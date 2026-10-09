@@ -30,7 +30,7 @@
           <!-- Current balance: prominent display on the right -->
           <div class="flex-shrink-0 text-right">
             <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('admin.users.currentBalance') }}</p>
-            <p class="text-xl font-bold text-gray-900 dark:text-white">
+            <p class="text-xl font-semibold text-gray-900 dark:text-white">
               ${{ user.balance?.toFixed(2) || '0.00' }}
             </p>
           </div>
@@ -267,8 +267,8 @@ const getIconBg = (item: BalanceHistoryItem) => {
   }
   if (isSubscriptionType(item.type)) return 'bg-purple-100 dark:bg-purple-900/30'
   return item.value >= 0
-    ? 'bg-blue-100 dark:bg-blue-900/30'
-    : 'bg-orange-100 dark:bg-orange-900/30'
+    ? 'bg-gray-100 dark:bg-dark-700'
+    : 'bg-rose-100 dark:bg-rose-900/30'
 }
 
 // Icon text color
@@ -280,8 +280,8 @@ const getIconColor = (item: BalanceHistoryItem) => {
   }
   if (isSubscriptionType(item.type)) return 'text-purple-600 dark:text-purple-400'
   return item.value >= 0
-    ? 'text-blue-600 dark:text-blue-400'
-    : 'text-orange-600 dark:text-orange-400'
+    ? 'text-gray-600 dark:text-dark-300'
+    : 'text-rose-600 dark:text-rose-400'
 }
 
 // Value text color
@@ -293,8 +293,8 @@ const getValueColor = (item: BalanceHistoryItem) => {
   }
   if (isSubscriptionType(item.type)) return 'text-purple-600 dark:text-purple-400'
   return item.value >= 0
-    ? 'text-blue-600 dark:text-blue-400'
-    : 'text-orange-600 dark:text-orange-400'
+    ? 'text-gray-600 dark:text-dark-300'
+    : 'text-rose-600 dark:text-rose-400'
 }
 
 // Item title

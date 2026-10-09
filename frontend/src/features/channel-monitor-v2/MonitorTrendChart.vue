@@ -4,8 +4,8 @@
   >
     <div class="card-header mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3 !border-0 !p-0">
       <div class="min-w-0">
-        <h2 class="flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white">
-          <span class="inline-flex h-4 w-4 text-sky-500" aria-hidden="true">
+        <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+          <span class="inline-flex h-4 w-4 text-gray-400 dark:text-dark-400" aria-hidden="true">
             <Icon name="chart" size="sm" />
           </span>
           {{ t('channelMonitorV2.chart.title') }}
@@ -37,7 +37,7 @@
     </div>
     <div class="card-body min-h-0 flex-1 !p-0">
       <div v-if="loading" class="flex h-[280px] items-center justify-center sm:h-[300px]">
-        <div class="animate-pulse text-sm text-gray-400">{{ t('common.loading') }}</div>
+        <div class="text-sm text-gray-400 dark:text-dark-400">{{ t('common.loading') }}</div>
       </div>
       <div
         v-else-if="chartData"

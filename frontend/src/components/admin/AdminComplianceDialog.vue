@@ -191,7 +191,7 @@ async function logout(): Promise<void> {
 }
 
 .legal-document-content :deep(h1) {
-  @apply mb-4 text-2xl font-bold text-gray-950 dark:text-white;
+  @apply mb-4 text-2xl font-semibold text-gray-950 dark:text-white;
 }
 
 .legal-document-content :deep(h2) {
