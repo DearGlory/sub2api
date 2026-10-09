@@ -552,10 +552,17 @@ describe('choreography: sampleTrail', () => {
       if (previous !== Infinity) largestGap = Math.max(largestGap, previous - out.x)
       previous = out.x
     }
-    // Smooth: no step across the whole 2.6 s tail is big enough to read as a jump.
+    // Smooth: no step across the whole tail is big enough to read as a jump.
     expect(largestGap).toBeLessThan(0.6)
-    // The far end of the tail is 2.6 s back down the leg, near the leg's start.
-    expect(previous).toBeCloseTo(-AMPLITUDE_X + 18 * (1 - Math.cos(Math.PI * (4 - 2.6) / LEG_SECONDS)) / 2, 6)
+    // The far end of the tail reaches back TAIL_SECONDS down the leg, i.e. to
+    // t = 4 - TAIL_SECONDS into a leg that started 4 s ago. Derived from the
+    // constant rather than from a literal so that retuning the tail cannot leave a
+    // stale number here quietly passing.
+    const backTo = 4 - TAIL_SECONDS
+    expect(previous).toBeCloseTo(
+      -AMPLITUDE_X + (18 * (1 - Math.cos(Math.PI * backTo / LEG_SECONDS))) / 2,
+      6
+    )
   })
 
   it('converges onto the glyph by the end of hold, so the tail shortens as the shape forms', () => {

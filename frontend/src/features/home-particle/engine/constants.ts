@@ -46,14 +46,74 @@ export const CAMERA_FAR = 900
 
 // --- Comet tail -------------------------------------------------------------
 
-/** How far back in time the tail reaches. */
-export const TAIL_SECONDS = 2.6
-/** Lateral spread per second of delay. */
-export const TAIL_SPREAD = 1.15
+/**
+ * How far back in time the tail may look for material.
+ *
+ * This is a *search window*, not the tail's length. The tail's length is
+ * `TAIL_LENGTH`, in world units; see the note on it for why the two are not the
+ * same number.
+ */
+export const TAIL_SECONDS = 3.2
+/**
+ * The tail's actual length, in world units of arc along the flight path.
+ *
+ * Distance, not time, and that distinction is the whole reason the comet reads as
+ * a comet. The head's speed is not constant: `sampleHeadPosition` eases the sweep
+ * with `(1 - cos(pi*p))/2` so the comet decelerates into each extreme and
+ * accelerates back out. Laying the tail out at uniform *time* steps therefore ties
+ * its length to the head's speed — the tail stretched to ~14 units mid-leg and
+ * collapsed to nothing as the comet arrived, which is exactly backwards from a
+ * comet and made the cloud read as a ring of concentric ellipses at the ends. A
+ * fixed arc length keeps the streak the same size all the way down the leg.
+ *
+ * 13 units against the leg's 18 puts the tail at about three quarters of a leg,
+ * long enough to lead the eye and short enough to leave the glyph its own space.
+ */
+export const TAIL_LENGTH = 13.0
 /** Base radius of the tail cone at zero delay. */
 export const TAIL_RADIUS = 0.42
+/**
+ * Radius at the tip, as a fraction of `TAIL_LENGTH`.
+ *
+ * Together with `TAIL_LENGTH` this sets the cone's aspect ratio, which is the
+ * other half of "does this look like a comet". The tip radius works out to
+ * `TAIL_RADIUS + TAIL_SPREAD * TAIL_LENGTH` ≈ 2.0, i.e. 4 units across against 13
+ * long — a 3.3:1 streak. The earlier time-keyed value gave under 2:1 at the
+ * fastest point of the leg and far worse at the ends, which is a blob.
+ */
+export const TAIL_SPREAD = 0.123
 /** Share of particles packed into the bright head core. */
 export const HEAD_CORE_SHARE = 0.18
+/**
+ * Radius of the ball the head-core particles fill, in world units.
+ *
+ * Core particles all sit at zero arc length, which is one exact point on the
+ * path. Left as a point they draw a flat disc, and the comet's leading face reads
+ * as a machined cut instead of a nose; this spreads them through a ball around
+ * that point. Kept above `TAIL_RADIUS` so the head is the widest part of the
+ * cloud, which is what makes it read as a coma the tail streams out of.
+ */
+export const HEAD_CORE_RADIUS = 0.62
+/**
+ * How far forward of the path point the core ball's centre sits, as a fraction of
+ * `HEAD_CORE_RADIUS`.
+ *
+ * Without this the ball is centred exactly on the newest point on the path, so its
+ * forward half is the only thing ahead of the tail and the boundary between them
+ * lands on a plane through that centre — which reads as a blunt, sliced face. Bias
+ * forward and the leading surface becomes convex, i.e. a nose.
+ */
+export const HEAD_CORE_LEAD = 0.45
+/**
+ * How many points along the past path are sampled before the tail is resampled.
+ *
+ * The tail is built by walking the path at uniform time and then redistributing
+ * those samples to uniform arc length, so this is the resolution of that first
+ * walk, not the number of particles or of tail segments. It only has to be dense
+ * enough that the arc-length integral is accurate; `QualityProfile.tailSampleCount`
+ * is the count that actually reaches the particles.
+ */
+export const TAIL_PROBE_COUNT = 192
 
 // --- Interaction ------------------------------------------------------------
 

@@ -357,10 +357,13 @@ function createGlowTexture(): Texture | null {
 
   const texture = new CanvasTexture(canvas)
   texture.needsUpdate = true
-  // The texture owns a GPU upload, not the element, so the canvas can be released
-  // straight away instead of holding a second copy of the same pixels.
-  canvas.width = 0
-  canvas.height = 0
+  // The canvas must outlive this function. `CanvasTexture` uploads lazily — the
+  // pixels are read on the first render that uses the material, not at
+  // construction — so zeroing the element here (an old idiom for releasing the
+  // backing store once the GPU copy exists) leaves the texture with a 0x0 source
+  // by the time that upload happens. WebGL then gets a zero-sized image: the draw
+  // call still executes and still counts as a draw call, which is why the
+  // starfield was silently invisible while `renderer.info` looked healthy.
   return texture
 }
 
