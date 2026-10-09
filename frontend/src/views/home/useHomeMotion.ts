@@ -15,10 +15,6 @@ import type { MaybeRefOrGetter, Ref } from 'vue'
 
 /** One-shot value reveal. Long enough to read as counting, short enough to stay out of the way. */
 const COUNT_UP_MS = 800
-const REVEAL_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)'
-
-/** The class list a revealed element carries, shared so every section feels identical. */
-export const REVEAL_TRANSITION_CLASS = `transition-[opacity,transform] duration-200 ease-[${REVEAL_EASE}]`
 
 /**
  * True when the visitor asked for reduced motion — including when the platform
