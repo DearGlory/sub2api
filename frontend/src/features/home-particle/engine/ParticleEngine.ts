@@ -1210,7 +1210,6 @@ export class ParticleEngine implements ParticleEngineContract {
   }
 
   private advanceCamera(): void {
-    const span = DOLLY_TO_Z - DOLLY_FROM_Z
     const period = DOLLY_PERIOD_SECONDS + DOLLY_WRAP_SECONDS
     const t = this.reducedMotion ? 0 : this.dollySeconds % period
 
@@ -1223,8 +1222,20 @@ export class ParticleEngine implements ParticleEngineContract {
       progress = 1 - smootherStep((t - DOLLY_PERIOD_SECONDS) / DOLLY_WRAP_SECONDS)
     }
 
-    const z = Math.max(DOLLY_FROM_Z + span * progress, this.fitDistance)
-    this.camera.position.set(0, 0, z)
+    // The framing guard SHIFTS the dolly's range rather than clamping the result.
+    //
+    // Clamping with `Math.max(DOLLY_FROM_Z + span * progress, fitDistance)` looks
+    // equivalent but parks the camera: on a 16:9 viewport `fitDistance` is ~18
+    // against a start of 15, so the camera sat perfectly still for the first 24 s
+    // of every lap, which is the one thing R2 asks it not to do. Mapping
+    // [0, 1] onto [start, end] instead keeps it moving for the entire period — the
+    // guard only decides where the near end of the range is.
+    const start = Math.max(DOLLY_FROM_Z, this.fitDistance)
+    // On a very narrow viewport the guard can exceed the far end too; the designed
+    // span is preserved so the pull-back is never compressed into nothing.
+    const end = Math.max(DOLLY_TO_Z, start + (DOLLY_TO_Z - DOLLY_FROM_Z))
+
+    this.camera.position.set(0, 0, start + (end - start) * progress)
     this.camera.lookAt(0, 0, 0)
   }
 
