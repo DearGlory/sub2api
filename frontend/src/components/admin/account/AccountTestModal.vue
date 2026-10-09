@@ -9,13 +9,13 @@
       <!-- Account Info Card -->
       <div
         v-if="account"
-        class="flex items-center justify-between rounded-xl border border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 p-3 dark:border-dark-500 dark:from-dark-700 dark:to-dark-600"
+        class="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-800"
       >
         <div class="flex items-center gap-3">
           <div
-            class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-600"
+            class="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-dark-700"
           >
-            <Icon name="play" size="md" class="text-white" :stroke-width="2" />
+            <Icon name="play" size="md" class="text-gray-600 dark:text-gray-300" :stroke-width="2" />
           </div>
           <div>
             <div class="font-semibold text-gray-900 dark:text-gray-100">{{ account.name }}</div>
@@ -193,7 +193,7 @@
 
           <!-- Streaming Content -->
           <div v-if="streamingContent" class="text-green-400">
-            {{ streamingContent }}<span class="animate-pulse">_</span>
+            {{ streamingContent }}<span class="opacity-70">_</span>
           </div>
 
           <!-- Result Status -->
@@ -241,7 +241,7 @@
               class="max-h-[360px] w-full object-contain"
             />
             <div class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover/img:bg-black/20">
-              <Icon name="eye" size="lg" class="text-white opacity-0 drop-shadow-lg transition-opacity group-hover/img:opacity-100" :stroke-width="2" />
+              <Icon name="eye" size="lg" class="text-white opacity-0 transition-opacity group-hover/img:opacity-100" :stroke-width="2" />
             </div>
             <div class="border-t border-gray-100 px-3 py-1.5 text-xs text-gray-500 dark:border-dark-500 dark:text-gray-300">
               {{ image.mimeType || 'image/*' }}
@@ -297,7 +297,7 @@
             <img
               :src="previewImageUrl"
               :alt="t('admin.accounts.imageLightboxAlt')"
-              class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+              class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-pop"
             />
           </div>
         </Transition>
@@ -953,7 +953,7 @@ const handleEvent = (event: {
     case 'test_start':
       addLine(t('admin.accounts.connectedToApi'), 'text-green-400')
       if (event.model) {
-        addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-cyan-400')
+        addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-blue-400')
       }
       addLine(
         isGrokAccount.value
@@ -992,7 +992,7 @@ const handleEvent = (event: {
           url: event.image_url,
           mimeType: event.mime_type
         })
-        addLine(t('admin.accounts.imageReceived', { count: generatedImages.value.length }), 'text-purple-300')
+        addLine(t('admin.accounts.imageReceived', { count: generatedImages.value.length }), 'text-primary-300')
       }
       break
 
@@ -1002,7 +1002,7 @@ const handleEvent = (event: {
           url: event.audio_url,
           mimeType: event.mime_type
         })
-        addLine(t('admin.accounts.audioReceived', { count: generatedAudios.value.length }), 'text-purple-300')
+        addLine(t('admin.accounts.audioReceived', { count: generatedAudios.value.length }), 'text-primary-300')
       }
       break
 
@@ -1012,13 +1012,13 @@ const handleEvent = (event: {
           url: event.video_url,
           mimeType: event.mime_type
         })
-        addLine(t('admin.accounts.videoReceived', { count: generatedVideos.value.length }), 'text-purple-300')
+        addLine(t('admin.accounts.videoReceived', { count: generatedVideos.value.length }), 'text-primary-300')
       }
       break
 
     case 'status':
       if (event.text) {
-        addLine(event.text, 'text-cyan-300')
+        addLine(event.text, 'text-blue-300')
       }
       break
 
