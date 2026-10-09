@@ -1060,6 +1060,26 @@ export default {
         saved: '过载冷却设置保存成功',
         saveFailed: '保存过载冷却设置失败'
       },
+      grokViolationFee: {
+        title: 'Grok 违规扣费',
+        description: 'xAI 安全检查拦截 Grok 请求时会额外收费，开启后将该费用转嫁给调用方',
+        enabled: '启用违规扣费',
+        enabledHint: '关闭后，被拦截的请求不计费',
+        amount: '单次违规费用',
+        amountHint: '每次请求被 xAI 安全检查拦截时，从 API Key 余额扣除',
+        saved: 'Grok 违规扣费设置保存成功',
+        saveFailed: '保存 Grok 违规扣费设置失败'
+      },
+      grok403Cooldown: {
+        title: 'Grok 403 冷却',
+        description: '无法识别的 403 会将账号移出调度，此处控制是否移出以及移出多久',
+        enabled: '启用 403 冷却',
+        enabledHint: '关闭后，403 只切换账号，不惩罚该账号',
+        cooldownMinutes: '冷却时长（分钟）',
+        cooldownMinutesHint: '收到无法识别的 403 后，账号被跳过调度的时长',
+        saved: 'Grok 403 冷却设置保存成功',
+        saveFailed: '保存 Grok 403 冷却设置失败'
+      },
       rateLimit429Cooldown: {
         title: '429 默认回避',
         description: '配置上游返回 429 且没有明确重置时间时的默认账号回避策略',

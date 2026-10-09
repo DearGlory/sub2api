@@ -170,6 +170,10 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 	var finalResp *apicompat.AnthropicResponse
 	var usage ClaudeUsage
 
+	// Fold streamed fragments with builders rather than `+=` per event; see
+	// blockDeltaAccumulator for why the naive form is quadratic.
+	blockAccs := make(map[int]*blockDeltaAccumulator)
+
 	// 读间隔上限：上游挂住 SSE 时中止组装（缓冲路径尚未提交响应头，可回 502）。
 	streamInterval := s.anthropicNativeStreamInterval()
 	pump := newAnthropicNativeLinePump(scanner, streamInterval)
@@ -243,15 +247,20 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 		if event.Type == "content_block_delta" && event.Delta != nil && finalResp != nil && event.Index != nil {
 			idx := *event.Index
 			if idx < len(finalResp.Content) {
+				acc := blockAccs[idx]
+				if acc == nil {
+					acc = &blockDeltaAccumulator{}
+					blockAccs[idx] = acc
+				}
 				switch event.Delta.Type {
 				case "text_delta":
-					finalResp.Content[idx].Text += event.Delta.Text
+					acc.appendText(event.Delta.Text)
 				case "thinking_delta":
-					finalResp.Content[idx].Thinking += event.Delta.Thinking
+					acc.appendThinking(event.Delta.Thinking)
 				case "signature_delta":
-					finalResp.Content[idx].Signature += event.Delta.Signature
+					acc.appendSignature(event.Delta.Signature)
 				case "input_json_delta":
-					finalResp.Content[idx].Input = appendRawJSON(finalResp.Content[idx].Input, event.Delta.PartialJSON)
+					acc.appendInput(event.Delta.PartialJSON)
 				}
 			}
 		}
@@ -261,6 +270,10 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 		writeResponsesError(c, http.StatusBadGateway, "server_error", "Upstream stream ended without a response")
 		return nil, fmt.Errorf("upstream stream ended without response")
 	}
+
+	// Materialize the buffered fragments onto the blocks (see
+	// blockDeltaAccumulator); done once after the stream is consumed.
+	flushBlockAccumulators(blockAccs, finalResp)
 
 	if usage.InputTokens > 0 || usage.OutputTokens > 0 {
 		finalResp.Usage = apicompat.AnthropicUsage{

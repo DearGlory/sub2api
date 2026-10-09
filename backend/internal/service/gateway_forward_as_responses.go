@@ -389,6 +389,12 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 	var finalResp *apicompat.AnthropicResponse
 	var usage ClaudeUsage
 
+	// Streamed fragments are folded into builders instead of being concatenated
+	// onto the block as each event arrives. `block.Text += frag` is O(n²) in the
+	// response size — a 500KB answer arriving in 100-byte deltas copies about a
+	// gigabyte of garbage — and was the dominant allocation source here.
+	blockAccs := make(map[int]*blockDeltaAccumulator)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		eventType, ok := parseAnthropicSSEField(line, "event")
@@ -439,15 +445,20 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 		if event.Type == "content_block_delta" && event.Delta != nil && finalResp != nil && event.Index != nil {
 			idx := *event.Index
 			if idx < len(finalResp.Content) {
+				acc := blockAccs[idx]
+				if acc == nil {
+					acc = &blockDeltaAccumulator{}
+					blockAccs[idx] = acc
+				}
 				switch event.Delta.Type {
 				case "text_delta":
-					finalResp.Content[idx].Text += event.Delta.Text
+					acc.appendText(event.Delta.Text)
 				case "thinking_delta":
-					finalResp.Content[idx].Thinking += event.Delta.Thinking
+					acc.appendThinking(event.Delta.Thinking)
 				case "signature_delta":
-					finalResp.Content[idx].Signature += event.Delta.Signature
+					acc.appendSignature(event.Delta.Signature)
 				case "input_json_delta":
-					finalResp.Content[idx].Input = appendRawJSON(finalResp.Content[idx].Input, event.Delta.PartialJSON)
+					acc.appendInput(event.Delta.PartialJSON)
 				}
 			}
 		}
@@ -466,6 +477,11 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 		writeResponsesError(c, http.StatusBadGateway, "server_error", "Upstream stream ended without a response")
 		return nil, fmt.Errorf("upstream stream ended without response")
 	}
+
+	// Materialize the buffered fragments onto the blocks. Done once, after the
+	// stream is fully consumed, so the accumulated values match what the
+	// per-event concatenation produced.
+	flushBlockAccumulators(blockAccs, finalResp)
 
 	// Update usage from accumulated delta
 	if usage.InputTokens > 0 || usage.OutputTokens > 0 {
@@ -691,9 +707,7 @@ func appendRawJSON(existing json.RawMessage, fragment string) json.RawMessage {
 	// Anthropic initializes tool_use.input to {} in content_block_start, then
 	// streams the actual input through input_json_delta events. Treat that empty
 	// object as a placeholder instead of prefixing it to the streamed JSON.
-	var existingObject map[string]json.RawMessage
-	isEmptyObject := json.Unmarshal(existing, &existingObject) == nil && existingObject != nil && len(existingObject) == 0
-	if len(existing) == 0 || isEmptyObject {
+	if len(existing) == 0 || isEmptyJSONObject(existing) {
 		return json.RawMessage(fragment)
 	}
 	return json.RawMessage(string(existing) + fragment)

@@ -470,6 +470,18 @@ type RateLimit429CooldownSettings struct {
 	CooldownSeconds int  `json:"cooldown_seconds"`
 }
 
+// GrokViolationFeeSettings Grok 违规扣费配置 DTO
+type GrokViolationFeeSettings struct {
+	Enabled bool    `json:"enabled"`
+	Amount  float64 `json:"amount"`
+}
+
+// Grok403CooldownSettings Grok 未识别 403 的账号冷却配置 DTO
+type Grok403CooldownSettings struct {
+	Enabled         bool `json:"enabled"`
+	CooldownMinutes int  `json:"cooldown_minutes"`
+}
+
 type OpenAIImagesOAuthUnavailableCooldownSettings struct {
 	CooldownMinutes int `json:"cooldown_minutes"`
 }

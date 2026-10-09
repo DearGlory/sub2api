@@ -787,6 +787,49 @@ func sanitizeGrokUnsupportedFields(body []byte) ([]byte, error) {
 	return marshalOpenAIUpstreamJSON(payload)
 }
 
+// sanitizeGrokRawChatCompatFields removes fields that the Grok raw Chat
+// Completions route rejects. It is intentionally not part of Responses bridge
+// eligibility or body conversion: presence penalties stay unknown there, and
+// user message names are preserved.
+func sanitizeGrokRawChatCompatFields(body []byte) ([]byte, error) {
+	out := body
+	var err error
+	for _, field := range []string{"presence_penalty", "presencePenalty"} {
+		if !gjson.GetBytes(out, field).Exists() {
+			continue
+		}
+		out, err = sjson.DeleteBytes(out, field)
+		if err != nil {
+			return nil, fmt.Errorf("remove Grok raw chat %s: %w", field, err)
+		}
+	}
+
+	messages := gjson.GetBytes(out, "messages")
+	if !messages.IsArray() {
+		return out, nil
+	}
+	for index, message := range messages.Array() {
+		if message.Get("role").String() == "user" || !message.Get("name").Exists() {
+			continue
+		}
+		out, err = sjson.DeleteBytes(out, fmt.Sprintf("messages.%d.name", index))
+		if err != nil {
+			return nil, fmt.Errorf("remove Grok raw chat message name: %w", err)
+		}
+	}
+	return out, nil
+}
+func (s *OpenAIGatewayService) grokUpstreamErrorBodyForOps(body []byte) string {
+	if s == nil || s.cfg == nil || !s.cfg.Gateway.LogUpstreamErrorBody || len(body) == 0 {
+		return ""
+	}
+	maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+	if maxBytes <= 0 {
+		maxBytes = 2048
+	}
+	return truncateString(string(body), maxBytes)
+}
+
 // sanitizeGrokResponsesUnsupportedFields 保留旧函数名作为别名，向后兼容
 var sanitizeGrokResponsesUnsupportedFields = sanitizeGrokUnsupportedFields
 
@@ -2070,7 +2113,20 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 			s.rateLimitGrok(ctx, account, grokSpendingLimitResetAt(account, time.Now()))
 			return
 		}
-		s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok access or entitlement denied")
+		// Any recognised safety-violation rejection carries a billable marker and
+		// is request-scoped: the request is already returned to the caller by the
+		// refusal path, so never penalise the account for it.
+		if isGrokViolationFeeRejection(statusCode, responseBody) {
+			return
+		}
+		// issue #7398: the duration is operator-configurable, and the penalty can
+		// be switched off entirely. Defaults keep the legacy 30 minutes.
+		if cooldown, apply := s.resolveGrok403Cooldown(ctx); apply {
+			s.tempUnscheduleGrok(ctx, account, cooldown, "grok access or entitlement denied")
+		} else {
+			slog.Info("grok_403_cooldown_disabled",
+				"account_id", account.ID, "status_code", statusCode)
+		}
 	case http.StatusTooManyRequests:
 		// updateGrokUsageSnapshot installs rate-limit state for non-pool accounts.
 		// Free-usage 429 was already cooled above via body classification.

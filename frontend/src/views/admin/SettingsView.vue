@@ -304,6 +304,208 @@
             </div>
           </div>
 
+          <!-- Grok Violation Fee Settings -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.grokViolationFee.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.grokViolationFee.description") }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div
+                v-if="grokViolationFeeLoading"
+                class="flex items-center gap-2 text-gray-500"
+              >
+                <div
+                  class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"
+                ></div>
+                {{ t("common.loading") }}
+              </div>
+
+              <template v-else>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t("admin.settings.grokViolationFee.enabled")
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.grokViolationFee.enabledHint") }}
+                    </p>
+                  </div>
+                  <Toggle v-model="grokViolationFeeForm.enabled" />
+                </div>
+
+                <div
+                  v-if="grokViolationFeeForm.enabled"
+                  class="space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
+                >
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {{ t("admin.settings.grokViolationFee.amount") }}
+                    </label>
+                    <input
+                      v-model.number="grokViolationFeeForm.amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      class="input w-32"
+                    />
+                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{
+                        t("admin.settings.grokViolationFee.amountHint")
+                      }}
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
+                >
+                  <button
+                    type="button"
+                    @click="saveGrokViolationFeeSettings"
+                    :disabled="grokViolationFeeSaving"
+                    class="btn btn-primary btn-sm"
+                  >
+                    <svg
+                      v-if="grokViolationFeeSaving"
+                      class="mr-1 h-4 w-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {{
+                      grokViolationFeeSaving
+                        ? t("common.saving")
+                        : t("common.save")
+                    }}
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Grok 403 Cooldown Settings -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.grok403Cooldown.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.grok403Cooldown.description") }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div
+                v-if="grok403CooldownLoading"
+                class="flex items-center gap-2 text-gray-500"
+              >
+                <div
+                  class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"
+                ></div>
+                {{ t("common.loading") }}
+              </div>
+
+              <template v-else>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t("admin.settings.grok403Cooldown.enabled")
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.grok403Cooldown.enabledHint") }}
+                    </p>
+                  </div>
+                  <Toggle v-model="grok403CooldownForm.enabled" />
+                </div>
+
+                <div
+                  v-if="grok403CooldownForm.enabled"
+                  class="space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
+                >
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {{ t("admin.settings.grok403Cooldown.cooldownMinutes") }}
+                    </label>
+                    <input
+                      v-model.number="grok403CooldownForm.cooldown_minutes"
+                      type="number"
+                      min="1"
+                      max="1440"
+                      class="input w-32"
+                    />
+                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{
+                        t("admin.settings.grok403Cooldown.cooldownMinutesHint")
+                      }}
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
+                >
+                  <button
+                    type="button"
+                    @click="saveGrok403CooldownSettings"
+                    :disabled="grok403CooldownSaving"
+                    class="btn btn-primary btn-sm"
+                  >
+                    <svg
+                      v-if="grok403CooldownSaving"
+                      class="mr-1 h-4 w-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {{
+                      grok403CooldownSaving
+                        ? t("common.saving")
+                        : t("common.save")
+                    }}
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+
           <!-- Rate Limit Cooldown (429) Settings -->
           <div class="card">
             <div
@@ -9216,6 +9418,22 @@ const overloadCooldownForm = reactive({
   cooldown_minutes: 10,
 });
 
+// Grok Violation Fee 状态
+const grokViolationFeeLoading = ref(true);
+const grokViolationFeeSaving = ref(false);
+const grokViolationFeeForm = reactive({
+  enabled: true,
+  amount: 0.5,
+});
+
+// Grok 403 Cooldown 状态
+const grok403CooldownLoading = ref(true);
+const grok403CooldownSaving = ref(false);
+const grok403CooldownForm = reactive({
+  enabled: true,
+  cooldown_minutes: 30,
+});
+
 // Rate Limit Cooldown (429) 状态
 const rateLimit429CooldownLoading = ref(true);
 const rateLimit429CooldownSaving = ref(false);
@@ -12199,6 +12417,74 @@ async function saveOverloadCooldownSettings() {
   }
 }
 
+// Grok Violation Fee 方法
+async function loadGrokViolationFeeSettings() {
+  grokViolationFeeLoading.value = true;
+  try {
+    const settings = await adminAPI.settings.getGrokViolationFeeSettings();
+    Object.assign(grokViolationFeeForm, settings);
+  } catch (_error: unknown) {
+    // Silent fail - settings will use defaults
+  } finally {
+    grokViolationFeeLoading.value = false;
+  }
+}
+
+async function saveGrokViolationFeeSettings() {
+  grokViolationFeeSaving.value = true;
+  try {
+    const updated = await adminAPI.settings.updateGrokViolationFeeSettings({
+      enabled: grokViolationFeeForm.enabled,
+      amount: grokViolationFeeForm.amount,
+    });
+    Object.assign(grokViolationFeeForm, updated);
+    appStore.showSuccess(t("admin.settings.grokViolationFee.saved"));
+  } catch (error: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(
+        error,
+        t("admin.settings.grokViolationFee.saveFailed"),
+      ),
+    );
+  } finally {
+    grokViolationFeeSaving.value = false;
+  }
+}
+
+// Grok 403 Cooldown 方法
+async function loadGrok403CooldownSettings() {
+  grok403CooldownLoading.value = true;
+  try {
+    const settings = await adminAPI.settings.getGrok403CooldownSettings();
+    Object.assign(grok403CooldownForm, settings);
+  } catch (_error: unknown) {
+    // Silent fail - settings will use defaults
+  } finally {
+    grok403CooldownLoading.value = false;
+  }
+}
+
+async function saveGrok403CooldownSettings() {
+  grok403CooldownSaving.value = true;
+  try {
+    const updated = await adminAPI.settings.updateGrok403CooldownSettings({
+      enabled: grok403CooldownForm.enabled,
+      cooldown_minutes: grok403CooldownForm.cooldown_minutes,
+    });
+    Object.assign(grok403CooldownForm, updated);
+    appStore.showSuccess(t("admin.settings.grok403Cooldown.saved"));
+  } catch (error: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(
+        error,
+        t("admin.settings.grok403Cooldown.saveFailed"),
+      ),
+    );
+  } finally {
+    grok403CooldownSaving.value = false;
+  }
+}
+
 // Panel API Rate Limit 方法
 async function loadPanelRateLimitSettings() {
   panelRateLimitLoading.value = true;
@@ -12917,6 +13203,8 @@ onMounted(() => {
   loadOllamaCloudUsageSettings();
   loadOpenCodeGoUsageSettings();
   loadOverloadCooldownSettings();
+  loadGrokViolationFeeSettings();
+  loadGrok403CooldownSettings();
   loadRateLimit429CooldownSettings();
   loadPanelRateLimitSettings();
   loadStreamTimeoutSettings();

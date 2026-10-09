@@ -715,6 +715,106 @@ func (s *SettingService) SetOverloadCooldownSettings(ctx context.Context, settin
 	return s.settingRepo.Set(ctx, SettingKeyOverloadCooldownSettings, string(data))
 }
 
+// GetGrokViolationFeeSettings 获取 Grok 违规扣费配置
+func (s *SettingService) GetGrokViolationFeeSettings(ctx context.Context) (*GrokViolationFeeSettings, error) {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyGrokViolationFeeSettings)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			return DefaultGrokViolationFeeSettings(), nil
+		}
+		return nil, fmt.Errorf("get grok violation fee settings: %w", err)
+	}
+	if value == "" {
+		return DefaultGrokViolationFeeSettings(), nil
+	}
+
+	var settings GrokViolationFeeSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return DefaultGrokViolationFeeSettings(), nil
+	}
+
+	// 修正配置值范围：负值归零，超上限取上限。
+	if settings.Amount < 0 {
+		settings.Amount = 0
+	}
+	if settings.Amount > grokViolationFeeMaxAmount {
+		settings.Amount = grokViolationFeeMaxAmount
+	}
+
+	return &settings, nil
+}
+
+// SetGrokViolationFeeSettings 设置 Grok 违规扣费配置
+func (s *SettingService) SetGrokViolationFeeSettings(ctx context.Context, settings *GrokViolationFeeSettings) error {
+	if settings == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+
+	// 启用时越界必须报错（含字段名），停用时归一化即可，不拒绝请求。
+	if settings.Amount < 0 || settings.Amount > grokViolationFeeMaxAmount {
+		if settings.Enabled {
+			return fmt.Errorf("amount must be between 0-%v", grokViolationFeeMaxAmount)
+		}
+		settings.Amount = grokViolationFeeDefaultAmount
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal grok violation fee settings: %w", err)
+	}
+
+	return s.settingRepo.Set(ctx, SettingKeyGrokViolationFeeSettings, string(data))
+}
+
+// GetGrok403CooldownSettings 获取 Grok 未识别 403 的账号冷却配置
+func (s *SettingService) GetGrok403CooldownSettings(ctx context.Context) (*Grok403CooldownSettings, error) {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyGrok403CooldownSettings)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			return DefaultGrok403CooldownSettings(), nil
+		}
+		return nil, fmt.Errorf("get grok 403 cooldown settings: %w", err)
+	}
+	if value == "" {
+		return DefaultGrok403CooldownSettings(), nil
+	}
+
+	var settings Grok403CooldownSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return DefaultGrok403CooldownSettings(), nil
+	}
+
+	if settings.CooldownMinutes < 1 {
+		settings.CooldownMinutes = 1
+	}
+	if settings.CooldownMinutes > grok403CooldownMaxMinutes {
+		settings.CooldownMinutes = grok403CooldownMaxMinutes
+	}
+
+	return &settings, nil
+}
+
+// SetGrok403CooldownSettings 设置 Grok 未识别 403 的账号冷却配置
+func (s *SettingService) SetGrok403CooldownSettings(ctx context.Context, settings *Grok403CooldownSettings) error {
+	if settings == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+
+	if settings.CooldownMinutes < 1 || settings.CooldownMinutes > grok403CooldownMaxMinutes {
+		if settings.Enabled {
+			return fmt.Errorf("cooldown_minutes must be between 1-%d", grok403CooldownMaxMinutes)
+		}
+		settings.CooldownMinutes = grok403CooldownDefaultMinutes
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal grok 403 cooldown settings: %w", err)
+	}
+
+	return s.settingRepo.Set(ctx, SettingKeyGrok403CooldownSettings, string(data))
+}
+
 // GetRateLimit429CooldownSettings 获取429默认回避配置
 func (s *SettingService) GetRateLimit429CooldownSettings(ctx context.Context) (*RateLimit429CooldownSettings, error) {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyRateLimit429CooldownSettings)

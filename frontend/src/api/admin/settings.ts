@@ -1340,6 +1340,62 @@ export async function updateRateLimit429CooldownSettings(
   return data;
 }
 
+// ==================== Grok Violation Fee Settings ====================
+
+/**
+ * xAI charges an extra fee when its safety check blocks a Grok request.
+ * This controls whether that cost is passed through to the caller.
+ */
+export interface GrokViolationFeeSettings {
+  enabled: boolean;
+  amount: number;
+}
+
+export async function getGrokViolationFeeSettings(): Promise<GrokViolationFeeSettings> {
+  const { data } = await apiClient.get<GrokViolationFeeSettings>(
+    "/admin/settings/grok-violation-fee",
+  );
+  return data;
+}
+
+export async function updateGrokViolationFeeSettings(
+  settings: GrokViolationFeeSettings,
+): Promise<GrokViolationFeeSettings> {
+  const { data } = await apiClient.put<GrokViolationFeeSettings>(
+    "/admin/settings/grok-violation-fee",
+    settings,
+  );
+  return data;
+}
+
+// ==================== Grok 403 Cooldown Settings ====================
+
+/**
+ * Controls how long a Grok account is taken out of scheduling after an
+ * unrecognised 403, and whether that penalty applies at all (issue #7398).
+ */
+export interface Grok403CooldownSettings {
+  enabled: boolean;
+  cooldown_minutes: number;
+}
+
+export async function getGrok403CooldownSettings(): Promise<Grok403CooldownSettings> {
+  const { data } = await apiClient.get<Grok403CooldownSettings>(
+    "/admin/settings/grok-403-cooldown",
+  );
+  return data;
+}
+
+export async function updateGrok403CooldownSettings(
+  settings: Grok403CooldownSettings,
+): Promise<Grok403CooldownSettings> {
+  const { data } = await apiClient.put<Grok403CooldownSettings>(
+    "/admin/settings/grok-403-cooldown",
+    settings,
+  );
+  return data;
+}
+
 // ==================== Panel Rate Limit Settings ====================
 
 /**
@@ -1597,6 +1653,10 @@ export const settingsAPI = {
   deleteAdminApiKey,
   getOverloadCooldownSettings,
   updateOverloadCooldownSettings,
+  getGrokViolationFeeSettings,
+  updateGrokViolationFeeSettings,
+  getGrok403CooldownSettings,
+  updateGrok403CooldownSettings,
   getRateLimit429CooldownSettings,
   updateRateLimit429CooldownSettings,
   getPanelRateLimitSettings,

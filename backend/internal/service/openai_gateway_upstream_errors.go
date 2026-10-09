@@ -551,6 +551,10 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 	if account != nil && account.Platform == PlatformGrok && isGrokContentPolicyRejection(resp.StatusCode, body) {
 		clientMsg := grokContentPolicyClientMessage(body)
 		setOpsUpstreamError(c, resp.StatusCode, clientMsg, truncateString(string(body), 2048))
+		// xAI bills the account holder an extra fee when the refusal carries its
+		// safety-check marker. Pass that cost through to the calling credential so
+		// it stays attributable; the marker check keeps plain refusals free.
+		s.chargeGrokViolationFeeForRefusal(ctx, c, account, resp.StatusCode, body, requestedModel...)
 		writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 		MarkResponseCommitted(c)
 		c.JSON(http.StatusForbidden, gin.H{
@@ -802,6 +806,7 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 	if account != nil && account.Platform == PlatformGrok && isGrokContentPolicyRejection(resp.StatusCode, body) {
 		clientMsg := grokContentPolicyClientMessage(body)
 		setOpsUpstreamError(c, resp.StatusCode, clientMsg, truncateString(string(body), 2048))
+		s.chargeGrokViolationFeeForRefusal(c.Request.Context(), c, account, resp.StatusCode, body, requestedModel...)
 		MarkResponseCommitted(c)
 		writeError(c, http.StatusForbidden, "invalid_request_error", clientMsg)
 		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)

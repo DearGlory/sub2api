@@ -585,6 +585,12 @@ const (
 
 	// SettingKeyRateLimit429CooldownSettings stores JSON config for 429 fallback cooldown handling.
 	SettingKeyRateLimit429CooldownSettings = "rate_limit_429_cooldown_settings"
+	// SettingKeyGrokViolationFeeSettings stores JSON config for the caller-facing
+	// fee charged when xAI blocks a request with a usage-guidelines violation.
+	SettingKeyGrokViolationFeeSettings = "grok_violation_fee_settings"
+	// SettingKeyGrok403CooldownSettings stores JSON config for the Grok
+	// unrecognised-403 account cooldown (issue #7398).
+	SettingKeyGrok403CooldownSettings = "grok_403_cooldown_settings"
 	// SettingKeyOpenAIImagesOAuthUnavailableCooldownSettings stores the cooldown applied when the OAuth image tool is unavailable.
 	SettingKeyOpenAIImagesOAuthUnavailableCooldownSettings = "openai_images_oauth_unavailable_cooldown_settings"
 	// SettingKeyOpenAIAPIKeyHealthBreakerSettings stores the opt-in OpenAI pool API-key breaker config.

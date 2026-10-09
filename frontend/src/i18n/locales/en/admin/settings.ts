@@ -1066,6 +1066,29 @@ export default {
         saved: 'Overload cooldown settings saved',
         saveFailed: 'Failed to save overload cooldown settings'
       },
+      grokViolationFee: {
+        title: 'Grok Violation Fee',
+        description:
+          "xAI charges an extra fee when its safety check blocks a Grok request; enabling this passes that cost through to the caller",
+        enabled: 'Enable violation fee',
+        enabledHint: 'When off, blocked requests are not billed',
+        amount: 'Fee per violation',
+        amountHint:
+          "Charged to the API key balance each time a request is blocked by xAI's safety check",
+        saved: 'Grok violation fee settings saved',
+        saveFailed: 'Failed to save Grok violation fee settings'
+      },
+      grok403Cooldown: {
+        title: 'Grok 403 Cooldown',
+        description:
+          'An unrecognised 403 takes the account out of scheduling; this controls whether that happens and for how long',
+        enabled: 'Enable 403 cooldown',
+        enabledHint: 'When off, a 403 only switches accounts and does not penalise the account',
+        cooldownMinutes: 'Cooldown duration (minutes)',
+        cooldownMinutesHint: 'How long the account is skipped after an unrecognised 403',
+        saved: 'Grok 403 cooldown settings saved',
+        saveFailed: 'Failed to save Grok 403 cooldown settings'
+      },
       rateLimit429Cooldown: {
         title: '429 Default Cooldown',
         description: 'Configure the default account cooldown when upstream returns 429 without an explicit reset time',

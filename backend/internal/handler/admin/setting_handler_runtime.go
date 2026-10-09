@@ -117,6 +117,110 @@ func (h *SettingHandler) GetRateLimit429CooldownSettings(c *gin.Context) {
 	})
 }
 
+// GetGrokViolationFeeSettings 获取 Grok 违规扣费配置
+// GET /api/v1/admin/settings/grok-violation-fee
+func (h *SettingHandler) GetGrokViolationFeeSettings(c *gin.Context) {
+	settings, err := h.settingService.GetGrokViolationFeeSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.GrokViolationFeeSettings{
+		Enabled: settings.Enabled,
+		Amount:  settings.Amount,
+	})
+}
+
+// UpdateGrokViolationFeeSettingsRequest 更新 Grok 违规扣费配置请求
+type UpdateGrokViolationFeeSettingsRequest struct {
+	Enabled bool    `json:"enabled"`
+	Amount  float64 `json:"amount"`
+}
+
+// UpdateGrokViolationFeeSettings 更新 Grok 违规扣费配置
+// PUT /api/v1/admin/settings/grok-violation-fee
+func (h *SettingHandler) UpdateGrokViolationFeeSettings(c *gin.Context) {
+	var req UpdateGrokViolationFeeSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	settings := &service.GrokViolationFeeSettings{
+		Enabled: req.Enabled,
+		Amount:  req.Amount,
+	}
+
+	if err := h.settingService.SetGrokViolationFeeSettings(c.Request.Context(), settings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	updated, err := h.settingService.GetGrokViolationFeeSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.GrokViolationFeeSettings{
+		Enabled: updated.Enabled,
+		Amount:  updated.Amount,
+	})
+}
+
+// GetGrok403CooldownSettings 获取 Grok 未识别 403 的账号冷却配置
+// GET /api/v1/admin/settings/grok-403-cooldown
+func (h *SettingHandler) GetGrok403CooldownSettings(c *gin.Context) {
+	settings, err := h.settingService.GetGrok403CooldownSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.Grok403CooldownSettings{
+		Enabled:         settings.Enabled,
+		CooldownMinutes: settings.CooldownMinutes,
+	})
+}
+
+// UpdateGrok403CooldownSettingsRequest 更新 Grok 403 冷却配置请求
+type UpdateGrok403CooldownSettingsRequest struct {
+	Enabled         bool `json:"enabled"`
+	CooldownMinutes int  `json:"cooldown_minutes"`
+}
+
+// UpdateGrok403CooldownSettings 更新 Grok 未识别 403 的账号冷却配置
+// PUT /api/v1/admin/settings/grok-403-cooldown
+func (h *SettingHandler) UpdateGrok403CooldownSettings(c *gin.Context) {
+	var req UpdateGrok403CooldownSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	settings := &service.Grok403CooldownSettings{
+		Enabled:         req.Enabled,
+		CooldownMinutes: req.CooldownMinutes,
+	}
+
+	if err := h.settingService.SetGrok403CooldownSettings(c.Request.Context(), settings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	updated, err := h.settingService.GetGrok403CooldownSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.Grok403CooldownSettings{
+		Enabled:         updated.Enabled,
+		CooldownMinutes: updated.CooldownMinutes,
+	})
+}
+
 // UpdateRateLimit429CooldownSettingsRequest 更新429默认回避配置请求
 type UpdateRateLimit429CooldownSettingsRequest struct {
 	Enabled         bool `json:"enabled"`

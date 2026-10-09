@@ -137,7 +137,9 @@ func TestRunSecurityAuditLogsWebSocketChecksAndCacheHits(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &turnCountingEngine{mode: securityaudit.ModeBlocking}
 	coordinator := securityaudit.NewCoordinator(nil, engine)
-	core, logs := observer.New(zap.InfoLevel)
+	// 这两条是每请求的诊断行，已降为 Debug（见 security_audit_helper.go）：
+	// 观察器要收到它们，级别必须跟着降，否则断言永远看到空日志。
+	core, logs := observer.New(zap.DebugLevel)
 	reqLog := zap.New(core)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)

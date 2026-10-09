@@ -44,7 +44,7 @@ func runContentModeration(c *gin.Context, reqLog *zap.Logger, svc *service.Conte
 	}
 	input := buildContentModerationInput(c, apiKey, subject, protocol, model, body)
 	if reqLog != nil {
-		reqLog.Info("content_moderation.gateway_check_start",
+		reqLog.Debug("content_moderation.gateway_check_start",
 			zap.String("request_id", input.RequestID),
 			zap.Int64("user_id", input.UserID),
 			zap.Int64("api_key_id", input.APIKeyID),
@@ -66,7 +66,7 @@ func runContentModeration(c *gin.Context, reqLog *zap.Logger, svc *service.Conte
 		return nil
 	}
 	if reqLog != nil && decision != nil {
-		reqLog.Info("content_moderation.gateway_check_done",
+		reqLog.Debug("content_moderation.gateway_check_done",
 			zap.String("request_id", input.RequestID),
 			zap.Bool("allowed", decision.Allowed),
 			zap.Bool("blocked", decision.Blocked),

@@ -239,6 +239,10 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	var finalResp *apicompat.AnthropicResponse
 	var usage ClaudeUsage
 
+	// Fold streamed fragments with builders rather than `+=` per event; see
+	// blockDeltaAccumulator for why the naive form is quadratic.
+	blockAccs := make(map[int]*blockDeltaAccumulator)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		// SSE 规范允许 `event:xxx`（冒号后无空格）：Kimi 等 Anthropic 兼容上游
@@ -281,13 +285,18 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		if event.Type == "content_block_delta" && event.Delta != nil && finalResp != nil && event.Index != nil {
 			idx := *event.Index
 			if idx < len(finalResp.Content) {
+				acc := blockAccs[idx]
+				if acc == nil {
+					acc = &blockDeltaAccumulator{}
+					blockAccs[idx] = acc
+				}
 				switch event.Delta.Type {
 				case "text_delta":
-					finalResp.Content[idx].Text += event.Delta.Text
+					acc.appendText(event.Delta.Text)
 				case "thinking_delta":
-					finalResp.Content[idx].Thinking += event.Delta.Thinking
+					acc.appendThinking(event.Delta.Thinking)
 				case "input_json_delta":
-					finalResp.Content[idx].Input = appendRawJSON(finalResp.Content[idx].Input, event.Delta.PartialJSON)
+					acc.appendInput(event.Delta.PartialJSON)
 				}
 			}
 		}
@@ -306,6 +315,10 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		writeGatewayCCError(c, http.StatusBadGateway, "server_error", "Upstream stream ended without a response")
 		return nil, fmt.Errorf("upstream stream ended without response")
 	}
+
+	// Materialize the buffered fragments onto the blocks (see
+	// blockDeltaAccumulator); done once after the stream is consumed.
+	flushBlockAccumulators(blockAccs, finalResp)
 
 	// Update usage from accumulated delta
 	if usage.InputTokens > 0 || usage.OutputTokens > 0 {

@@ -582,6 +582,44 @@ type RateLimit429CooldownSettings struct {
 	CooldownSeconds int `json:"cooldown_seconds"`
 }
 
+// GrokViolationFeeSettings 控制上游安全策略拒答时的调用方违规扣费。
+//
+// xAI 对触发安全审核（usage-guidelines violation）的请求额外收取违规费，
+// 该费用由账号持有者承担。把费用透传到调用方账本，使成本可归因；关闭开关
+// 或把 amount 设为 0 即完全停用，无需重新构建。
+type GrokViolationFeeSettings struct {
+	// Enabled 是否在检测到安全策略拒答时对调用方计费
+	Enabled bool `json:"enabled"`
+	// Amount 单次违规的基础扣费金额（USD），实际扣费 = Amount × 分组倍率
+	Amount float64 `json:"amount"`
+}
+
+const (
+	// grokViolationFeeDefaultAmount 与生产 Grok 渠道实际生效口径一致
+	// （newapi options `grok.violation_deduction_amount` = 0.5）。注意 GloryCode
+	// 代码内置默认值是 0.05，生产覆盖成了 0.5，两者不要混淆。
+	grokViolationFeeDefaultAmount = 0.5
+	// grokViolationFeeMaxAmount 上限，避免误配置把余额一次扣空。
+	grokViolationFeeMaxAmount = 100.0
+)
+
+// Grok403CooldownSettings 控制 Grok 未识别 403 的账号冷却（issue #7398）。
+//
+// 未识别 403 会落到默认分支把账号临时停调，且单个请求可连续冷却多个账号
+// （受 gateway.max_account_switches 约束）。时长与开关都需要可运维调整：
+// 403 常常是出口 IP 或请求级问题，而不是账号失效。
+type Grok403CooldownSettings struct {
+	// Enabled 是否对未识别的 Grok 403 停调账号
+	Enabled bool `json:"enabled"`
+	// CooldownMinutes 冷却时长（分钟）
+	CooldownMinutes int `json:"cooldown_minutes"`
+}
+
+const (
+	grok403CooldownDefaultMinutes = 30
+	grok403CooldownMaxMinutes     = 1440
+)
+
 // OpenAIImagesOAuthUnavailableCooldownSettings controls how long an OAuth account's image capability is paused when unavailable.
 type OpenAIImagesOAuthUnavailableCooldownSettings struct {
 	CooldownMinutes int `json:"cooldown_minutes"`
@@ -622,6 +660,23 @@ func DefaultRateLimit429CooldownSettings() *RateLimit429CooldownSettings {
 	return &RateLimit429CooldownSettings{
 		Enabled:         true,
 		CooldownSeconds: 5,
+	}
+}
+
+// DefaultGrokViolationFeeSettings 返回默认的 Grok 违规扣费配置（启用，0.5）。
+func DefaultGrokViolationFeeSettings() *GrokViolationFeeSettings {
+	return &GrokViolationFeeSettings{
+		Enabled: true,
+		Amount:  grokViolationFeeDefaultAmount,
+	}
+}
+
+// DefaultGrok403CooldownSettings 返回默认的 Grok 403 冷却配置（启用，30分钟）。
+// 默认值与改造前的硬编码行为完全一致，避免升级本身改变现网调度。
+func DefaultGrok403CooldownSettings() *Grok403CooldownSettings {
+	return &Grok403CooldownSettings{
+		Enabled:         true,
+		CooldownMinutes: grok403CooldownDefaultMinutes,
 	}
 }
 
