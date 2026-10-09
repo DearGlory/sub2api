@@ -1,14 +1,14 @@
 <template>
   <button
     type="button"
-    class="group text-left p-5 rounded-2xl min-h-[280px] w-full bg-white/70 backdrop-blur-xl border border-gray-200/80 shadow-card dark:bg-dark-800/60 dark:border-dark-700/70 hover:-translate-y-1 hover:shadow-card-hover dark:hover:border-primary-500/30 hover:border-gray-300 transition-all duration-300 ease-out flex flex-col"
+    class="group text-left p-5 rounded-xl min-h-[280px] w-full bg-white border border-gray-200 dark:bg-dark-800 dark:border-dark-700 hover:border-gray-300 dark:hover:border-dark-600 transition-colors duration-200 flex flex-col"
     @click="emit('click')"
   >
     <!-- Header: icon + name/model + status chip -->
     <div class="flex items-start gap-3">
       <span
-        class="w-9 h-9 rounded-xl ring-1 ring-black/5 dark:ring-white/10 grid place-items-center flex-shrink-0"
-        :class="[providerGradient(item.provider), providerTintClass]"
+        class="w-9 h-9 rounded-lg border border-gray-200 bg-gray-100 dark:border-dark-700 dark:bg-dark-800 grid place-items-center flex-shrink-0"
+        :class="providerTintClass"
       >
         <ProviderIcon :provider="item.provider" :size="20" />
       </span>
@@ -80,10 +80,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UserMonitorView } from '@/api/channelMonitor'
-import {
-  useChannelMonitorFormat,
-  providerGradient,
-} from '@/composables/useChannelMonitorFormat'
+import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import { isChannelMonitorQuotaVisible } from '@/utils/featureFlags'
 import ProviderIcon from './ProviderIcon.vue'
 import MonitorMetricPair from './MonitorMetricPair.vue'

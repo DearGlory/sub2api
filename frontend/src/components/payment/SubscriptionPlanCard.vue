@@ -1,8 +1,8 @@
 <template>
   <div
     :class="[
-      'group relative flex flex-col overflow-hidden rounded-2xl border transition-all',
-      'hover:shadow-xl hover:-translate-y-0.5',
+      'group relative flex flex-col overflow-hidden rounded-xl border transition-colors duration-200',
+      'hover:border-gray-300 dark:hover:border-dark-600',
       borderClass,
       'bg-white dark:bg-dark-800',
     ]"
@@ -27,7 +27,7 @@
         <div class="shrink-0 text-right">
           <div class="flex items-baseline gap-1">
             <span class="text-xs text-gray-400 dark:text-dark-500">{{ planCurrencySymbol }}</span>
-            <span :class="['text-2xl font-extrabold tracking-tight', textClass]">{{ plan.price }}</span>
+            <span :class="['text-2xl font-semibold tracking-tight', textClass]">{{ plan.price }}</span>
             <span v-if="plan.currency" class="text-xs font-medium text-gray-400 dark:text-dark-500">{{ plan.currency }}</span>
           </div>
           <div class="flex items-center justify-end gap-1">
@@ -95,7 +95,7 @@
       <!-- Subscribe Button -->
       <button
         type="button"
-        :class="['w-full rounded-xl py-2.5 text-sm font-semibold transition-all active:scale-[0.98]', btnClass]"
+        :class="['w-full rounded-lg py-2.5 text-sm font-semibold transition-colors duration-150', btnClass]"
         @click="emit('select', plan)"
       >
         {{ isRenewal ? t('payment.renewNow') : t('payment.subscribeNow') }}

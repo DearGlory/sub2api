@@ -5,7 +5,7 @@
     </div>
     <div class="flex items-baseline gap-0.5">
       <span
-        class="text-3xl font-bold tabular-nums leading-none"
+        class="text-3xl font-semibold tabular-nums leading-none"
         :style="colorStyle"
       >
         {{ displayValue }}
