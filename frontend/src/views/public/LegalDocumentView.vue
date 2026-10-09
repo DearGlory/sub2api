@@ -4,7 +4,7 @@
       <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <RouterLink to="/home" class="flex min-w-0 items-center gap-3">
           <template v-if="settings">
-            <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-700">
+            <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-700">
               <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
             </span>
             <span class="truncate text-base font-semibold text-gray-950 dark:text-white">
@@ -12,13 +12,13 @@
             </span>
           </template>
           <template v-else>
-            <span class="h-10 w-10 flex-shrink-0 animate-pulse rounded-xl bg-gray-200 dark:bg-dark-700" aria-hidden="true"></span>
-            <span class="h-5 w-28 animate-pulse rounded bg-gray-200 dark:bg-dark-700" aria-hidden="true"></span>
+            <span class="skeleton h-10 w-10 flex-shrink-0 rounded-xl" aria-hidden="true"></span>
+            <span class="skeleton h-5 w-28 flex-shrink-0" aria-hidden="true"></span>
           </template>
         </RouterLink>
         <RouterLink
           to="/login"
-          class="inline-flex flex-shrink-0 items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-primary-600/20 transition hover:bg-primary-700"
+          class="inline-flex flex-shrink-0 items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400"
         >
           {{ t('home.login') }}
         </RouterLink>
@@ -43,7 +43,7 @@
         class="rounded-lg border border-gray-200 bg-white p-6 dark:border-dark-700 dark:bg-dark-900"
       >
         <div class="flex items-start gap-3">
-          <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-600 dark:bg-dark-800 dark:text-dark-300">
+          <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-dark-800 dark:text-dark-300">
             <Icon name="document" size="sm" />
           </span>
           <div>
@@ -58,12 +58,12 @@
       <article v-else>
         <div class="mb-8 border-b border-gray-200 pb-6 dark:border-dark-700">
           <div class="flex items-start gap-4">
-            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-md bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
+            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-dark-800 dark:text-dark-300">
               <Icon :name="documentIcon" size="md" />
             </span>
             <div class="min-w-0">
-              <p class="text-sm font-medium text-primary-700 dark:text-primary-300">{{ documentTypeLabel }}</p>
-              <h1 class="mt-2 break-words text-2xl font-bold tracking-normal text-gray-950 dark:text-white sm:text-3xl">
+              <p class="text-sm font-medium text-gray-500 dark:text-dark-400">{{ documentTypeLabel }}</p>
+              <h1 class="mt-2 break-words text-2xl font-semibold tracking-[-0.01em] text-gray-950 dark:text-white sm:text-3xl">
                 {{ currentDocument.title }}
               </h1>
               <p v-if="updatedAt" class="mt-3 text-sm text-gray-500 dark:text-dark-400">
@@ -190,11 +190,11 @@ onMounted(async () => {
 }
 
 .legal-document-content :deep(h1) {
-  @apply mb-4 mt-8 border-b border-gray-200 pb-3 text-3xl font-bold dark:border-dark-700;
+  @apply mb-4 mt-8 border-b border-gray-200 pb-3 text-3xl font-semibold dark:border-dark-700;
 }
 
 .legal-document-content :deep(h2) {
-  @apply mb-3 mt-7 text-2xl font-bold;
+  @apply mb-3 mt-7 text-2xl font-semibold;
 }
 
 .legal-document-content :deep(h3) {
@@ -226,7 +226,7 @@ onMounted(async () => {
 }
 
 .legal-document-content :deep(blockquote) {
-  @apply my-5 border-l-4 border-gray-300 pl-4 text-gray-600 dark:border-dark-600 dark:text-dark-300;
+  @apply my-5 border-l-2 border-gray-300 pl-4 text-gray-600 dark:border-dark-600 dark:text-dark-300;
 }
 
 .legal-document-content :deep(code) {

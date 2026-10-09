@@ -1,16 +1,16 @@
 <template>
   <div
-    class="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4 dark:from-dark-900 dark:to-dark-800"
+    class="flex min-h-screen items-center justify-center bg-gray-50 p-4 dark:bg-dark-950"
   >
     <div class="w-full max-w-2xl">
       <!-- Logo & Title -->
       <div class="mb-8 text-center">
         <div
-          class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg"
+          class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900"
         >
-          <Icon name="cog" size="xl" class="text-white" />
+          <Icon name="cog" size="xl" />
         </div>
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ t('setup.title') }}</h1>
+        <h1 class="text-3xl font-semibold tracking-[-0.01em] text-gray-900 dark:text-white">{{ t('setup.title') }}</h1>
         <p class="mt-2 text-gray-500 dark:text-dark-400">{{ t('setup.description') }}</p>
       </div>
 
@@ -21,11 +21,11 @@
             <div class="flex items-center">
               <div
                 :class="[
-                  'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-all',
+                  'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-colors',
                   currentStep > index
-                    ? 'bg-primary-500 text-white'
+                    ? 'bg-primary-600 text-white dark:bg-primary-500'
                     : currentStep === index
-                      ? 'bg-primary-500 text-white ring-4 ring-primary-100 dark:ring-primary-900'
+                      ? 'bg-primary-600 text-white ring-2 ring-primary-500/25 dark:bg-primary-500 dark:ring-primary-500/30'
                       : 'bg-gray-200 text-gray-500 dark:bg-dark-700 dark:text-dark-400'
                 ]"
               >
@@ -51,14 +51,14 @@
             <div
               v-if="index < steps.length - 1"
               class="mx-2 h-0.5 w-6 sm:mx-3 sm:w-12"
-              :class="currentStep > index ? 'bg-primary-500' : 'bg-gray-200 dark:bg-dark-700'"
+              :class="currentStep > index ? 'bg-primary-600 dark:bg-primary-500' : 'bg-gray-200 dark:bg-dark-700'"
             ></div>
           </template>
         </div>
       </div>
 
       <!-- Step Content -->
-      <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-dark-800">
+      <div class="rounded-xl border border-gray-200 bg-white p-6 dark:border-dark-800 dark:bg-dark-900">
         <!-- Step 1: Database -->
         <div v-if="currentStep === 0" class="space-y-6">
           <div class="mb-6 text-center">
@@ -360,7 +360,7 @@
           </div>
 
           <div class="space-y-4">
-            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
+            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-800">
               <h3 class="mb-2 text-sm font-medium text-gray-500 dark:text-dark-400">
                 {{ t('setup.ready.database') }}
               </h3>
@@ -371,7 +371,7 @@
               </p>
             </div>
 
-            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
+            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-800">
               <h3 class="mb-2 text-sm font-medium text-gray-500 dark:text-dark-400">
                 {{ t('setup.ready.redis') }}
               </h3>
@@ -380,7 +380,7 @@
               </p>
             </div>
 
-            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
+            <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-800">
               <h3 class="mb-2 text-sm font-medium text-gray-500 dark:text-dark-400">
                 {{ t('setup.ready.adminEmail') }}
               </h3>
