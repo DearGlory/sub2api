@@ -36,6 +36,10 @@ export interface ChoreographyState {
 }
 
 export interface ChoreographyOptions {
+  /** Number of brands to cycle through. Comes from the engine's brand list, so a
+   *  caller that passes a short roster still wraps correctly instead of stepping
+   *  past the end of it. */
+  brandCount: number
   amplitudeX: number
   swayY: number
   swayZ: number
@@ -90,10 +94,14 @@ export interface BrandTargets {
  */
 export interface BrandTargetSource {
   get(slug: string): BrandTargets | null
-  /** Kick off the work off the critical path (requestIdleCallback when present). */
-  prefetch(slug: string, count: number): void
+  /**
+   * Kick off the work off the critical path (requestIdleCallback when present).
+   * `canvasSize` is the quality profile's `iconCanvasSize`: a weaker device
+   * rasterises the glyph smaller and spends proportionally less CPU per brand.
+   */
+  prefetch(slug: string, count: number, canvasSize?: number): void
   /** Synchronously produce the targets, or `null` if the glyph cannot be read. */
-  ensure(slug: string, count: number): BrandTargets | null
+  ensure(slug: string, count: number, canvasSize?: number): BrandTargets | null
   dispose(): void
 }
 

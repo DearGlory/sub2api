@@ -1,0 +1,8 @@
+546b3dcfb11825668ce888a6a9d1d376e49e4213be24bfb012228fabcde8bd34  src/features/home-particle/engine/types.ts
+5cde3ad3af1c9c4186843bb634a6197831d815c804431cbb0714e438bf9b6773  src/features/home-particle/engine/constants.ts
+79e9718be953a37ce86acd8edbfd275e9c8c44e679403eb32a85f1ffc19b3196  src/features/home-particle/engine/index.ts
+f25cc5a64b0fc7cb2edc3506ae115705035d0ef2627902c54e8e99d365206ff8  src/features/home-particle/HomeParticleBackground.vue
+825c34f78d6329f5f38dc781d237be42b156ddf12b623655909c2875e727dc92  src/features/home-particle/index.ts
+f91266be8f17a1c090a06f2e8bfbbd2c9cec90504dc8c82e4cff75c8e8e919b5  src/features/home-particle/vendor/voxspace-math.ts
+fc59b3fc6a0f06ab87a6e47c603af8250a57eaa656b848ec5dd158875b6b1d32  src/features/home-particle/vendor/voxspace-icon-targets.ts
+13499a78a8f25f99b680b0b94832b618911da83ccf9c21cc3fb3f73f8f99243e  src/features/home-particle/assets/brands/*.svg
