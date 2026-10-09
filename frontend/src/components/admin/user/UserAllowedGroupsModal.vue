@@ -2,9 +2,9 @@
   <BaseDialog :show="show" :title="t('admin.users.groupConfig')" width="wide" @close="$emit('close')">
     <div v-if="user" class="space-y-6">
       <!-- 用户信息头部 -->
-      <div class="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-primary-50 to-primary-100 p-5 dark:from-primary-900/30 dark:to-primary-800/20">
-        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm dark:bg-dark-700">
-          <span class="text-2xl font-semibold text-primary-600 dark:text-primary-400">{{ user.email.charAt(0).toUpperCase() }}</span>
+      <div class="flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-dark-800 dark:bg-dark-900">
+        <div class="flex h-14 w-14 items-center justify-center rounded-full border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+          <span class="text-2xl font-semibold text-gray-600 dark:text-dark-200">{{ user.email.charAt(0).toUpperCase() }}</span>
         </div>
         <div class="flex-1">
           <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ user.email }}</p>
@@ -32,9 +32,9 @@
             <div
               v-for="config in exclusiveGroupConfigs"
               :key="config.groupId"
-              class="group relative overflow-hidden rounded-xl border-2 p-4 transition-all duration-200"
+              class="group relative overflow-hidden rounded-lg border-2 p-4 transition-colors duration-200"
               :class="config.isSelected
-                ? 'border-primary-400 bg-primary-50/50 shadow-sm dark:border-primary-500 dark:bg-primary-900/20'
+                ? 'border-primary-400 bg-primary-50/50 dark:border-primary-500 dark:bg-primary-900/20'
                 : 'border-gray-200 bg-white hover:border-gray-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-dark-500'"
             >
               <div class="flex items-center gap-4">
@@ -47,7 +47,7 @@
                       @change="toggleExclusiveGroup(config.groupId)"
                       class="peer sr-only"
                     />
-                    <div class="h-5 w-5 rounded-md border-2 border-gray-300 transition-all peer-checked:border-primary-500 peer-checked:bg-primary-500 dark:border-dark-500 peer-checked:dark:border-primary-500">
+                    <div class="h-5 w-5 rounded-md border-2 border-gray-300 transition-colors duration-150 peer-checked:border-primary-500 peer-checked:bg-primary-500 dark:border-dark-500 peer-checked:dark:border-primary-500">
                       <svg v-if="config.isSelected" class="h-full w-full text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                       </svg>

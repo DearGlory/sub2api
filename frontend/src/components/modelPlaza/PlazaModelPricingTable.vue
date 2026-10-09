@@ -284,20 +284,20 @@
           >
             <span
               v-if="period"
-              class="font-bold text-primary-600 dark:text-primary-400"
+              class="font-semibold text-primary-600 dark:text-primary-400"
               :title="t('modelPlaza.table.timePricingRateHint', { rate: effectiveRate, multiplier: period.multiplier })"
               >{{ periodRate(period) }}x</span
             >
             <span
               v-else-if="usesIndependentMediaRate(m)"
-              class="font-bold text-gray-700 dark:text-gray-300"
+              class="font-semibold text-gray-700 dark:text-gray-300"
               >{{ requestRate(m) }}x</span
             >
             <template v-else-if="hasCustomRate">
               <span class="mr-1 text-gray-400 line-through dark:text-dark-500">{{ rateMultiplier }}x</span>
-              <span class="font-bold text-primary-600 dark:text-primary-400">{{ effectiveRate }}x</span>
+              <span class="font-semibold text-primary-600 dark:text-primary-400">{{ effectiveRate }}x</span>
             </template>
-            <span v-else class="font-bold text-gray-700 dark:text-gray-300">{{ effectiveRate }}x</span>
+            <span v-else class="font-semibold text-gray-700 dark:text-gray-300">{{ effectiveRate }}x</span>
           </td>
         </tr>
       </tbody>

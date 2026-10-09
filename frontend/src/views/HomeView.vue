@@ -72,9 +72,9 @@
         <img
           :src="siteLogo || '/logo.svg'"
           alt="Logo"
-          class="mx-auto mb-6 h-20 w-20 rounded-2xl object-contain"
+          class="mx-auto mb-6 h-20 w-20 rounded-xl object-contain"
         />
-        <h1 class="[overflow-wrap:anywhere] text-3xl font-bold md:text-4xl">{{ siteName }}</h1>
+        <h1 class="[overflow-wrap:anywhere] text-3xl font-semibold md:text-4xl">{{ siteName }}</h1>
         <p class="mt-4 whitespace-pre-wrap [overflow-wrap:anywhere] text-base text-gray-600 dark:text-dark-300">{{ siteSubtitle }}</p>
         <router-link
           :to="isAuthenticated ? dashboardPath : '/login'"
@@ -93,14 +93,14 @@
   <!-- Default Home Page -->
   <div
     v-else
-    class="relative flex min-h-screen flex-col bg-gray-50 dark:bg-dark-950"
+    class="relative flex min-h-screen flex-col overflow-hidden bg-gray-50 dark:bg-dark-950"
   >
     <!-- Header -->
     <header class="relative z-20 px-6 py-4">
       <nav class="mx-auto flex max-w-6xl items-center justify-between">
         <!-- Logo -->
         <div class="flex items-center">
-          <div class="h-10 w-10 overflow-hidden rounded-lg">
+          <div class="h-10 w-10 overflow-hidden rounded-lg border border-gray-200 dark:border-dark-800">
             <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
           </div>
         </div>
@@ -150,7 +150,7 @@
             class="inline-flex items-center gap-1.5 rounded-full bg-gray-900 py-1 pl-1 pr-2.5 transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
           >
             <span
-              class="flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white"
+              class="flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-[10px] font-semibold text-white dark:bg-dark-700"
             >
               {{ userInitial }}
             </span>
@@ -188,7 +188,7 @@
           <!-- Left: Text Content -->
           <div class="flex-1 text-center lg:text-left">
             <h1
-              class="mb-4 text-4xl font-semibold tracking-tight text-gray-900 dark:text-white md:text-5xl lg:text-6xl"
+              class="mb-4 text-4xl font-semibold text-gray-900 dark:text-white md:text-5xl lg:text-6xl"
             >
               {{ siteName }}
             </h1>
@@ -249,7 +249,7 @@
         <!-- Feature Tags - Centered -->
         <div class="mb-12 flex flex-wrap items-center justify-center gap-4 md:gap-6">
           <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-5 py-2.5 dark:border-dark-700 dark:bg-dark-900"
+            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-5 py-2.5 dark:border-dark-800 dark:bg-dark-900"
           >
             <Icon name="swap" size="sm" class="text-primary-500" />
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
@@ -257,7 +257,7 @@
             }}</span>
           </div>
           <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-5 py-2.5 dark:border-dark-700 dark:bg-dark-900"
+            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-5 py-2.5 dark:border-dark-800 dark:bg-dark-900"
           >
             <Icon name="shield" size="sm" class="text-primary-500" />
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
@@ -265,7 +265,7 @@
             }}</span>
           </div>
           <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-5 py-2.5 dark:border-dark-700 dark:bg-dark-900"
+            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-5 py-2.5 dark:border-dark-800 dark:bg-dark-900"
           >
             <Icon name="chart" size="sm" class="text-primary-500" />
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
@@ -275,15 +275,15 @@
         </div>
 
         <!-- Features Grid -->
-        <div class="mb-12 grid gap-5 md:grid-cols-3">
+        <div class="mb-12 grid gap-6 md:grid-cols-3">
           <!-- Feature 1: Unified Gateway -->
           <div
-            class="rounded-xl border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-900"
+            class="group rounded-xl border border-gray-200 bg-white p-5 transition-colors duration-200 hover:border-gray-300 dark:border-dark-800 dark:bg-dark-900 dark:hover:border-dark-700"
           >
             <div
-              class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-dark-800 dark:text-dark-300"
             >
-              <Icon name="server" size="lg" class="text-gray-700 dark:text-dark-200" />
+              <Icon name="server" size="lg" />
             </div>
             <h3 class="mb-2 text-base font-semibold text-gray-900 dark:text-white">
               {{ t('home.features.unifiedGateway') }}
@@ -295,13 +295,13 @@
 
           <!-- Feature 2: Account Pool -->
           <div
-            class="rounded-xl border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-900"
+            class="group rounded-xl border border-gray-200 bg-white p-5 transition-colors duration-200 hover:border-gray-300 dark:border-dark-800 dark:bg-dark-900 dark:hover:border-dark-700"
           >
             <div
-              class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-dark-800 dark:text-dark-300"
             >
               <svg
-                class="h-6 w-6 text-gray-700 dark:text-dark-200"
+                class="h-6 w-6"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -324,13 +324,13 @@
 
           <!-- Feature 3: Billing & Quota -->
           <div
-            class="rounded-xl border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-900"
+            class="group rounded-xl border border-gray-200 bg-white p-5 transition-colors duration-200 hover:border-gray-300 dark:border-dark-800 dark:bg-dark-900 dark:hover:border-dark-700"
           >
             <div
-              class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-dark-800 dark:text-dark-300"
             >
               <svg
-                class="h-6 w-6 text-gray-700 dark:text-dark-200"
+                class="h-6 w-6"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -343,7 +343,7 @@
                 />
               </svg>
             </div>
-            <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 class="mb-2 text-base font-semibold text-gray-900 dark:text-white">
               {{ t('home.features.balanceQuota') }}
             </h3>
             <p class="text-sm leading-relaxed text-gray-600 dark:text-dark-400">
@@ -354,7 +354,7 @@
 
         <!-- Supported Providers -->
         <div class="mb-8 text-center">
-          <h2 class="mb-3 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
+          <h2 class="mb-3 text-2xl font-semibold text-gray-900 dark:text-white">
             {{ t('home.providers.title') }}
           </h2>
           <p class="text-sm text-gray-600 dark:text-dark-400">
@@ -365,76 +365,76 @@
         <div class="mb-16 flex flex-wrap items-center justify-center gap-4">
           <!-- Claude - Supported -->
           <div
-            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-700 dark:bg-dark-900"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-800 dark:bg-dark-900"
           >
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 dark:bg-dark-800"
             >
-              <span class="text-xs font-semibold text-gray-700 dark:text-dark-200">C</span>
+              <span class="text-xs font-semibold text-gray-600 dark:text-dark-300">C</span>
             </div>
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.claude') }}</span>
             <span
-              class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-dark-800 dark:text-dark-300"
+              class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
               >{{ t('home.providers.supported') }}</span
             >
           </div>
           <!-- GPT - Supported -->
           <div
-            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-700 dark:bg-dark-900"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-800 dark:bg-dark-900"
           >
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 dark:bg-dark-800"
             >
-              <span class="text-xs font-semibold text-gray-700 dark:text-dark-200">G</span>
+              <span class="text-xs font-semibold text-gray-600 dark:text-dark-300">G</span>
             </div>
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">GPT</span>
             <span
-              class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-dark-800 dark:text-dark-300"
+              class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
               >{{ t('home.providers.supported') }}</span
             >
           </div>
           <!-- Gemini - Supported -->
           <div
-            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-700 dark:bg-dark-900"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-800 dark:bg-dark-900"
           >
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 dark:bg-dark-800"
             >
-              <span class="text-xs font-semibold text-gray-700 dark:text-dark-200">G</span>
+              <span class="text-xs font-semibold text-gray-600 dark:text-dark-300">G</span>
             </div>
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.gemini') }}</span>
             <span
-              class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-dark-800 dark:text-dark-300"
+              class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
               >{{ t('home.providers.supported') }}</span
             >
           </div>
           <!-- Antigravity - Supported -->
           <div
-            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-700 dark:bg-dark-900"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 dark:border-dark-800 dark:bg-dark-900"
           >
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 dark:bg-dark-800"
             >
-              <span class="text-xs font-semibold text-gray-700 dark:text-dark-200">A</span>
+              <span class="text-xs font-semibold text-gray-600 dark:text-dark-300">A</span>
             </div>
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.antigravity') }}</span>
             <span
-              class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-dark-800 dark:text-dark-300"
+              class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
               >{{ t('home.providers.supported') }}</span
             >
           </div>
           <!-- More - Coming Soon -->
           <div
-            class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 opacity-60 dark:border-dark-700 dark:bg-dark-900"
+            class="flex items-center gap-2 rounded-xl border border-gray-200/50 bg-white/40 px-5 py-3 opacity-60 backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/40"
           >
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-800"
+              class="flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 dark:bg-dark-800"
             >
-              <span class="text-xs font-semibold text-gray-700 dark:text-dark-200">+</span>
+              <span class="text-xs font-semibold text-gray-600 dark:text-dark-300">+</span>
             </div>
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.more') }}</span>
             <span
-              class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-800 dark:text-dark-400"
+              class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700 dark:text-dark-400"
               >{{ t('home.providers.soon') }}</span
             >
           </div>
@@ -568,14 +568,14 @@ onMounted(() => {
   display: inline-block;
 }
 
-/* Terminal Window */
+/* Terminal Window - flat surface + 1px border, no glow / no 3D tilt */
 .terminal-window {
   width: 420px;
   background: #0f1113;
-  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   overflow: hidden;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .terminal-window:hover {
@@ -587,8 +587,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(30, 41, 59, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .terminal-buttons {
@@ -635,7 +635,7 @@ onMounted(() => {
   gap: 8px;
   flex-wrap: wrap;
   opacity: 0;
-  animation: line-appear 0.5s ease forwards;
+  animation: line-appear 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .line-1 {
@@ -664,16 +664,16 @@ onMounted(() => {
 
 .code-prompt {
   color: #22c55e;
-  font-weight: bold;
+  font-weight: 600;
 }
 .code-cmd {
-  color: #38bdf8;
+  color: #cbd5e1;
 }
 .code-flag {
-  color: #a78bfa;
+  color: #94a3b8;
 }
 .code-url {
-  color: #ff8447;
+  color: #e2e8f0;
 }
 .code-comment {
   color: #64748b;
@@ -687,31 +687,21 @@ onMounted(() => {
   font-weight: 600;
 }
 .code-response {
-  color: #fbbf24;
+  color: #cbd5e1;
 }
 
-/* Blinking Cursor */
+/* Cursor - steady block, no blink (design language bans flashing cursor) */
 .cursor {
   display: inline-block;
   width: 8px;
   height: 16px;
-  background: #22c55e;
-  animation: blink 1s step-end infinite;
+  background: #475569;
 }
 
-@keyframes blink {
-  0%,
-  50% {
+@media (prefers-reduced-motion: reduce) {
+  .code-line {
+    animation: none;
     opacity: 1;
   }
-  51%,
-  100% {
-    opacity: 0;
-  }
-}
-
-/* Dark mode adjustments */
-:deep(.dark) .terminal-window {
-  border-color: rgba(255, 255, 255, 0.1);
 }
 </style>

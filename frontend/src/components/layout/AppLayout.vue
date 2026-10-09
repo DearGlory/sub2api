@@ -5,7 +5,7 @@
 
     <!-- Main Content Area -->
     <div
-      class="relative min-h-screen transition-all duration-300"
+      class="relative min-h-screen transition-[margin] duration-200 ease-out motion-reduce:transition-none"
       :class="[sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64']"
     >
       <!-- Header -->

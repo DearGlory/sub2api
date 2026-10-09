@@ -4,8 +4,8 @@
   >
     <div class="card-header mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3 !border-0 !p-0">
       <div class="min-w-0">
-        <h2 class="flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white">
-          <span class="inline-flex h-4 w-4 text-emerald-500" aria-hidden="true">
+        <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+          <span class="inline-flex h-4 w-4 text-gray-400 dark:text-dark-400" aria-hidden="true">
             <Icon name="grid" size="sm" />
           </span>
           {{ t('channelMonitorV2.matrix.title') }}
@@ -32,7 +32,7 @@
       <div
         v-if="rows.length"
         ref="scrollRef"
-        class="matrix-scroll max-h-[min(42vh,420px)] max-w-full overflow-auto rounded-2xl bg-gray-50/60 p-2 dark:bg-dark-900/30"
+        class="matrix-scroll max-h-[min(42vh,420px)] max-w-full overflow-auto rounded-xl bg-gray-50 p-2 dark:bg-dark-900/40"
         @wheel="onMatrixWheel"
       >
         <div class="matrix-table w-full" :style="tableStyle">

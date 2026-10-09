@@ -1,6 +1,6 @@
 <template>
   <section
-    class="overflow-hidden rounded-2xl border bg-white shadow-card dark:bg-dark-800/50"
+    class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-800 dark:bg-dark-900"
     :class="[platformBorderStrongClass(group.platform)]"
   >
     <!-- 分组头部:名称/平台/倍率徽章/专属/订阅徽章 + 描述 -->
