@@ -444,7 +444,7 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 		}
 		if event.Type == "content_block_delta" && event.Delta != nil && finalResp != nil && event.Index != nil {
 			idx := *event.Index
-			if idx < len(finalResp.Content) {
+			if idx >= 0 && idx < len(finalResp.Content) {
 				acc := blockAccs[idx]
 				if acc == nil {
 					acc = &blockDeltaAccumulator{}
