@@ -45,8 +45,8 @@ watch(
 
 const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
 const colors = computed(() => ({
-  blue: '#3b82f6',
-  blueAlpha: '#3b82f620',
+  accent: isDarkMode.value ? '#ff8447' : '#ff6708',
+  accentAlpha: isDarkMode.value ? '#ff844730' : '#ff670820',
   green: '#10b981',
   greenAlpha: '#10b98120',
   grid: isDarkMode.value ? '#374151' : '#f3f4f6',
@@ -63,8 +63,8 @@ const chartData = computed(() => {
       {
         label: 'QPS',
         data: props.points.map((p) => p.qps ?? 0),
-        borderColor: colors.value.blue,
-        backgroundColor: colors.value.blueAlpha,
+        borderColor: colors.value.accent,
+        backgroundColor: colors.value.accentAlpha,
         fill: true,
         tension: 0.4,
         pointRadius: 0,
@@ -173,13 +173,13 @@ function downloadChart() {
 </script>
 
 <template>
-  <div class="flex h-full min-w-0 flex-col rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
+  <div class="flex h-full min-w-0 flex-col rounded-xl bg-white p-5 ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
     <div
       data-testid="throughput-chart-header"
       class="mb-4 flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
     >
-      <h3 class="flex min-w-0 items-center gap-2 text-sm font-bold text-gray-900 dark:text-white">
-        <svg class="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <h3 class="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+        <svg class="h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
         </svg>
         {{ t('admin.ops.throughputTrend') }}
@@ -189,7 +189,7 @@ function downloadChart() {
         data-testid="throughput-chart-toolbar"
         class="flex w-full min-w-0 flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 sm:w-auto sm:justify-end"
       >
-        <span class="flex shrink-0 items-center gap-1"><span class="h-2 w-2 rounded-full bg-blue-500"></span>QPS</span>
+        <span class="flex shrink-0 items-center gap-1"><span class="h-2 w-2 rounded-full bg-primary-500 dark:bg-primary-400"></span>QPS</span>
         <span class="flex shrink-0 items-center gap-1"><span class="h-2 w-2 rounded-full bg-green-500"></span>{{ t('admin.ops.tpsK') }}</span>
         <template v-if="!props.fullscreen">
           <button
@@ -253,7 +253,7 @@ function downloadChart() {
     <div class="min-h-0 min-w-0 flex-1">
       <Line v-if="state === 'ready' && chartData" ref="throughputChartRef" :data="chartData" :options="options" />
       <div v-else class="flex h-full items-center justify-center">
-        <div v-if="state === 'loading'" class="animate-pulse text-sm text-gray-400">{{ t('common.loading') }}</div>
+        <div v-if="state === 'loading'" class="text-sm text-gray-400 dark:text-gray-500">{{ t('common.loading') }}</div>
         <EmptyState v-else :title="t('common.noData')" :description="t('admin.ops.charts.emptyRequest')" />
       </div>
     </div>
