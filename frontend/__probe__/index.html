@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>brand glyph probe</title>
+    <style>
+      body { margin: 0; font: 13px/1.5 ui-monospace, monospace; background: #0b0d14; color: #dde3f0; }
+      #out { padding: 16px; white-space: pre; }
+    </style>
+  </head>
+  <body>
+    <div id="out">running…</div>
+    <script type="module">
+      /*
+       * Independent probe for the brand glyph sampler.
+       *
+       * The lane's own spec skips the real rasteriser under jsdom (no Path2D), so
+       * the 28 official logos are never actually turned into particles by the unit
+       * suite. This page runs the sampler in a real browser and reports, per slug,
+       * what came out — plus a cross-slug comparison, because 28 logos that all
+       * collapse to the same blob would still pass a per-slug "not noise" check.
+       *
+       * Result lands on window.__BRAND_PROBE__ for the CDP harness to read.
+       */
+      import { createBrandTargetSource } from '/src/features/home-particle/engine/brandTargets.ts'
+      import { BRANDS } from '/src/features/home-particle/engine/constants.ts'
+
+      const COUNT = 600
+
+      function stats(targets, strokeDepth, count) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+        let sumX = 0, sumY = 0
+        let finite = true
+        for (let i = 0; i < count; i++) {
+          const x = targets[i * 3]
+          const y = targets[i * 3 + 1]
+          if (!Number.isFinite(x) || !Number.isFinite(y)) finite = false
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+          sumX += x
+          sumY += y
+        }
+        let depthMin = Infinity, depthMax = -Infinity
+        for (let i = 0; i < count; i++) {
+          const d = strokeDepth[i]
+          if (d < depthMin) depthMin = d
+          if (d > depthMax) depthMax = d
+        }
+        return {
+          finite,
+          sumX, sumY,
+          meanX: sumX / count,
+          meanY: sumY / count,
+          extentX: maxX - minX,
+          extentY: maxY - minY,
+          depthMin, depthMax,
+        }
+      }
+
+      // A coarse 12x12 occupancy bitmap of the silhouette. Two logos with the same
+      // bitmap are the same shape as far as the particles are concerned, which is
+      // the failure a per-slug assertion cannot see.
+      function signature(targets, count, extentX, extentY, meanX, meanY) {
+        const N = 12
+        const cells = new Uint8Array(N * N)
+        const w = extentX || 1
+        const h = extentY || 1
+        for (let i = 0; i < count; i++) {
+          const nx = (targets[i * 3] - (meanX - w / 2)) / w
+          const ny = (targets[i * 3 + 1] - (meanY - h / 2)) / h
+          const cx = Math.max(0, Math.min(N - 1, Math.floor(nx * N)))
+          const cy = Math.max(0, Math.min(N - 1, Math.floor(ny * N)))
+          cells[cy * N + cx] = 1
+        }
+        let bits = ''
+        for (let i = 0; i < cells.length; i++) bits += cells[i]
+        return bits
+      }
+
+      async function run() {
+        const result = { count: COUNT, brands: [], failures: [], skipped: [] }
+        const source = createBrandTargetSource()
+
+        // Lazy check first: nothing should exist before it is asked for.
+        const lazyBefore = BRANDS.filter((b) => source.get(b.slug) !== null).map((b) => b.slug)
+        result.lazyHitsBeforeEnsure = lazyBefore
+
+        for (const brand of BRANDS) {
+          let targets = source.ensure(brand.slug, COUNT)
+          if (!targets) {
+            result.skipped.push({ slug: brand.slug, reason: 'ensure() returned null' })
+            continue
+          }
+          const s = stats(targets.targets, targets.strokeDepth, COUNT)
+          const sig = signature(targets.targets, COUNT, s.extentX, s.extentY, s.meanX, s.meanY)
+          result.brands.push({
+            slug: brand.slug,
+            label: brand.label,
+            anchorCount: targets.anchorCount,
+            ...s,
+            signature: sig,
+          })
+          if (!s.finite) result.failures.push(`${brand.slug}: non-finite coordinates`)
+          if (s.extentX <= 0.5 || s.extentY <= 0.5) {
+            result.failures.push(`${brand.slug}: degenerate extent ${s.extentX.toFixed(3)}x${s.extentY.toFixed(3)}`)
+          }
+        }
+
+        // Cross-slug: how many distinct silhouettes did we actually get?
+        const bySig = new Map()
+        for (const b of result.brands) {
+          const list = bySig.get(b.signature) ?? []
+          list.push(b.slug)
+          bySig.set(b.signature, list)
+        }
+        result.distinctSilhouettes = bySig.size
+        result.collisions = [...bySig.values()].filter((l) => l.length > 1)
+
+        // The noise fallback is a sphere; if a glyph collapsed to it, meanX would be
+        // ~0 (noise is centred on the origin, glyphs sit at ICON_CENTER_X).
+        result.looksLikeNoise = result.brands.filter((b) => Math.abs(b.meanX) < 0.5).map((b) => b.slug)
+
+        source.dispose()
+        const afterDispose = BRANDS.filter((b) => source.get(b.slug) !== null).length
+        result.cacheClearedOnDispose = afterDispose === 0
+
+        return result
+      }
+
+      try {
+        const r = await run()
+        window.__BRAND_PROBE__ = r
+        document.getElementById('out').textContent = JSON.stringify(r, null, 2)
+      } catch (error) {
+        window.__BRAND_PROBE__ = { error: String(error && error.stack ? error.stack : error) }
+        document.getElementById('out').textContent = 'ERROR: ' + String(error)
+      }
+    </script>
+  </body>
+</html>
