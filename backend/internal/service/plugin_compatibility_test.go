@@ -46,3 +46,32 @@ func TestMatchesSemverRange(t *testing.T) {
 	assert.False(t, matchesSemverRange("dev", ">=0.1.0"))
 	assert.False(t, matchesSemverRange("0.1.179", "^0.1.0"))
 }
+
+// A GloryCode build carries a vendor suffix on top of an upstream base version.
+// In semver a hyphen introduces a prerelease, which sorts BELOW the plain
+// release, so without stripping, a plugin requiring the base version would be
+// misjudged as incompatible with an equal-or-newer build.
+func TestMatchesSemverRangeWithVendorSuffix(t *testing.T) {
+	assert.True(t, matchesSemverRange("0.2.15-GloryCode", ">=0.2.15"))
+	assert.True(t, matchesSemverRange("0.2.15-GloryCode", "=0.2.15"))
+	assert.True(t, matchesSemverRange("0.2.15-GloryCode", ">=0.2.14 <0.3.0"))
+	assert.False(t, matchesSemverRange("0.2.15-GloryCode", ">=0.2.16"))
+	assert.False(t, matchesSemverRange("0.2.15-GloryCode", "<0.2.15"))
+	// Case should not change the verdict.
+	assert.True(t, matchesSemverRange("0.2.15-glorycode", ">=0.2.15"))
+}
+
+func TestEvaluatePluginCompatibilityWithVendorSuffix(t *testing.T) {
+	manifest := testPluginManifest(nil)
+	manifest.Requires.Sub2API = ">=0.2.15"
+	manifest.Requires.TestedSub2APIVersions = []string{"0.2.15"}
+
+	result := EvaluatePluginCompatibility(manifest, PluginHostInfo{
+		Version:   "0.2.15-GloryCode",
+		BuildType: "release",
+	})
+
+	require.True(t, result.Compatible)
+	assert.Equal(t, "compatible", result.Status)
+	assert.True(t, result.Tested)
+}

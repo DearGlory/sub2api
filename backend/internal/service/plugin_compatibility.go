@@ -51,8 +51,28 @@ func EvaluatePluginCompatibility(manifest PluginManifest, host PluginHostInfo) P
 	return result
 }
 
+// vendorVersionSuffix labels a GloryCode build on top of an upstream base
+// version, e.g. "0.2.15-GloryCode" is upstream 0.2.15 plus our patches.
+const vendorVersionSuffix = "-GloryCode"
+
+// normalizeSemver converts a version string into x/mod/semver form.
+//
+// The vendor suffix is stripped before comparison. In semver a hyphen starts a
+// PRERELEASE, and a prerelease sorts BELOW its plain release: x/mod/semver
+// reports Compare("v0.2.15-GloryCode", "v0.2.15") == -1. Left in place, a plugin
+// requiring ">=0.2.15" would be judged incompatible with a build that is
+// 0.2.15 plus extra patches — the suffix is a vendor label on the upstream base
+// version, not a statement that this build is older or unfinished.
 func normalizeSemver(version string) string {
 	v := strings.TrimSpace(version)
+	if v == "" {
+		return ""
+	}
+	// Case-insensitive match; version strings are ASCII, so the byte offset from
+	// the folded copy is valid for the original.
+	if idx := strings.Index(strings.ToLower(v), strings.ToLower(vendorVersionSuffix)); idx != -1 {
+		v = strings.TrimSpace(v[:idx])
+	}
 	if v == "" {
 		return ""
 	}
