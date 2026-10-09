@@ -1,0 +1,279 @@
+<script setup lang="ts">
+/**
+ * Hero — the first screen.
+ *
+ * Structure follows the reference (badge → oversized headline → value line →
+ * supporting copy → capability chips → CTA pair, with a product visual on the
+ * right), content is this gateway's, and the styling is DESIGN-LANGUAGE.md:
+ * one accent used only on the primary action, borders instead of shadows,
+ * border radius capped at 16px, weights capped at 600.
+ *
+ * There is no scrim behind the copy. The particle canvas is a full-viewport
+ * `z-0` layer and this section is `z-10`; text sits directly on it, the way
+ * x.ai lets type sit over its background rather than boxing it in.
+ */
+import { useI18n } from 'vue-i18n'
+
+import Icon from '@/components/icons/Icon.vue'
+
+const { t } = useI18n()
+
+withDefaults(
+  defineProps<{
+    siteName: string
+    siteSubtitle: string
+    isAuthenticated: boolean
+    /** Where the primary action goes once signed in. */
+    dashboardPath: string
+    /** Sanitised documentation URL; the secondary action hides when empty. */
+    docUrl: string
+  }>(),
+  { siteName: 'Sub2API', siteSubtitle: '', isAuthenticated: false, dashboardPath: '/dashboard', docUrl: '' },
+)
+</script>
+
+<template>
+  <section
+    data-testid="home-hero"
+    class="relative z-10 flex min-h-[calc(100svh-4rem)] items-center px-6 pt-16 pb-20 md:pt-20 md:pb-28"
+  >
+    <div class="mx-auto w-full max-w-6xl">
+      <div class="flex flex-col items-center gap-14 lg:flex-row lg:items-center lg:gap-16">
+        <!-- Copy -->
+        <div class="min-w-0 flex-1 text-center lg:text-left">
+          <p
+            class="inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900/70 dark:text-dark-300"
+          >
+            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500 dark:bg-primary-400" />
+            <span class="truncate">{{ t('home.sections.hero.badge') }}</span>
+          </p>
+
+          <h1 class="mt-6 text-4xl font-semibold tracking-[-0.03em] text-gray-900 sm:text-5xl lg:text-6xl dark:text-white">
+            {{ siteName }}
+          </h1>
+
+          <p class="mt-4 text-lg font-medium text-gray-800 sm:text-xl dark:text-dark-100">
+            {{ t('home.heroSubtitle') }}
+          </p>
+
+          <p class="mx-auto mt-4 max-w-xl text-sm leading-7 text-gray-600 lg:mx-0 dark:text-dark-400">
+            {{ t('home.heroDescription') }}
+          </p>
+
+          <!-- Capability chips: reuse the three claims the old landing page already made. -->
+          <ul class="mt-7 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+            <li
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
+            >
+              <Icon name="swap" size="sm" class="text-gray-400 dark:text-dark-500" />
+              {{ t('home.tags.subscriptionToApi') }}
+            </li>
+            <li
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
+            >
+              <Icon name="shield" size="sm" class="text-gray-400 dark:text-dark-500" />
+              {{ t('home.tags.stickySession') }}
+            </li>
+            <li
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
+            >
+              <Icon name="chartBar" size="sm" class="text-gray-400 dark:text-dark-500" />
+              {{ t('home.tags.realtimeBilling') }}
+            </li>
+          </ul>
+
+          <div class="mt-9 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+            <router-link
+              :to="isAuthenticated ? dashboardPath : '/login'"
+              class="btn btn-primary gap-1.5"
+            >
+              {{ isAuthenticated ? t('home.goToDashboard') : t('home.getStarted') }}
+              <Icon name="arrowRight" size="sm" />
+            </router-link>
+            <a
+              v-if="docUrl"
+              :href="docUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-secondary gap-1.5"
+            >
+              <Icon name="book" size="sm" />
+              {{ t('home.viewDocs') }}
+            </a>
+          </div>
+
+          <p v-if="siteSubtitle" class="mt-6 text-xs text-gray-500 dark:text-dark-500">
+            {{ siteSubtitle }}
+          </p>
+        </div>
+
+        <!-- Product visual: a real request against the gateway's own endpoint. -->
+        <div class="flex w-full min-w-0 flex-1 justify-center lg:w-auto lg:justify-end">
+          <div class="terminal-container">
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <div class="terminal-buttons" aria-hidden="true">
+                  <span class="btn-close"></span>
+                  <span class="btn-minimize"></span>
+                  <span class="btn-maximize"></span>
+                </div>
+                <span class="terminal-title">terminal</span>
+              </div>
+              <div class="terminal-body">
+                <div class="code-line line-1">
+                  <span class="code-prompt">$</span>
+                  <span class="code-cmd">curl</span>
+                  <span class="code-flag">-X POST</span>
+                  <span class="code-url">/v1/messages</span>
+                </div>
+                <div class="code-line line-2">
+                  <span class="code-comment"># Routing to upstream...</span>
+                </div>
+                <div class="code-line line-3">
+                  <span class="code-success">200 OK</span>
+                  <span class="code-response">{ "content": "Hello!" }</span>
+                </div>
+                <div class="code-line line-4">
+                  <span class="code-prompt">$</span>
+                  <span class="cursor" aria-hidden="true"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+/* Flat surface + 1px border + 12px radius. No glow, no tilt, no gradient. */
+.terminal-container {
+  width: 100%;
+  max-width: 420px;
+}
+
+.terminal-window {
+  background: #0f1113;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.terminal-window:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.terminal-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* Neutral window controls: the palette is grey-scale, colour is reserved. */
+.terminal-buttons span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3f3f46;
+}
+
+.terminal-title {
+  flex: 1;
+  text-align: center;
+  font-family: theme('fontFamily.mono');
+  font-size: 12px;
+  color: #71717a;
+  margin-right: 46px;
+}
+
+.terminal-body {
+  padding: 20px 24px;
+  font-family: theme('fontFamily.mono');
+  font-size: 13px;
+  line-height: 2;
+}
+
+.code-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  opacity: 0;
+  animation: line-appear 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.line-1 {
+  animation-delay: 60ms;
+}
+.line-2 {
+  animation-delay: 140ms;
+}
+.line-3 {
+  animation-delay: 220ms;
+}
+.line-4 {
+  animation-delay: 300ms;
+}
+
+@keyframes line-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.code-prompt {
+  color: #a1a1aa;
+  font-weight: 600;
+}
+.code-cmd {
+  color: #e4e4e7;
+}
+.code-flag {
+  color: #a1a1aa;
+}
+.code-url {
+  color: #d4d4d8;
+}
+.code-comment {
+  color: #71717a;
+}
+.code-success {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.14);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.code-response {
+  color: #d4d4d8;
+}
+
+/* Steady block, never blinking (DESIGN-LANGUAGE bans flashing cursors). */
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  background: #52525b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code-line {
+    animation: none;
+    opacity: 1;
+  }
+}
+</style>

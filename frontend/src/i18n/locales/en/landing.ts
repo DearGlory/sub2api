@@ -109,6 +109,69 @@ export default {
       description: 'Sign up now and get free trial credits to experience seamless AI access',
       button: 'Sign Up Free'
     },
+    // Copy for the particle home page's sections (the default branch)
+    sections: {
+      hero: {
+        badge: 'Subscription to API · Multi-account pool · Pay as you go'
+      },
+      stats: {
+        items: {
+          platforms: {
+            label: 'Platforms onboarded',
+            hint: 'Growing continuously'
+          },
+          gateways: {
+            label: 'Inbound protocols',
+            hint: 'Anthropic / OpenAI / Gemini'
+          },
+          multiProtocol: {
+            label: 'Multi-protocol platforms',
+            hint: 'Endpoint chosen per protocol'
+          },
+          traceability: {
+            label: 'Requests traced',
+            hint: 'Every call is recorded'
+          }
+        }
+      },
+      features: {
+        eyebrow: 'Core capabilities',
+        title: 'One key across every upstream',
+        lead: 'Fold scattered subscriptions and accounts into a single API entry point, with price, balance and request history in one console.',
+        compatTitle: 'Protocol compatible',
+        compatDesc: 'Anthropic, OpenAI and Gemini inbound protocols are all served on the same host — point your existing SDK at a new base URL and go.',
+        capUptime: 'Reliably available',
+        capUptimeDesc: 'Automatic failover across the account pool, so one flaky upstream never stops your traffic.',
+        capControl: 'Quotas under control',
+        capControlDesc: 'Set spending ceilings and rate limits per user and per key.',
+        capRecords: 'Records you can audit',
+        capRecordsDesc: 'Time, model, usage and outcome are logged per request, so cost is never a mystery.',
+        capCompat: 'Easy to adopt',
+        capCompatDesc: 'Works with existing OpenAI and Anthropic call shapes; migration is a base-URL change.',
+        poolActive: 'Account serving traffic',
+        poolFailover: 'Failed account removed',
+        poolLimit: 'Rate-limited account switched',
+        billingExample: '$0.0031',
+        billingUnit: '/ 1K tokens'
+      },
+      howItWorks: {
+        eyebrow: 'How it works',
+        title: 'Three steps to your first call',
+        lead: 'What you see is your account, balance, models and request history. The scheduling underneath stays out of the way.',
+        step1Eyebrow: 'Start',
+        step1Title: 'Open an account with credit',
+        step1Desc: 'Register, get your balance, and check model pricing up front so every call is a known cost.',
+        step2Eyebrow: 'Call',
+        step2Title: 'Create an API key and send requests',
+        step2Desc: 'Copy the OpenAI-compatible endpoint and wire model access into your product, scripts or automation.',
+        step3Eyebrow: 'Track',
+        step3Title: 'Review spend and request logs',
+        step3Desc: 'Usage, cost, errors and latency are all recorded, which makes budgeting and debugging straightforward.'
+      },
+      cta: {
+        eyebrow: 'Ready out of the box'
+      }
+    },
     footer: {
       allRightsReserved: 'All rights reserved.'
     }
