@@ -667,7 +667,7 @@
           >
             <div class="flex items-start gap-3">
               <div
-                class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white"
+                class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white"
               >
                 1
               </div>
@@ -786,7 +786,7 @@
           >
             <div class="flex items-start gap-3">
               <div
-                class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white"
+                class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white"
               >
                 2
               </div>
@@ -827,7 +827,7 @@
           >
             <div class="flex items-start gap-3">
               <div
-                class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white"
+                class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white"
               >
                 3
               </div>
