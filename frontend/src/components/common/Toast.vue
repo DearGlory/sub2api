@@ -6,7 +6,7 @@
       aria-atomic="true"
     >
       <TransitionGroup
-        enter-active-class="transition ease-out duration-300"
+        enter-active-class="transition ease-out duration-200"
         enter-from-class="opacity-0 translate-x-full"
         enter-to-class="opacity-100 translate-x-0"
         leave-active-class="transition ease-in duration-200"
@@ -17,10 +17,8 @@
           v-for="toast in toasts"
           :key="toast.id"
           :class="[
-            'pointer-events-auto min-w-[320px] max-w-md overflow-hidden rounded-lg shadow-lg',
-            'bg-white dark:bg-dark-800',
-            'border-l-4',
-            getBorderColor(toast.type)
+            'pointer-events-auto min-w-[320px] max-w-md overflow-hidden rounded-lg shadow-pop',
+            'bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700'
           ]"
         >
           <div class="p-4">
@@ -105,16 +103,6 @@ const getIconColor = (type: string): string => {
     error: 'text-red-500',
     warning: 'text-yellow-500',
     info: 'text-blue-500'
-  }
-  return colors[type] || colors.info
-}
-
-const getBorderColor = (type: string): string => {
-  const colors: Record<string, string> = {
-    success: 'border-green-500',
-    error: 'border-red-500',
-    warning: 'border-yellow-500',
-    info: 'border-blue-500'
   }
   return colors[type] || colors.info
 }

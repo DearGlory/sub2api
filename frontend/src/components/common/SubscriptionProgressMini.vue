@@ -78,7 +78,7 @@
                   }}</span>
                   <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
-                      class="h-1.5 rounded-full transition-all"
+                      class="h-1.5 rounded-full transition-[width,height]"
                       :class="
                         getProgressBarClass(
                           subscription.daily_usage_usd,
@@ -106,7 +106,7 @@
                   }}</span>
                   <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
-                      class="h-1.5 rounded-full transition-all"
+                      class="h-1.5 rounded-full transition-[width,height]"
                       :class="
                         getProgressBarClass(
                           subscription.weekly_usage_usd,
@@ -134,7 +134,7 @@
                   }}</span>
                   <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
-                      class="h-1.5 rounded-full transition-all"
+                      class="h-1.5 rounded-full transition-[width,height]"
                       :class="
                         getProgressBarClass(
                           subscription.monthly_usage_usd,

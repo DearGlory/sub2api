@@ -473,7 +473,7 @@
                           :key="item.version"
                           @click="selectRollbackVersion(item.version)"
                           :disabled="rollingBack"
-                          class="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                          class="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                           :class="
                             selectedRollbackVersion === item.version
                               ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'

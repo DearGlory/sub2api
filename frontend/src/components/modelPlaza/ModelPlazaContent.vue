@@ -190,6 +190,6 @@ const filteredGroups = computed(() => {
 }
 
 .plaza-description :deep(blockquote) {
-  @apply my-2 border-l-4 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300;
+  @apply my-2 border-l-2 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300;
 }
 </style>

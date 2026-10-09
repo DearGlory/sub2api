@@ -24,7 +24,7 @@
               </span>
               <Icon name="chevronDown" size="sm" class="shrink-0" />
             </button>
-            <div v-if="datesOpen" id="backup-archive-options" class="absolute left-0 top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-dark-600 dark:bg-dark-800">
+            <div v-if="datesOpen" id="backup-archive-options" class="absolute left-0 top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-2 shadow-pop dark:border-dark-600 dark:bg-dark-800">
               <div class="mb-1 flex items-center justify-between gap-2 px-1 text-xs text-gray-500 dark:text-gray-400">
                 <span>{{ t('admin.backup.archive.selectedDates', { count: selectedLabels.length }) }}</span>
                 <button type="button" class="min-h-9 px-2 text-primary-600 dark:text-primary-400" @click="closeDates(true)">{{ t('admin.backup.archive.done') }}</button>
