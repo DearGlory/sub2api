@@ -109,6 +109,69 @@ export default {
       description: '注册即可获得免费试用额度，体验一站式 AI 服务',
       button: '免费注册'
     },
+    // 粒子首页的分区文案（首页默认分支）
+    sections: {
+      hero: {
+        badge: '订阅转 API · 多账号池 · 按量计费'
+      },
+      stats: {
+        items: {
+          platforms: {
+            label: '已接入平台',
+            hint: '持续扩充中'
+          },
+          gateways: {
+            label: '入站协议族',
+            hint: 'Anthropic / OpenAI / Gemini'
+          },
+          multiProtocol: {
+            label: '多协议平台',
+            hint: '按入站协议选端点'
+          },
+          traceability: {
+            label: '请求可追溯',
+            hint: '每次调用都有记录'
+          }
+        }
+      },
+      features: {
+        eyebrow: '核心能力',
+        title: '一个密钥，覆盖全部上游',
+        lead: '把分散的订阅与账号收敛成一条统一的 API 入口，价格、余额和调用记录都在同一个控制台里。',
+        compatTitle: '协议兼容',
+        compatDesc: '同时提供 Anthropic、OpenAI 与 Gemini 三种入站协议，现有 SDK 与工具改一个 base URL 即可接入。',
+        capUptime: '稳定可用',
+        capUptimeDesc: '多账号池自动切换，单个上游波动不会中断你的业务。',
+        capControl: '配额可控',
+        capControlDesc: '按用户、按密钥设置额度上限与速率限制。',
+        capRecords: '记录可查',
+        capRecordsDesc: '时间、模型、用量与结果逐条留痕，成本一目了然。',
+        capCompat: '接入友好',
+        capCompatDesc: '兼容 OpenAI 与 Anthropic 的既有调用方式，迁移成本极低。',
+        poolActive: '当前账号正常调度',
+        poolFailover: '异常账号自动摘除',
+        poolLimit: '触发限制自动切换',
+        billingExample: '$0.0031',
+        billingUnit: '/ 1K tokens'
+      },
+      howItWorks: {
+        eyebrow: '使用流程',
+        title: '三步开始调用',
+        lead: '面向使用者呈现的是账号、余额、模型与调用记录；底层调度留在幕后，不打扰你。',
+        step1Eyebrow: '开始',
+        step1Title: '开通账号与额度',
+        step1Desc: '注册后获取账号额度，查看模型价格与余额，让每一次调用都清楚可控。',
+        step2Eyebrow: '调用',
+        step2Title: '创建 API Key 并发起请求',
+        step2Desc: '复制兼容 OpenAI 的调用地址，把模型能力接入你的产品、脚本或自动化工作流。',
+        step3Eyebrow: '追踪',
+        step3Title: '查看消费与调用记录',
+        step3Desc: '用量、消费、错误与延迟都有记录，方便控制成本并排查调用问题。'
+      },
+      cta: {
+        eyebrow: '开箱即用'
+      }
+    },
     footer: {
       allRightsReserved: '保留所有权利。'
     }
