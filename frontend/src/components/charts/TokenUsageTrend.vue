@@ -61,11 +61,12 @@ const isDarkMode = computed(() => {
 const chartColors = computed(() => ({
   text: isDarkMode.value ? '#e5e7eb' : '#374151',
   grid: isDarkMode.value ? '#374151' : '#e5e7eb',
-  input: '#3b82f6',
+  // 主序列用主题 accent（primary-500 橙）；其余序列保留可辨识度（规范 §2.5 / §9）。
+  input: '#ff6708',
   output: '#10b981',
   cacheCreation: '#f59e0b',
-  cacheRead: '#06b6d4',
-  cacheHitRate: '#8b5cf6'
+  cacheRead: '#8b5cf6',
+  cacheHitRate: '#3b82f6'
 }))
 
 const chartData = computed(() => {
