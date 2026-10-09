@@ -61,17 +61,30 @@ func TestMatchesSemverRangeWithVendorSuffix(t *testing.T) {
 	assert.True(t, matchesSemverRange("0.2.15-glorycode", ">=0.2.15"))
 }
 
+// The full scheme is <upstream base>-GloryCode-<our own revision>. The second
+// hyphen must not leak into the comparison: the whole vendor label, including
+// our revision segment, is stripped, so the build still compares as its base.
+func TestMatchesSemverRangeWithOwnRevisionSegment(t *testing.T) {
+	assert.True(t, matchesSemverRange("0.2.15-GloryCode-0.0.1", ">=0.2.15"))
+	assert.True(t, matchesSemverRange("0.2.15-GloryCode-0.0.1", "=0.2.15"))
+	assert.True(t, matchesSemverRange("0.2.15-GloryCode-0.0.1", ">=0.2.14 <0.3.0"))
+	assert.True(t, matchesSemverRange("0.2.15-GloryCode-12.34.56", ">=0.2.15"))
+	assert.False(t, matchesSemverRange("0.2.15-GloryCode-0.0.1", ">=0.2.16"))
+	assert.False(t, matchesSemverRange("0.2.15-GloryCode-0.0.1", "<0.2.15"))
+}
+
 func TestEvaluatePluginCompatibilityWithVendorSuffix(t *testing.T) {
 	manifest := testPluginManifest(nil)
 	manifest.Requires.Sub2API = ">=0.2.15"
 	manifest.Requires.TestedSub2APIVersions = []string{"0.2.15"}
 
-	result := EvaluatePluginCompatibility(manifest, PluginHostInfo{
-		Version:   "0.2.15-GloryCode",
-		BuildType: "release",
-	})
-
-	require.True(t, result.Compatible)
-	assert.Equal(t, "compatible", result.Status)
-	assert.True(t, result.Tested)
+	for _, hostVersion := range []string{"0.2.15-GloryCode", "0.2.15-GloryCode-0.0.1"} {
+		result := EvaluatePluginCompatibility(manifest, PluginHostInfo{
+			Version:   hostVersion,
+			BuildType: "release",
+		})
+		require.True(t, result.Compatible, "host %s should be compatible", hostVersion)
+		assert.Equal(t, "compatible", result.Status)
+		assert.True(t, result.Tested, "host %s should match the tested base version", hostVersion)
+	}
 }
