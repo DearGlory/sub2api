@@ -12,10 +12,20 @@
  * particles keep flowing inside the shape, then scattering back into a comet —
  * under a camera that keeps pulling back through a deep starfield.
  *
+ * The tail is **emitted**, not dragged. Every tail particle is born inside the nucleus,
+ * handed a velocity, given a lifetime, and fades to nothing as that lifetime runs out;
+ * its position is a closed form evaluated each frame from the emission table. Its
+ * predecessor was a rigid ribbon of particles pinned to fixed arc-length slots on the
+ * head's past path, which the user rejected as unreadable ("彗星和彗尾看不出来是什么
+ * 东西…完全没有彗星的真实感") because a fixed slot is a fixed *geometry* — the whole
+ * tail translated as one body. See the `// --- Tail emission (V2) ---` section of
+ * `constants.ts` for the model and the measured numbers behind it.
+ *
  * Performance rules that live here (HOME-PARTICLE-DESIGN.md §6):
  *   - one BufferGeometry, positions/colors updated in place, one draw call
- *   - zero per-frame allocation: every buffer is preallocated in `scratch`, and
- *     `sampleTrail` is evaluated `tailSampleCount` times per frame into a lookup
+ *   - zero per-frame allocation: every buffer is preallocated in `scratch`, including
+ *     the per-particle age/life/reach/cone arrays the emission model needs, and
+ *     `sampleTrail` is evaluated `tailSampleCount` times per frame into the emission
  *     table the particles index — not once per particle
  *   - `frameStep = min(dt * 60, 2)` so behaviour is framerate independent
  *   - `stop()` cancels the rAF, it does not merely skip the render
@@ -62,7 +72,7 @@ import {
 } from '../vendor/voxspace-math'
 
 import { createBrandTargetSource } from './brandTargets'
-import { createChoreography } from './choreography'
+import { createChoreography, type Point3 } from './choreography'
 import {
   AMPLITUDE_X,
   BRANDS,
@@ -85,10 +95,21 @@ import {
   SUBJECT_Z,
   SWAY_Y,
   SWAY_Z,
-  TAIL_LENGTH,
-  TAIL_PROBE_COUNT,
-  TAIL_RADIUS,
+  TAIL_DUST_LIFE_MAX,
+  TAIL_DUST_LIFE_MIN,
+  TAIL_DUST_REACH_MAX,
+  TAIL_DUST_REACH_MIN,
+  TAIL_ENTRAIN,
+  TAIL_FADE_POWER,
+  TAIL_FILL,
+  TAIL_ION_LIFE_MAX,
+  TAIL_ION_LIFE_MIN,
+  TAIL_ION_NARROW,
+  TAIL_ION_REACH_MAX,
+  TAIL_ION_REACH_MIN,
+  TAIL_ION_SHARE,
   TAIL_SECONDS,
+  TAIL_SPEED_JITTER,
   TAIL_SPREAD,
 } from './constants'
 import { createQualityProfile, probeQualityProfile } from './quality'
@@ -236,36 +257,52 @@ interface EngineScratch {
   positions: Float32Array
   velocities: Float32Array
   colors: Float32Array
-  /** Where each particle sits along the tail: 0 head, 1 tip. */
-  tailT: Float32Array
-  /** Stable angle around the tail axis, so a particle cannot jump slots. */
-  tailAngle: Float32Array
-  /** Stable thickness multiplier — without it the tail is a smooth cone. */
-  tailRadius: Float32Array
-  /** Stable swirl rate, so the tail does not rotate as one rigid body. */
-  tailSpin: Float32Array
+  /**
+   * Seconds since each tail particle was born, and how long it gets to live.
+   *
+   * This pair *is* the model. Age advances by the frame's own delta, and when it
+   * reaches `tailLife` the particle dies and is recycled at the nucleus — which is
+   * why the plume has a moving population instead of a fixed set of slots. There is
+   * no ring buffer and no allocation: the death is a reset of one float.
+   */
+  tailLife: Float32Array
+  tailAge: Float32Array
+  /**
+   * World units a particle covers along its own birth axis over its whole life.
+   *
+   * Stored as a reach rather than a speed so the plume's length cannot re-couple to
+   * lifetime (see `TAIL_DUST_REACH_MIN`). The speed is `reach / life`, recomputed
+   * where it is used.
+   */
+  tailReach: Float32Array
+  /**
+   * The particle's ejection direction, baked as a unit vector in the birth frame:
+   * `(cos θ, sin θ·cos φ, sin θ·sin φ)`, `count * 3`.
+   *
+   * Baked in the birth frame, not in world space, because the frame rotates with the
+   * head — the cone has to be carried along and re-referenced each frame, and storing
+   * world-space directions would freeze the spray in the direction the comet happened
+   * to be facing when the particle was born.
+   */
+  tailCone: Float32Array
+  /** `1` for the ion population, `0` for dust. Selects the tint and the cone width. */
+  tailIon: Uint8Array
   /** Stable per-particle phase for the shimmer term. */
   tailSeed: Float32Array
   /**
-   * Offsets inside the head core, `count * 3`.
+   * Offsets inside the nucleus, `count * 3`.
    *
-   * The core particles all sit at `tailT = 0`, which is one exact point on the
-   * path — so without this they form a flat disc, and the comet's leading face
-   * reads as a machined cut rather than a nose. These spread them through a ball
-   * around that point instead.
+   * Every particle's birth point sits somewhere in this ball rather than at one exact
+   * point. For the core particles that is what stops the nucleus drawing as a flat
+   * machined disc; for the tail particles it is the emission aperture, and it is what
+   * keeps the plume's root from being a single bright pixel.
    */
   headOffset: Float32Array
   /** Glyph anchors in subject space for the brand being assembled. */
   glyphTargets: Float32Array
   glyphStrokeDepth: Float32Array
-  /** Per-frame tail path lookup table, `tailSampleCount * 3`. */
-  tailLut: Float32Array
-  /** Uniform-time walk of the past path, `TAIL_PROBE_COUNT * 3`, before resampling. */
-  tailProbeXyz: Float32Array
-  /** Cumulative arc length of each probe, `TAIL_PROBE_COUNT`. */
-  tailProbeArc: Float32Array
-  /** Arc length the tail actually spans this frame; short when the head is still. */
-  tailReach: number
+  /** The emission table the tail particles index by age. See {@link EmissionTable}. */
+  tailTable: EmissionTable
   /** Per-frame radial drift of the internal glyph flow. */
   iconOrbitOffsets: Float32Array
   iconOrbitField: VoxSpaceIconOrbitField
@@ -274,7 +311,40 @@ interface EngineScratch {
   /** Reused vectors — the frame loop must not construct any. */
   vecA: Vector3
   vecB: Vector3
+  /** Reused sample target for the emission table walk. */
+  probePoint: Point3
   inverseRotation: Quaternion
+}
+
+/**
+ * The head's past, baked per frame into everything a tail particle needs to know
+ * about the instant it was born.
+ *
+ * Uniform TIME, and deliberately no longer uniform arc length. The arc-length
+ * resampling the old tail used existed to give a rigid ribbon a length that did not
+ * depend on the head's speed; under V2 that job belongs to the inherited birth
+ * velocity (see `TAIL_ENTRAIN`), so this table only has to answer two questions —
+ * where was the head, and how fast was it moving, when this particle left it.
+ *
+ * Every array is `probeCount * 3` and preallocated; `writeEmissionTable` refills them
+ * in place. Split out of `EngineScratch` so the emission kernel can be unit-tested
+ * against a synthetic path with no WebGL anywhere near it.
+ */
+export interface EmissionTable {
+  /** Absolute subject-space head position at each probe, newest first. */
+  xyz: Float32Array
+  /** **Forward** head velocity at each probe, from a central difference. */
+  vel: Float32Array
+  /** Unit backward tangent — the axis the spray opens around. */
+  axis: Float32Array
+  /** First basis vector of the plane normal to `axis`. */
+  side1: Float32Array
+  /** Second basis vector, `cross(axis, side1)`. */
+  side2: Float32Array
+  /** Probes actually populated, `2 <= probeCount <= TAIL_PROBE_COUNT`. */
+  probeCount: number
+  /** Seconds of the past the table spans. Always `TAIL_SECONDS`. */
+  spanSeconds: number
 }
 
 /**
@@ -303,54 +373,98 @@ function hash01(index: number, salt: number): number {
 }
 
 export function createEngineScratch(count: number, tailSampleCount: number): EngineScratch {
-  // Golden-ratio spacing gives low-discrepancy coverage of [0,1] for any count,
-  // which is what keeps the tail from banding along its length. Raising t to a
-  // power packs more of the cloud near the head, where a comet is densest.
-  //
-  // Only `tailT` may come from the golden ratio. Every other attribute has to be
-  // hashed (see `hash01`), or it inherits `tailT`'s ordering.
-  const tailT = new Float32Array(count)
-  const tailAngle = new Float32Array(count)
-  const tailRadius = new Float32Array(count)
-  const tailSpin = new Float32Array(count)
+  const tailLife = new Float32Array(count)
+  const tailAge = new Float32Array(count)
+  const tailReach = new Float32Array(count)
+  const tailCone = new Float32Array(count * 3)
+  const tailIon = new Uint8Array(count)
   const tailSeed = new Float32Array(count)
   const headOffset = new Float32Array(count * 3)
   const golden = 0.6180339887498949
   const coreCount = Math.floor(count * HEAD_CORE_SHARE)
 
-  // Distinct salts, so no two attributes can fall into step with each other.
-  const ANGLE_SALT = 0x1f123bb5
-  const RADIUS_SALT = 0x27d4eb2f
-  const SPIN_SALT = 0x165667b1
+  // Distinct salts, so no two attributes can fall into step with each other. The
+  // earlier version of this file derived every attribute from the same golden-ratio
+  // sequence, which made the radius, angle and spin all functions of the particle's
+  // position — the tail rendered as a machined helix. Any two attributes that must be
+  // independent need different salts.
+  const LIFE_SALT = 0x7feb352d
+  const REACH_SALT = 0xa511e9b3
+  const THETA_SALT = 0x1b56c4e9
+  const PHI_SALT = 0x27d4eb2f
+  const ION_SALT = 0x68e31da4
+  const JITTER_SALT = 0x846ca68b
   const SEED_SALT = 0x9e3779b9
-  const HEAD_X_SALT = 0x2545f491
-  const HEAD_Y_SALT = 0x9e3779b1
-  const HEAD_Z_SALT = 0x85ebca6b
+  const CORE_X_SALT = 0x2545f491
+  const CORE_Y_SALT = 0x9e3779b1
+  const CORE_Z_SALT = 0x85ebca6b
 
   for (let i = 0; i < count; i++) {
-    tailT[i] = i < coreCount ? 0 : Math.pow((i * golden + 0.5) % 1, 1.35)
-    tailAngle[i] = hash01(i, ANGLE_SALT) * Math.PI * 2
-    // `pow` of a uniform roll concentrates particles toward the path, giving the
-    // dense core and thinning envelope a comet actually has. A *shell* sample
-    // would put every particle at one radius for a given point along the path,
-    // which reads as a stack of concentric ellipse outlines — a coil, not a plume.
-    // (A plain `sqrt` fills the cone uniformly, which is also wrong here: it makes
-    // the tail a flat cloud of even density, with no core to catch the eye.)
-    tailRadius[i] = Math.pow(hash01(i, RADIUS_SALT), 1.5)
-    tailSpin[i] = 0.55 + hash01(i, SPIN_SALT) * 0.9
     tailSeed[i] = hash01(i, SEED_SALT)
 
     if (i < coreCount) {
       // A ball, not a disc: a cubic-root radius makes the fill uniform by volume,
       // so the core has no harder edge at its surface than at its centre.
-      const r = HEAD_CORE_RADIUS * Math.cbrt(hash01(i, HEAD_X_SALT))
-      const cosTheta = hash01(i, HEAD_Y_SALT) * 2 - 1
-      const phi = hash01(i, HEAD_Z_SALT) * Math.PI * 2
+      const r = HEAD_CORE_RADIUS * Math.cbrt(hash01(i, CORE_X_SALT))
+      const cosTheta = hash01(i, CORE_Y_SALT) * 2 - 1
+      const phi = hash01(i, CORE_Z_SALT) * Math.PI * 2
       const sinTheta = Math.sqrt(Math.max(0, 1 - cosTheta * cosTheta))
       headOffset[i * 3] = r * sinTheta * Math.cos(phi)
       headOffset[i * 3 + 1] = r * sinTheta * Math.sin(phi)
       headOffset[i * 3 + 2] = r * cosTheta
+      // Core particles live forever and never move under the emission model: they are
+      // the nucleus, not the plume. A zero life with a zero reach leaves them parked
+      // on the birth point, and `integrate()` blends the core in by index instead.
+      tailLife[i] = 0
+      tailReach[i] = 0
+      continue
     }
+
+    const ion = hash01(i, ION_SALT) < TAIL_ION_SHARE
+    tailIon[i] = ion ? 1 : 0
+
+    // Uniform lives within the class. A single shared lifetime would make every
+    // particle the same age, and the plume would pulse as one slab breathing in and
+    // out instead of showing newborn and dying material at once.
+    const lifeMin = ion ? TAIL_ION_LIFE_MIN : TAIL_DUST_LIFE_MIN
+    const lifeMax = ion ? TAIL_ION_LIFE_MAX : TAIL_DUST_LIFE_MAX
+    const life = lifeMin + hash01(i, LIFE_SALT) * (lifeMax - lifeMin)
+    tailLife[i] = life
+
+    // A reach, not a speed — see `TAIL_DUST_REACH_MIN`. Jittered so the fade edge is
+    // a soft band rather than a mathematically exact disc.
+    const reachMin = ion ? TAIL_ION_REACH_MIN : TAIL_DUST_REACH_MIN
+    const reachMax = ion ? TAIL_ION_REACH_MAX : TAIL_DUST_REACH_MAX
+    const reach = reachMin + hash01(i, REACH_SALT) * (reachMax - reachMin)
+    tailReach[i] = reach * (1 + (hash01(i, JITTER_SALT) - 0.5) * 2 * TAIL_SPEED_JITTER)
+
+    // Age starts spread uniformly through life, which is the steady state the running
+    // engine converges to. Starting every particle at age 0 would open the page with
+    // one synchronised wave of newborns collapsing to nothing 2.5 s in — a visible
+    // pulse on first paint, exactly where nobody is watching for a defect.
+    tailAge[i] = (((i - coreCount) * golden + 0.5) % 1) * life
+
+    // The ejection cone. `sin(theta)` is raised to `TAIL_FILL` so the angles crowd
+    // toward the axis — a bright spine inside a thinning envelope, rather than the
+    // uniform-density cloud a plain `sqrt` gives or the hollow shell a uniform roll
+    // in `sin(theta)` gives. Ion particles get a proportionally narrower cone.
+    const spread = TAIL_SPREAD * (ion ? TAIL_ION_NARROW : 1)
+    const sinTheta = spread * Math.pow(hash01(i, THETA_SALT), TAIL_FILL)
+    const cosTheta = Math.sqrt(Math.max(0, 1 - sinTheta * sinTheta))
+    const phi = hash01(i, PHI_SALT) * Math.PI * 2
+    tailCone[i * 3] = cosTheta
+    tailCone[i * 3 + 1] = sinTheta * Math.cos(phi)
+    tailCone[i * 3 + 2] = sinTheta * Math.sin(phi)
+
+    // The emission aperture: a ball around the nucleus, so the plume's root is a
+    // volume and not one bright pixel. Uniform in direction, cubed-root in radius.
+    const r = HEAD_CORE_RADIUS * Math.cbrt(hash01(i, CORE_X_SALT))
+    const cosY = hash01(i, CORE_Y_SALT) * 2 - 1
+    const phiY = hash01(i, CORE_Z_SALT) * Math.PI * 2
+    const sinY = Math.sqrt(Math.max(0, 1 - cosY * cosY))
+    headOffset[i * 3] = r * sinY * Math.cos(phiY)
+    headOffset[i * 3 + 1] = r * sinY * Math.sin(phiY)
+    headOffset[i * 3 + 2] = r * cosY
   }
 
   return {
@@ -359,18 +473,16 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
     positions: createInitialScatterTargets(count),
     velocities: new Float32Array(count * 3),
     colors: new Float32Array(count * 3),
-    tailT,
-    tailAngle,
-    tailRadius,
-    tailSpin,
+    tailLife,
+    tailAge,
+    tailReach,
+    tailCone,
+    tailIon,
     tailSeed,
     headOffset,
     glyphTargets: new Float32Array(count * 3),
     glyphStrokeDepth: new Float32Array(count),
-    tailLut: new Float32Array(tailSampleCount * 3),
-    tailProbeXyz: new Float32Array(TAIL_PROBE_COUNT * 3),
-    tailProbeArc: new Float32Array(TAIL_PROBE_COUNT),
-    tailReach: 0,
+    tailTable: createEmissionTable(tailSampleCount),
     iconOrbitOffsets: new Float32Array(count * 3),
     iconOrbitField: createVoxSpaceIconOrbitField(count),
     iconHoldPose: { rotationX: 0, rotationY: 0, rotationZ: 0, toneScale: 0 },
@@ -384,7 +496,36 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
     },
     vecA: new Vector3(),
     vecB: new Vector3(),
+    probePoint: { x: 0, y: 0, z: 0 },
     inverseRotation: new Quaternion(),
+  }
+}
+
+/**
+ * Allocate an emission table. Every buffer is allocated here and only here, so the
+ * frame loop can refill it without touching the allocator.
+ *
+ * `probeCount` comes from the quality profile's `tailSampleCount`, which the ladder
+ * already varies from 48 to 96. Those numbers used to be "how many points along the
+ * rigid ribbon", which needed to be dense because the ribbon's shape was drawn by
+ * linear interpolation between them. Now they are the resolution of the emission
+ * table's *time* axis, and what needs to be dense is the sampling of the head's
+ * velocity, since a coarse table makes a particle born mid-turn inherit a velocity
+ * from a different part of the curve. 48 is still enough: the fastest the head moves
+ * is 5.0 u/s, and 3.2 s / 48 probes is a 0.067 s step, over which the head travels at
+ * most 0.33 units — an order of magnitude below the plume's own width, so the
+ * misinheritance is smaller than the tail.
+ */
+export function createEmissionTable(probeCount: number): EmissionTable {
+  const n = Math.max(2, Math.floor(probeCount))
+  return {
+    xyz: new Float32Array(n * 3),
+    vel: new Float32Array(n * 3),
+    axis: new Float32Array(n * 3),
+    side1: new Float32Array(n * 3),
+    side2: new Float32Array(n * 3),
+    probeCount: n,
+    spanSeconds: TAIL_SECONDS,
   }
 }
 
@@ -418,84 +559,224 @@ export function followSpeedFor(phase: CometPhase): number {
 }
 
 /**
- * Resample a polyline onto uniform arc length.
+ * Fill `table` with the head's recent past, newest first, at uniform TIME.
  *
- * `source` is `probeCount * 3` points laid out at uniform *time*; `arc` is their
- * cumulative arc length, ascending, as produced by {@link accumulateArcLength}.
- * The output is `sampleCount * 3` points sitting evenly along the same path
- * starting at the head, spanning at most `maxLength` world units.
+ * `source` is the choreography's `sampleTrail(delay, out)`. Working through a
+ * callback rather than reaching for the engine's own choreography is what lets the
+ * whole emission kernel be tested against a synthetic path in jsdom — and the kernel
+ * is where every interesting number in the new tail lives.
  *
- * This is what gives the comet a tail whose size does not depend on how fast the
- * head is moving. Extracted from the engine because it is pure arithmetic with no
- * WebGL in it, and the engine cannot be constructed under jsdom — so leaving it
- * inline would mean the one piece of new shaping logic had no test at all.
+ * `probePoint` is a caller-owned scratch `Point3`, so this allocates nothing.
  *
- * Returns the length actually spanned, which is shorter than `maxLength` when the
- * path is (a stationary head has no length to spread a tail over).
+ * Three passes, all in place:
+ *   1. positions, at uniform time back from the head
+ *   2. **forward** velocities, from a central difference — forward because the tail
+ *      particle's position is `birthPos + birthVelocity * age`, and getting this sign
+ *      wrong turns the plume inside out (it trails at twice the head speed instead of
+ *      co-moving, and the visible length collapses to a few units)
+ *   3. per-probe unit backward tangent and an orthonormal basis normal to it, which is
+ *      the frame the ejection cone is expressed in
+ *
+ * The basis is built from a fixed reference vector chosen per probe rather than from
+ * the world up axis unconditionally: at the S-curve's extremes the tangent is nearly
+ * parallel to `+X`, and crossing that with `+Y` would still work, but the cross
+ * degenerates to zero on a path that happened to be vertical. Picking whichever of
+ * `+Y` / `+X` is further from parallel keeps the basis well-conditioned everywhere the
+ * head can go, at the cost of one comparison.
  */
-export function resampleByArcLength(
-  source: Float32Array,
-  arc: Float32Array,
-  probeCount: number,
-  out: Float32Array,
-  sampleCount: number,
-  maxLength: number
-): number {
-  if (probeCount < 2 || sampleCount < 1) return 0
-  const total = arc[probeCount - 1]
-  if (!(total > 1e-6)) {
-    // A degenerate path: copy the single distinct point into every slot rather
-    // than leaving NaNs or a stale tail from the previous frame.
-    const x = source[0]
-    const y = source[1]
-    const z = source[2]
-    for (let k = 0; k < sampleCount; k++) {
-      out[k * 3] = x
-      out[k * 3 + 1] = y
-      out[k * 3 + 2] = z
-    }
-    return 0
+export function fillEmissionTable(
+  table: EmissionTable,
+  source: { sampleTrail(delaySeconds: number, out: Point3): void },
+  probePoint: Point3
+): void {
+  const n = table.probeCount
+  const { xyz, vel, axis, side1, side2 } = table
+  const span = table.spanSeconds
+  const step = span / Math.max(1, n - 1)
+
+  // Pass 1: the path at uniform time.
+  for (let k = 0; k < n; k++) {
+    source.sampleTrail(k * step, probePoint)
+    xyz[k * 3] = probePoint.x
+    xyz[k * 3 + 1] = probePoint.y
+    xyz[k * 3 + 2] = probePoint.z
   }
 
-  const reach = Math.min(maxLength, total)
-  let cursor = 0
-  for (let k = 0; k < sampleCount; k++) {
-    const want = sampleCount === 1 ? 0 : (k / (sampleCount - 1)) * reach
-    // Both the targets and the source ascend, so one forward cursor suffices; a
-    // binary search per sample would cost more than the walk that built `arc`.
-    while (cursor < probeCount - 2 && arc[cursor + 1] < want) cursor++
-    const a0 = arc[cursor]
-    const a1 = arc[cursor + 1]
-    const seg = a1 - a0
-    const frac = seg > 1e-9 ? (want - a0) / seg : 0
-    const i0 = cursor * 3
-    const i1 = (cursor + 1) * 3
-    out[k * 3] = source[i0] + (source[i1] - source[i0]) * frac
-    out[k * 3 + 1] = source[i0 + 1] + (source[i1 + 1] - source[i0 + 1]) * frac
-    out[k * 3 + 2] = source[i0 + 2] + (source[i1 + 2] - source[i0 + 2]) * frac
+  // Pass 2 + 3 in one walk: the central difference needs neighbours, and the axis is
+  // just the negated unit velocity, so both come out of the same three points.
+  for (let k = 0; k < n; k++) {
+    const hi = (k === 0 ? 0 : k - 1) * 3
+    const lo = (k === n - 1 ? n - 1 : k + 1) * 3
+    // `hi` is the *newer* probe (smaller delay) and `lo` the older, so
+    // (newer - older) / elapsed is the forward velocity. The endpoints reuse their
+    // single available neighbour, which halves the span; both are so far down the
+    // tail (>= 2 s old) that the difference is invisible.
+    const elapsed = (k === 0 || k === n - 1 ? 1 : 2) * step
+    const vx = (xyz[hi] - xyz[lo]) / elapsed
+    const vy = (xyz[hi + 1] - xyz[lo + 1]) / elapsed
+    const vz = (xyz[hi + 2] - xyz[lo + 2]) / elapsed
+    vel[k * 3] = vx
+    vel[k * 3 + 1] = vy
+    vel[k * 3 + 2] = vz
+
+    const speed = Math.sqrt(vx * vx + vy * vy + vz * vz)
+    let ax: number
+    let ay: number
+    let az: number
+    if (speed > 1e-6) {
+      // Backward: the plume is left behind the direction of travel.
+      ax = -vx / speed
+      ay = -vy / speed
+      az = -vz / speed
+    } else {
+      // A held glyph pins the head, so its velocity is genuinely zero and there is no
+      // tangent to derive. Fall back to the world X axis rather than dividing by ~0 —
+      // any unit vector is as good as any other here, because the emission model is
+      // gated off by `glyphMix` in exactly these phases (see `integrate`).
+      ax = -1
+      ay = 0
+      az = 0
+    }
+    axis[k * 3] = ax
+    axis[k * 3 + 1] = ay
+    axis[k * 3 + 2] = az
+
+    // An orthonormal pair spanning the plane normal to the axis.
+    const rx = Math.abs(ay) < 0.9 ? 0 : 1
+    const ry = Math.abs(ay) < 0.9 ? 1 : 0
+    const rz = 0
+    let s1x = ry * az - rz * ay
+    let s1y = rz * ax - rx * az
+    let s1z = rx * ay - ry * ax
+    const s1Len = Math.sqrt(s1x * s1x + s1y * s1y + s1z * s1z)
+    if (s1Len > 1e-6) {
+      s1x /= s1Len
+      s1y /= s1Len
+      s1z /= s1Len
+    } else {
+      s1x = 1
+      s1y = 0
+      s1z = 0
+    }
+    side1[k * 3] = s1x
+    side1[k * 3 + 1] = s1y
+    side1[k * 3 + 2] = s1z
+    // The second basis vector is a cross product of two unit, orthogonal vectors, so
+    // it is already unit length and needs no normalisation.
+    side2[k * 3] = ay * s1z - az * s1y
+    side2[k * 3 + 1] = az * s1x - ax * s1z
+    side2[k * 3 + 2] = ax * s1y - ay * s1x
   }
-  return reach
 }
 
-/** Cumulative arc length of `count` consecutive xyz points. Writes `count` values
- *  into `out` and returns the total. */
-export function accumulateArcLength(
-  points: Float32Array,
-  count: number,
+/**
+ * The lifetime falloff: 1 at birth, exactly 0 at the end of life, monotone between.
+ *
+ * `(1 - u) ** TAIL_FADE_POWER` rather than a smoothstep or a linear ramp because the
+ * requirement is a *gradual* fade to nothing, and this form cannot overshoot: the
+ * value is 0 at `u = 1` by construction, so a recycled particle is invisible on the
+ * frame it is reused rather than popping. The exponent below 1 front-loads the decay,
+ * which reads as material already cooling as it leaves the nucleus.
+ *
+ * Clamped on both sides: `u` comes from a division by `life`, and a recycled particle
+ * whose `life` was somehow 0 would otherwise push a negative base into `Math.pow` and
+ * write a NaN into the colour buffer, which blanks the whole cloud for a frame.
+ */
+export function tailFade(u: number): number {
+  // Non-finite `u` cannot be clamped meaningfully, and returning 1 for a NaN would
+  // leave a permanently bright particle stuck in the plume. Invisible is the safe
+  // failure: the worst case is one missing point, not a glowing artefact.
+  if (!Number.isFinite(u)) return 0
+  const w = 1 - clamp01(u)
+  return w <= 0 ? 0 : Math.pow(w, TAIL_FADE_POWER)
+}
+
+/**
+ * Where one tail particle sits, in subject space, from its own baked numbers.
+ *
+ *     p = head(age) + headVelocity(age)·age·ENTRAIN
+ *       + apertureOffset
+ *       + (axis·cosθ + side1·sinθcosφ + side2·sinθsinφ) · reach · (age/life)
+ *
+ * Extracted so the emission model — the thing the user actually complained about — is
+ * asserted as arithmetic rather than inspected in a screenshot. Nothing here touches
+ * WebGL, and the axial profile and age histogram in the acceptance data are produced
+ * by running this function over the scratch arrays.
+ *
+ * Writes `out[0..2]`. Allocation-free.
+ */
+export function writeTailParticlePosition(
+  table: EmissionTable,
+  age: number,
+  life: number,
+  reach: number,
+  coneX: number,
+  coneY: number,
+  coneZ: number,
+  jitterX: number,
+  jitterY: number,
+  jitterZ: number,
   out: Float32Array
-): number {
-  let travelled = 0
-  out[0] = 0
-  for (let i = 1; i < count; i++) {
-    const i0 = (i - 1) * 3
-    const i1 = i * 3
-    const dx = points[i1] - points[i0]
-    const dy = points[i1 + 1] - points[i0 + 1]
-    const dz = points[i1 + 2] - points[i0 + 2]
-    travelled += Math.sqrt(dx * dx + dy * dy + dz * dz)
-    out[i] = travelled
-  }
-  return travelled
+): void {
+  const n = table.probeCount
+  const { xyz, vel, axis, side1, side2 } = table
+  const span = table.spanSeconds
+  const step = span / Math.max(1, n - 1)
+
+  // Sanitise every scalar first. These come from a float accumulator in the frame loop,
+  // and a single NaN reaching the colour buffer blanks the entire cloud for a frame —
+  // so the failure has to be local to one particle, not global. `age` is clamped into
+  // the table rather than rejected, since 0 is a legitimate "just born" reading.
+  const safeAge = Number.isFinite(age) ? clampTo(age, span) : 0
+  const safeLife = Number.isFinite(life) ? life : 0
+  const safeReach = Number.isFinite(reach) ? reach : 0
+
+  // Locate the birth instant on the table's time axis, then lerp. The clamp is the
+  // reason `TAIL_SECONDS` has to exceed the longest life: a clamped probe would pin a
+  // whole column of dying particles onto a *fresher* point of the path and they would
+  // visibly snap toward the head as they faded.
+  const f = safeAge / step
+  const k = Math.min(n - 2, Math.floor(f))
+  const t = f - k
+  const a = k * 3
+  const b = (k + 1) * 3
+
+  const px = xyz[a] + (xyz[b] - xyz[a]) * t
+  const py = xyz[a + 1] + (xyz[b + 1] - xyz[a + 1]) * t
+  const pz = xyz[a + 2] + (xyz[b + 2] - xyz[a + 2]) * t
+
+  // The inherited birth velocity. This is what keeps the plume's visible length from
+  // tracking the head's speed — see `TAIL_ENTRAIN`.
+  const vx = vel[a] + (vel[b] - vel[a]) * t
+  const vy = vel[a + 1] + (vel[b + 1] - vel[a + 1]) * t
+  const vz = vel[a + 2] + (vel[b + 2] - vel[a + 2]) * t
+  const drift = safeAge * TAIL_ENTRAIN
+
+  // The ejection cone, re-referenced into the birth frame every frame: the cone turns
+  // with the comet instead of staying frozen in the direction it was pointing.
+  const sx = axis[a] + (axis[b] - axis[a]) * t
+  const sy = axis[a + 1] + (axis[b + 1] - axis[a + 1]) * t
+  const sz = axis[a + 2] + (axis[b + 2] - axis[a + 2]) * t
+  const ux = side1[a] + (side1[b] - side1[a]) * t
+  const uy = side1[a + 1] + (side1[b + 1] - side1[a + 1]) * t
+  const uz = side1[a + 2] + (side1[b + 2] - side1[a + 2]) * t
+  const wx = side2[a] + (side2[b] - side2[a]) * t
+  const wy = side2[a + 1] + (side2[b + 1] - side2[a + 1]) * t
+  const wz = side2[a + 2] + (side2[b + 2] - side2[a + 2]) * t
+
+  // Distance covered along the birth axis, in world units: the particle's own reach,
+  // reached at its own death, so `life` drops out and the fade edge stays coherent.
+  const travelled = safeLife > 1e-6 ? safeReach * clamp01(safeAge / safeLife) : 0
+
+  out[0] = px + vx * drift + jitterX + (sx * coneX + ux * coneY + wx * coneZ) * travelled
+  out[1] = py + vy * drift + jitterY + (sy * coneX + uy * coneY + wy * coneZ) * travelled
+  out[2] = pz + vz * drift + jitterZ + (sz * coneX + uz * coneY + wz * coneZ) * travelled
+}
+
+/** Clamp `v` into `[0, hi]`, mapping NaN and negatives to 0. */
+function clampTo(v: number, hi: number): number {
+  if (!(v > 0)) return 0
+  return v < hi ? v : hi
 }
 
 // ---------------------------------------------------------------------------
@@ -521,6 +802,12 @@ export class ParticleEngine implements ParticleEngineContract {
   private readonly ownsBrandSource: boolean
 
   private readonly scratch: EngineScratch
+  /**
+   * Scratch output for {@link writeTailParticlePosition}, so the per-particle emission
+   * step allocates nothing. A `Float32Array` rather than a `Vector3` because the write
+   * path is three indexed stores, with no method call in the hot loop.
+   */
+  private readonly tailPoint = new Float32Array(3)
   /** One object, mutated in place and republished every frame (see §6 item 2). */
   private readonly stats: EngineStats
 
@@ -881,7 +1168,7 @@ export class ParticleEngine implements ParticleEngineContract {
 
     try {
       this.advanceClock(clockStep)
-      this.writeTailLut()
+      this.writeEmissionTable()
       this.integrate(frameStep, now / 1000)
       this.upload()
       this.advanceCamera()
@@ -971,48 +1258,16 @@ export class ParticleEngine implements ParticleEngineContract {
   }
 
   /**
-   * Build the tail path as a lookup table of points spaced at uniform ARC LENGTH.
+   * Refill the emission table from the head's recent past.
    *
-   * Two passes. The first walks the head's past at uniform *time* and accumulates
-   * real distance between consecutive samples. The second walks that accumulated
-   * distance to pick the points that sit evenly along the path — which is what the
-   * particles index into.
-   *
-   * The indirection is the whole point. The head eases into each extreme, so
-   * uniform time is uniform *distance* only mid-leg; sampling by time instead
-   * stretched the tail to ~14 units at the fastest point and collapsed it to
-   * nearly nothing at the ends, where a comet should look its longest. Indexing by
-   * arc length gives the cloud a tail of `TAIL_LENGTH` regardless of how fast the
-   * head happens to be moving, so the streak keeps its shape through the turn.
-   *
-   * Both buffers are preallocated, so this allocates nothing per frame.
+   * The whole method is the call to {@link fillEmissionTable}, which is a free
+   * function so that it can be exercised against a synthetic path in a unit test —
+   * this class cannot be constructed under jsdom, and the table's *sign conventions*
+   * are the part of the new tail most likely to be got subtly wrong. Everything it
+   * needs is preallocated in `scratch`, so the frame allocates nothing.
    */
-  private writeTailLut(): void {
-    const s = this.scratch
-    const probe = s.tailProbeXyz
-    const arc = s.tailProbeArc
-    const out = s.vecB
-    const probes = TAIL_PROBE_COUNT
-
-    // Pass 1: the past path at uniform time, with cumulative arc length.
-    const stepSeconds = TAIL_SECONDS / (probes - 1)
-    for (let i = 0; i < probes; i++) {
-      this.choreography.sampleTrail(i * stepSeconds, out)
-      probe[i * 3] = out.x
-      probe[i * 3 + 1] = out.y
-      probe[i * 3 + 2] = out.z
-    }
-    accumulateArcLength(probe, probes, arc)
-
-    // Pass 2: resample onto uniform arc length.
-    s.tailReach = resampleByArcLength(
-      probe,
-      arc,
-      probes,
-      s.tailLut,
-      this.tailSampleCount,
-      TAIL_LENGTH
-    )
+  private writeEmissionTable(): void {
+    fillEmissionTable(this.scratch.tailTable, this.choreography, this.scratch.probePoint)
   }
 
   private integrate(frameStep: number, time: number): void {
@@ -1021,7 +1276,6 @@ export class ParticleEngine implements ParticleEngineContract {
     const velocities = s.velocities
     const colors = s.colors
     const glyph = s.glyphTargets
-    const lut = s.tailLut
     const count = this.particleCount
     const state = this.choreography.state
     const palette = this.palette
@@ -1096,30 +1350,39 @@ export class ParticleEngine implements ParticleEngineContract {
       }
     }
 
-    const lutMax = this.tailSampleCount - 1
     const coreCount = count * HEAD_CORE_SHARE
-    const spin = this.reducedMotion ? 0 : 1
     const useHoldStep = phase === 'hold' && glyphMix > 0.5
+    // The comet half of the blend. Its inverse weights the glyph, and the emission
+    // model is faded out by it *before* the glyph target is built — a tail particle
+    // still mid-flight when the gather starts has to give way to the glyph rather than
+    // fight it, which is why this is a weight on the whole emission term and not a
+    // gate on whether the age advances.
+    const cometMix = 1 - glyphMix
 
-    // The head ball is offset forward along the direction of travel, which is the
-    // path's tangent at the newest point: sample 0 is the head, sample 1 is one
-    // step into the past, so head - previous points the way the comet is going.
-    // Computed once per frame rather than per particle.
+    // The nucleus is offset forward along the direction of travel, which is the
+    // head's velocity: the core ball's leading surface has to be convex or the comet
+    // reads as a sliced-off disc. Taken from the emission table's newest probe rather
+    // than from a difference of two table samples, because the table already holds the
+    // central-difference velocity and re-deriving it here would be a second, subtly
+    // different estimate of the same quantity.
+    const table = s.tailTable
     let leadX = 0
     let leadY = 0
     let leadZ = 0
-    if (this.tailSampleCount > 1 && s.tailReach > 1e-6) {
-      const tx = lut[0] - lut[3]
-      const ty = lut[1] - lut[4]
-      const tz = lut[2] - lut[5]
-      const len = Math.sqrt(tx * tx + ty * ty + tz * tz)
-      if (len > 1e-6) {
-        const scale = (HEAD_CORE_RADIUS * HEAD_CORE_LEAD) / len
-        leadX = tx * scale
-        leadY = ty * scale
-        leadZ = tz * scale
+    {
+      const vx0 = table.vel[0]
+      const vy0 = table.vel[1]
+      const vz0 = table.vel[2]
+      const speed = Math.sqrt(vx0 * vx0 + vy0 * vy0 + vz0 * vz0)
+      if (speed > 1e-6) {
+        const scale = (HEAD_CORE_RADIUS * HEAD_CORE_LEAD) / speed
+        leadX = vx0 * scale
+        leadY = vy0 * scale
+        leadZ = vz0 * scale
       }
     }
+
+    const tailOut = this.tailPoint
 
     for (let i = 0; i < count; i++) {
       const idx = i * 3
@@ -1127,43 +1390,63 @@ export class ParticleEngine implements ParticleEngineContract {
       const py = positions[idx + 1]
       const pz = positions[idx + 2]
 
-      // --- comet target: a point on the path, thickened into a cone ----------
-      const t = s.tailT[i]
-      const scaled = t * lutMax
-      const k = Math.floor(scaled)
-      const k1 = k + 1 > lutMax ? lutMax : k + 1
-      const frac = scaled - k
-      const ax = lut[k * 3]
-      const ay = lut[k * 3 + 1]
-      const az = lut[k * 3 + 2]
-      const bx = lut[k1 * 3]
-      const by = lut[k1 * 3 + 1]
-      const bz = lut[k1 * 3 + 2]
-
-      const headness = 1 - t
-      // Radius scales toward the tip, which is what makes the head a bright core
-      // and the tip a diffuse plume. Keyed to arc length rather than to delay: the
-      // taper has to describe a shape in space, so tying it to the clock would make
-      // the cone pinch wherever the head slowed down.
-      const along = s.tailReach > 1e-6 ? (t * s.tailReach) / TAIL_LENGTH : 0
-      const radius = TAIL_RADIUS + TAIL_SPREAD * TAIL_LENGTH * along * s.tailRadius[i]
-      const angle = s.tailAngle[i] + time * s.tailSpin[i] * spin
-      const cosA = Math.cos(angle)
-      const sinA = Math.sin(angle)
-
-      // The core particles sit at zero arc length — one exact point on the path —
-      // so their swirl ring would collapse to a flat disc. Spreading them through
-      // the head ball instead is what turns that disc into a coma, and biasing the
-      // ball forward along the tangent is what makes the leading surface convex
-      // instead of a sliced-off plane.
       const core = i < coreCount
-      const jitterX = core ? s.headOffset[idx] + leadX : 0
-      const jitterY = core ? s.headOffset[idx + 1] + leadY : 0
-      const jitterZ = core ? s.headOffset[idx + 2] + leadZ : 0
+      // --- comet target ------------------------------------------------------
+      // Two populations under one model. The core particles are the nucleus: they sit
+      // inside the head ball, biased forward, and never age — a comet whose nucleus
+      // evaporated would not be a comet. The tail particles are *emitted*: each has its
+      // own age, life and reach, and its position is the closed form in
+      // `writeTailParticlePosition` rather than a slot on a shared rigid path.
+      let cometX: number
+      let cometY: number
+      let cometZ: number
+      let emit: number
 
-      const cometX = ax + (bx - ax) * frac + sinA * radius * 0.35 + jitterX
-      const cometY = ay + (by - ay) * frac + cosA * radius + jitterY
-      const cometZ = az + (bz - az) * frac + sinA * radius * 0.75 + jitterZ
+      if (core) {
+        // `age` is a real count of seconds, so the nucleus does breathe slightly as
+        // the head accelerates; the emission term is zero for core particles because
+        // their `tailReach` is baked as 0.
+        cometX = table.xyz[0] + s.headOffset[idx] + leadX
+        cometY = table.xyz[1] + s.headOffset[idx + 1] + leadY
+        cometZ = table.xyz[2] + s.headOffset[idx + 2] + leadZ
+        emit = 1
+      } else {
+        // --- the emission step ----------------------------------------------
+        // Age advances by the frame's own step, divided by 60 because `frameStep` is
+        // in 60 Hz frames and `life` is in seconds. Both are preallocated arrays, so
+        // this is the entire cost of the particle's life: two reads, one add, one
+        // compare, and on death one write. No allocation, no ring buffer.
+        let age = s.tailAge[i] + frameStep / 60
+        const life = s.tailLife[i]
+        if (age >= life) {
+          // Death and immediate rebirth at the nucleus — this is the recycling that
+          // makes the plume a continuous stream rather than a fixed set of slots. The
+          // fractional remainder is carried over instead of being discarded, so the
+          // recycle rate cannot drift against the clock at any frame rate.
+          age -= life * Math.floor(age / life)
+        }
+        s.tailAge[i] = age
+
+        const u = life > 1e-6 ? age / life : 1
+        emit = tailFade(u) * cometMix
+
+        writeTailParticlePosition(
+          table,
+          age,
+          life,
+          s.tailReach[i],
+          s.tailCone[idx],
+          s.tailCone[idx + 1],
+          s.tailCone[idx + 2],
+          s.headOffset[idx],
+          s.headOffset[idx + 1],
+          s.headOffset[idx + 2],
+          tailOut
+        )
+        cometX = tailOut[0]
+        cometY = tailOut[1]
+        cometZ = tailOut[2]
+      }
 
       // --- glyph target: the anchor plus its bounded internal drift -----------
       let tx = cometX
@@ -1223,14 +1506,24 @@ export class ParticleEngine implements ParticleEngineContract {
       // Dark theme is a white-hot head cooling down the tail, with the site's
       // single warm accent mixed in at the head only — a comet reads as white-hot,
       // and a saturated head would fight the glyph it forms.
-      const warm = glyphMix > 0 ? glyphMix * 0.26 : headness * headness * 0.55
+      //
+      // `emit` is the lifetime fade, and it is what the user asked for by name:
+      // "达到一定距离后渐变消失". A particle's brightness falls to exactly zero as its
+      // life runs out, so the far end of the plume dissolves instead of being cut off.
+      // The head's own luminance is left where it was; nothing here shrinks the comet.
+      const warm = glyphMix > 0 ? glyphMix * 0.26 : (1 - emit) * cometMix * 0.55
       const depth = Math.max(-1, Math.min(1, nz / 1.4)) * this.holdFade
       const shimmer = 0.86 + Math.sin(time * 2.1 + s.tailSeed[i] * 43.0) * 0.05 + depth * 0.08
-      const lum = (0.42 + headness * 0.72 + Math.abs(depth) * 0.06) * shimmer * palette.gain
+      // The ion population is tinted toward the accent and the dust toward the cool
+      // core, which is the one nod to the two-tail structure the brief asks for that
+      // this renderer can afford: one multiply and one compare per particle.
+      const ionWarm = core ? 0 : s.tailIon[i] * 0.18
+      const w = warm > ionWarm ? warm : ionWarm
+      const lum = (0.42 + emit * 0.72 + Math.abs(depth) * 0.06) * shimmer * palette.gain
 
-      const cr = (palette.core.r + (palette.accent.r - palette.core.r) * warm) * lum
-      const cg = (palette.core.g + (palette.accent.g - palette.core.g) * warm) * lum
-      const cb = (palette.core.b + (palette.accent.b - palette.core.b) * warm) * lum
+      const cr = (palette.core.r + (palette.accent.r - palette.core.r) * w) * lum
+      const cg = (palette.core.g + (palette.accent.g - palette.core.g) * w) * lum
+      const cb = (palette.core.b + (palette.accent.b - palette.core.b) * w) * lum
 
       const cap = this.light ? 0.82 : 1.4
       colors[idx] = cr > cap ? cap : cr
