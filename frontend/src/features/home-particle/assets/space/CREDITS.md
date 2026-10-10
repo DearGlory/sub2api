@@ -75,3 +75,86 @@ tools/fetch-space-bg.sh --check    # verify the existing output only
 The script asserts the 1.5 MiB ceiling, the 4000 px minimum width, and the
 360° seam, and exits non-zero if any of them fails. It writes the measured
 numbers back to stdout and to `.verify.json`.
+
+---
+
+## Integration — how the engine should consume this
+
+**Assets only.** Nothing in `engine/` was touched: `starfield.ts`,
+`ParticleEngine.ts`, `HomeParticleBackground.vue` and `constants.ts` are byte
+identical to before. Wiring the texture into the scene is a separate change.
+
+The engine currently clears to a solid dark colour with `alpha: true` and
+`setClearColor(palette.background, 1)` on dark, `0` on light. The background
+belongs **behind** the WebGL canvas, on the DOM — not inside the scene — so it
+costs zero draw calls against §6's budget of six.
+
+In `HomeParticleBackground.vue`, on the already-`fixed inset-0 z-0`
+`pointer-events-none` container, add a sibling layer behind the canvas:
+
+```vue
+<div
+  v-if="!failed"
+  class="home-space-sky pointer-events-none absolute inset-0"
+  aria-hidden="true"
+/>
+```
+
+```css
+.home-space-sky {
+  /* Dark theme only. The light theme keeps its current treatment — a deep-space
+     photograph under a pale page destroys the light page's readability. */
+  display: none;
+}
+:global(.dark) .home-space-sky {
+  display: block;
+  background-image: url('../assets/space/stars-milkyway.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* No x-repeat: the source is a 360° equirectangular strip, so tiling it would
+     restart the galactic band at a visible cut. Cover, and accept the crop. */
+}
+```
+
+For the lite variant, swap the URL at build time with a media query rather than
+loading both — Vite will emit only the file each rule references:
+
+```css
+@media (max-width: 900px), (max-resolution: 1.5dppx) {
+  :global(.dark) .home-space-sky {
+    background-image: url('../assets/space/stars-milkyway-lite.webp');
+  }
+}
+```
+
+**In-scene alternative**, if the integrator prefers a `Scene.background`
+texture: set `THREE.EquirectangularReflectionMapping` on the texture and a
+matching `scene.background`, then **keep `setClearColor(..., 0)`** so the canvas
+still composites over the page. The DOM path is recommended — it is one CSS
+layer, it needs no GPU work, and it cannot break the WebGL fallback path.
+
+**Where not to put text.** Measured mean luminance per band of the 4096×2048
+asset, with the WCAG contrast ratio white text would get against it:
+
+| band | mean | white-text contrast |
+|---|---|---|
+| top 20 % | 7.2 / 255 | 20.1 : 1 |
+| upper third | 10.2 / 255 | 19.8 : 1 |
+| galactic plane | 27.5–32.2 / 255 | 16.3–17.1 : 1 |
+| lower third | 9.6 / 255 | 19.8 : 1 |
+| bottom 30 % | 7.1 / 255 | 20.1 : 1 |
+
+Every band clears AA and AAA for white text, including over the galactic plane.
+The real hazards are local, not regional: a handful of stars clip to 255, and
+0.3–0.4 % of pixels in the dark zones exceed 96. Put the headline and body copy
+in the top 20 % or the bottom 30 % and the background is effectively invisible
+behind the type. If the layout must cross the bright mid-band, add a
+`linear-gradient` scrim rather than darkening the photograph.
+
+**Do not darken the file further.** A vertical vignette was tried to buy extra
+text headroom: it cost ~20 % of the detectable stars (top band 9929 → 7673) and
+doubled the longest flat gradient run (42 → 78 px, i.e. more banding risk) for
+contrast the type did not need. The flat grade above is the measurement-driven
+choice; if a specific layout still needs a darker plate, do it in CSS where it is
+one line to tune and costs nothing to re-tune.
