@@ -153,6 +153,25 @@ defineExpose({
     data-testid="home-particle-background"
   >
     <!--
+      The real Milky Way photograph, on the DOM behind the WebGL canvas.
+
+      Behind rather than in the scene on purpose: a `scene.background` texture is
+      another draw call against §6's budget of six, while a CSS background costs
+      none — and the canvas is transparent, so this shows through it. It also means
+      the photograph survives a lost GL context, so a visitor whose driver refused a
+      context still gets a real sky instead of a flat colour.
+
+      Dark theme only. The photograph is a deep-space exposure; on the pale page it
+      would invert the whole design's contrast story, which is why `display:none` is
+      the base rule and `.dark` turns it on.
+
+      `background-repeat: no-repeat` is load-bearing: the master is a 360-degree
+      equirectangular strip, so tiling on x restarts the galactic band at a hard cut
+      in the middle of the screen.
+    -->
+    <div class="home-space-sky absolute inset-0" />
+
+    <!--
       Non-WebGL degradation. The starfield is a CSS dot grid here because there is
       no GL context to draw one in; the flat space colour keeps the page readable
       either way. This is the only gradient in the feature and it exists solely to
@@ -163,6 +182,31 @@ defineExpose({
 </template>
 
 <style scoped>
+.home-space-sky {
+  /* Base is off: the light theme keeps its pale page. */
+  display: none;
+}
+
+:global(.dark) .home-space-sky {
+  display: block;
+  background-image: url('../assets/space/stars-milkyway.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/*
+ * Hand the small file to viewports that cannot tell the difference: a phone at
+ * 2-3x DPR and a low-DPI laptop both resolve far below the 4096px master, so the
+ * 148 KB lite pass buys the same picture for a twelfth of the bytes. Vite emits
+ * only the file a given visitor matches.
+ */
+@media (max-width: 900px), (max-resolution: 1.5dppx) {
+  :global(.dark) .home-space-sky {
+    background-image: url('../assets/space/stars-milkyway-lite.webp');
+  }
+}
+
 .home-particle-fallback::after {
   content: '';
   position: absolute;
@@ -172,7 +216,19 @@ defineExpose({
   opacity: 0.35;
 }
 
+/*
+ * On a failed context the sky is still there, so the fallback's dot grid has to sit
+ * over it rather than beside it — two star fields at different scales read as noise.
+ */
 :global(.dark) .home-particle-fallback::after {
+  display: none;
+}
+
+:global(.dark) .home-particle-fallback {
+  background-color: transparent;
+}
+
+:global(:not(.dark)) .home-particle-fallback::after {
   background-image: radial-gradient(circle, rgb(226 232 240 / 0.6) 1px, transparent 1px);
   opacity: 0.55;
 }
