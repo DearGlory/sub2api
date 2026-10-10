@@ -2,19 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { AdditiveBlending, NormalBlending } from 'three'
 
 import {
-  accumulateArcLength,
+  createEmissionTable,
   createEngineScratch,
+  fillEmissionTable,
   followSpeedFor,
   glyphMixFor,
   paletteFor,
-  resampleByArcLength,
+  tailFade,
+  writeTailParticlePosition,
 } from '../ParticleEngine'
+import { createChoreography } from '../choreography'
 import {
   BRANDS,
   HEAD_CORE_SHARE,
   POINTER_RADIUS,
-  TAIL_LENGTH,
-  TAIL_PROBE_COUNT,
+  TAIL_DUST_LIFE_MIN,
+  TAIL_DUST_REACH_MAX,
+  TAIL_ENTRAIN,
+  TAIL_FADE_POWER,
+  TAIL_ION_LIFE_MAX,
+  TAIL_ION_SHARE,
   TAIL_RADIUS,
   TAIL_SECONDS,
   TAIL_SPREAD,
@@ -25,10 +32,17 @@ import {
  * merely constructed it would either fail, or (worse) pass by falling into the
  * shell's catch block, which is green while asserting nothing.
  *
- * This file therefore pins the logic that is real without a GPU. The things that
- * need a context — the draw call, the frame pacing, the heap, whether the comet
- * actually moves — are measured by `tools/visual-acceptance.mjs` against real
- * Chrome, because a stubbed renderer here would only be testing the stub.
+ * This file therefore pins the logic that is real without a GPU: the emission model's
+ * arithmetic, the buffers it reads, and the phase blending around it. The things that
+ * need a context — the draw call, the frame pacing, the heap, and whether the plume
+ * actually *looks* like a comet — are measured by `tools/visual-acceptance.mjs`
+ * against real Chrome, because a stubbed renderer here would only be testing the stub.
+ *
+ * V2 note: the old tail was a rigid ribbon of particles pinned to arc-length slots.
+ * The user rejected it as unreadable ("彗星和彗尾看不出来是什么东西"). The tests that
+ * pinned that model — `tailT`, `tailRadius`, `accumulateArcLength`,
+ * `resampleByArcLength` — are gone with it, and the tests below pin the properties
+ * that replaced them: age, life, reach, the ejection cone, and the fade.
  */
 
 const COUNT = 512
@@ -36,6 +50,7 @@ const TAIL_SAMPLES = 32
 
 describe('createEngineScratch', () => {
   const scratch = createEngineScratch(COUNT, TAIL_SAMPLES)
+  const coreCount = Math.floor(COUNT * HEAD_CORE_SHARE)
 
   it('allocates every buffer the frame loop needs, at the right length', () => {
     expect(scratch.positions.length).toBe(COUNT * 3)
@@ -43,132 +58,144 @@ describe('createEngineScratch', () => {
     expect(scratch.colors.length).toBe(COUNT * 3)
     expect(scratch.glyphTargets.length).toBe(COUNT * 3)
     expect(scratch.glyphStrokeDepth.length).toBe(COUNT)
-    expect(scratch.tailT.length).toBe(COUNT)
-    expect(scratch.tailLut.length).toBe(TAIL_SAMPLES * 3)
+    expect(scratch.tailAge.length).toBe(COUNT)
+    expect(scratch.tailLife.length).toBe(COUNT)
+    expect(scratch.tailReach.length).toBe(COUNT)
+    expect(scratch.tailCone.length).toBe(COUNT * 3)
+    expect(scratch.tailIon.length).toBe(COUNT)
+    expect(scratch.tailSeed.length).toBe(COUNT)
+    expect(scratch.headOffset.length).toBe(COUNT * 3)
     expect(scratch.iconOrbitOffsets.length).toBe(COUNT * 3)
   })
 
+  it('allocates the emission table off the sample count the profile gives it', () => {
+    expect(scratch.tailTable.probeCount).toBe(TAIL_SAMPLES)
+    for (const buf of [
+      scratch.tailTable.xyz,
+      scratch.tailTable.vel,
+      scratch.tailTable.axis,
+      scratch.tailTable.side1,
+      scratch.tailTable.side2,
+    ]) {
+      expect(buf.length).toBe(TAIL_SAMPLES * 3)
+    }
+    expect(scratch.tailTable.spanSeconds).toBe(TAIL_SECONDS)
+  })
+
   it('starts every particle somewhere finite, so frame one cannot render NaN', () => {
-    for (const buf of [scratch.positions, scratch.velocities, scratch.colors]) {
+    for (const buf of [
+      scratch.positions,
+      scratch.velocities,
+      scratch.colors,
+      scratch.tailCone,
+      scratch.tailAge,
+      scratch.tailLife,
+      scratch.tailReach,
+      scratch.headOffset,
+    ]) {
       for (let i = 0; i < buf.length; i++) {
         expect(Number.isFinite(buf[i]), `non-finite at ${i}: ${buf[i]}`).toBe(true)
       }
     }
   })
 
-  it('places every particle on the tail axis, inside [0, 1]', () => {
-    for (let i = 0; i < COUNT; i++) {
-      expect(scratch.tailT[i]).toBeGreaterThanOrEqual(0)
-      expect(scratch.tailT[i]).toBeLessThanOrEqual(1)
-    }
-  })
-
-  it('packs a head core that sits exactly at the head', () => {
-    const coreCount = Math.floor(COUNT * HEAD_CORE_SHARE)
+  it('packs a head core that never ages and never flies', () => {
+    // The core is the nucleus: if it were emitted like the tail, the comet would
+    // evaporate and the head would stop reading as a solid body.
     expect(coreCount).toBeGreaterThan(0)
     for (let i = 0; i < coreCount; i++) {
-      // The core is what makes the head a bright concentration instead of a
-      // uniform tube, so a stray value here is a visible defect.
-      expect(scratch.tailT[i]).toBe(0)
+      expect(scratch.tailLife[i]).toBe(0)
+      expect(scratch.tailReach[i]).toBe(0)
     }
   })
 
-  it('spreads the tail densely enough that it cannot band', () => {
-    // Low-discrepancy spacing: every non-core particle must land on its own value,
-    // or the tail shows bands where two particles share a slot. The core particles
-    // are all exactly 0 by design, so they are excluded rather than counted.
-    const coreCount = Math.floor(COUNT * HEAD_CORE_SHARE)
-    const tailOnly = Array.from(scratch.tailT).slice(coreCount)
-    const distinct = new Set(tailOnly.map((v) => v.toFixed(4))).size
-    expect(distinct).toBe(tailOnly.length)
-  })
-
-  it('keeps the head denser than the tip, which is what a comet looks like', () => {
-    const coreCount = Math.floor(COUNT * HEAD_CORE_SHARE)
-    const tailOnly = Array.from(scratch.tailT).slice(coreCount)
-    const near = tailOnly.filter((t) => t < 0.5).length
-    const far = tailOnly.filter((t) => t >= 0.5).length
-    // t = u^1.35 with u uniform, so the near half must hold more than the far half.
-    expect(near).toBeGreaterThan(far)
-  })
-
-  it('hashes a decorrelated roll, so no two attributes move together', () => {
-    // The position roll is golden-ratio (banding-free by construction); the other
-    // four must not be, or the tail renders as a helix — which is exactly the bug
-    // this replaced. Correlating the raw sequences is the cheapest way to see it.
-    const n = 4000
-    const s = createEngineScratch(n, 16)
-    const t: number[] = []
-    const r: number[] = []
-    for (let i = 0; i < n; i++) {
-      t.push(s.tailT[i])
-      r.push(s.tailRadius[i])
-    }
-    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
-    const mt = mean(t)
-    const mr = mean(r)
-    let cov = 0
-    let vt = 0
-    let vr = 0
-    for (let i = 0; i < n; i++) {
-      const dt = t[i] - mt
-      const dr = r[i] - mr
-      cov += dt * dr
-      vt += dt * dt
-      vr += dr * dr
-    }
-    const corr = cov / Math.sqrt(vt * vr)
-    // Independent rolls sit near 0; the golden-ratio version was strongly ordered.
-    expect(Math.abs(corr)).toBeLessThan(0.12)
-  })
-
-  it('gives every particle a non-degenerate swirl and a radius inside the cone', () => {
-    for (let i = 0; i < COUNT; i++) {
-      expect(scratch.tailSpin[i]).toBeGreaterThan(0)
-      // The radius is a fraction of the cone's half-width, so it must stay inside
-      // [0, 1] — a value above 1 would push particles outside the cone the taper
-      // describes, and a shell (a narrow band of radii) is what made the tail read
-      // as concentric ring outlines instead of a plume.
-      expect(scratch.tailRadius[i]).toBeGreaterThanOrEqual(0)
-      expect(scratch.tailRadius[i]).toBeLessThanOrEqual(1)
+  it('gives every tail particle a positive life inside the designed window', () => {
+    for (let i = coreCount; i < COUNT; i++) {
+      expect(scratch.tailLife[i]).toBeGreaterThanOrEqual(TAIL_DUST_LIFE_MIN)
+      expect(scratch.tailLife[i]).toBeLessThanOrEqual(TAIL_ION_LIFE_MAX)
+      expect(scratch.tailReach[i]).toBeGreaterThan(0)
     }
   })
 
-  it('fills the cone instead of shelling it, so the tail reads as a plume', () => {
-    // A shell would put nearly every radius near 1. Filling puts most of the mass
-    // near the axis, which is what gives the tail a core.
-    const mean = Array.from(scratch.tailRadius).reduce((a, b) => a + b, 0) / COUNT
-    expect(mean).toBeLessThan(0.5)
-    // ...but a meaningful share must still sit away from the axis, or the tail has
-    // no visible width at all.
-    const outer = Array.from(scratch.tailRadius).filter((r) => r > 0.6).length
-    expect(outer).toBeGreaterThan(COUNT * 0.1)
+  it('starts every tail particle at a distinct age, so the plume is not one slab', () => {
+    // All-zero ages would open the page with one synchronised wave of newborns that
+    // all die together 2.5 s later — a visible pulse at first paint.
+    const ages = Array.from(scratch.tailAge).slice(coreCount)
+    expect(ages.every((a) => a >= 0)).toBe(true)
+    const distinct = new Set(ages.map((a) => a.toFixed(5))).size
+    expect(distinct).toBeGreaterThan(ages.length * 0.95)
+    // ...and they must span the range, not merely be distinct.
+    const spread = Math.max(...ages) - Math.min(...ages)
+    expect(spread).toBeGreaterThan(TAIL_DUST_LIFE_MIN * 0.8)
   })
 
-  it('decorrelates the per-particle attributes from the position along the tail', () => {
-    // This is the bug that shipped once: every attribute was derived from the same
-    // golden-ratio sequence, so radius, angle and spin were all functions of `t`
-    // and the tail rendered as a machined helix. Sorted by `t`, the radius must
-    // look like noise rather than a ramp.
-    const coreCount = Math.floor(COUNT * HEAD_CORE_SHARE)
-    const order = Array.from({ length: COUNT - coreCount }, (_, k) => k + coreCount)
-    order.sort((a, b) => scratch.tailT[a] - scratch.tailT[b])
+  it('keeps every emission cone direction a unit vector', () => {
+    // The cone is baked as (cos θ, sin θ cos φ, sin θ sin φ) in the birth frame. If it
+    // were not unit length, `reach` would stop meaning world units and the plume's
+    // length would be whatever the hashes happened to produce.
+    for (let i = coreCount; i < COUNT; i++) {
+      const x = scratch.tailCone[i * 3]
+      const y = scratch.tailCone[i * 3 + 1]
+      const z = scratch.tailCone[i * 3 + 2]
+      expect(Math.sqrt(x * x + y * y + z * z)).toBeCloseTo(1, 5)
+    }
+  })
 
-    const radii = order.map((i) => scratch.tailRadius[i])
-    // Split the sorted order in half and compare means: a correlated attribute
-    // would make these differ sharply, noise makes them close.
-    const half = Math.floor(radii.length / 2)
-    const meanOf = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
-    const early = meanOf(radii.slice(0, half))
-    const late = meanOf(radii.slice(half))
-    expect(Math.abs(early - late)).toBeLessThan(0.12)
+  it('points every cone backward along its own axis, within the designed angle', () => {
+    for (let i = coreCount; i < COUNT; i++) {
+      const cosTheta = scratch.tailCone[i * 3]
+      // `sin θ = TAIL_SPREAD * u^TAIL_FILL` with `u` in [0, 1], so `cos θ` sits in
+      // [sqrt(1 - TAIL_SPREAD^2), 1] and the axial component is never negative — no
+      // particle is ever ejected forward, into the direction of travel.
+      expect(cosTheta).toBeGreaterThan(0)
+      expect(cosTheta).toBeLessThanOrEqual(1)
+      expect(cosTheta).toBeGreaterThanOrEqual(Math.sqrt(1 - TAIL_SPREAD * TAIL_SPREAD) - 1e-6)
+    }
+  })
 
-    // And it must not be a monotone ramp in the sorted order either.
-    let ascents = 0
-    for (let k = 1; k < radii.length; k++) if (radii[k] > radii[k - 1]) ascents++
-    const ascentRatio = ascents / (radii.length - 1)
-    expect(ascentRatio).toBeGreaterThan(0.35)
-    expect(ascentRatio).toBeLessThan(0.65)
+  it('crowds the cone toward its axis, so the plume has a spine', () => {
+    // `TAIL_FILL > 1` on `sin θ`. A uniform roll in `sin θ` would shell the cone and
+    // the tail would read as concentric outlines rather than as a plume with a core.
+    const sines = []
+    for (let i = coreCount; i < COUNT; i++) {
+      const c = scratch.tailCone[i * 3]
+      sines.push(Math.sqrt(Math.max(0, 1 - c * c)))
+    }
+    const mean = sines.reduce((a, b) => a + b, 0) / sines.length
+    // A uniform distribution over the cone would average TAIL_SPREAD / 2; crowding
+    // toward the axis has to bring that mean down appreciably.
+    expect(mean).toBeLessThan(TAIL_SPREAD * 0.45)
+    // ...but the envelope must still exist, or the cone is a needle again.
+    expect(Math.max(...sines)).toBeGreaterThan(TAIL_SPREAD * 0.6)
+  })
+
+  it('mixes a real ion population in with the dust', () => {
+    let ion = 0
+    for (let i = coreCount; i < COUNT; i++) ion += scratch.tailIon[i]
+    const share = ion / (COUNT - coreCount)
+    expect(share).toBeGreaterThan(TAIL_ION_SHARE - 0.08)
+    expect(share).toBeLessThan(TAIL_ION_SHARE + 0.08)
+  })
+
+  it('reaches further with the ion population than with the dust', () => {
+    // The one structural difference the brief asks for that survives at this
+    // resolution: the straight tail overhangs the curving one.
+    let dustReach = 0
+    let ionReach = 0
+    let dustN = 0
+    let ionN = 0
+    for (let i = coreCount; i < COUNT; i++) {
+      if (scratch.tailIon[i]) {
+        ionReach += scratch.tailReach[i]
+        ionN += 1
+      } else {
+        dustReach += scratch.tailReach[i]
+        dustN += 1
+      }
+    }
+    expect(ionN).toBeGreaterThan(0)
+    expect(dustN).toBeGreaterThan(0)
+    expect(ionReach / ionN).toBeGreaterThan(dustReach / dustN)
   })
 
   it('wires the pointer field to the frozen radius constant', () => {
@@ -184,10 +211,394 @@ describe('createEngineScratch', () => {
     expect(scratch.iconHoldPose.rotationZ).toBe(0)
   })
 
-  it('keeps the tail lookup table in step with the sample count', () => {
-    expect(scratch.tailLut.length).toBe(TAIL_SAMPLES * 3)
-    // A non-positive TAIL_SECONDS collapses every tail sample onto the head.
-    expect(TAIL_SECONDS).toBeGreaterThan(0)
+  it('decorrelates life, reach and the cone from each other', () => {
+    // The bug this file has already shipped once: every attribute derived from the same
+    // golden-ratio sequence, so they were all functions of one another and the tail
+    // rendered as a machined helix. Two independent hashes must not correlate.
+    const n = 4000
+    const s = createEngineScratch(n, 16)
+    const core = Math.floor(n * HEAD_CORE_SHARE)
+    const corr = (a: number[], b: number[]) => {
+      const ma = a.reduce((x, y) => x + y, 0) / a.length
+      const mb = b.reduce((x, y) => x + y, 0) / b.length
+      let cov = 0
+      let va = 0
+      let vb = 0
+      for (let i = 0; i < a.length; i++) {
+        const da = a[i] - ma
+        const db = b[i] - mb
+        cov += da * db
+        va += da * da
+        vb += db * db
+      }
+      return cov / Math.sqrt(va * vb)
+    }
+
+    // Life, reach and the cone must be independent *within a population*, so the test
+    // separates the two populations rather than mixing them. Mixing them hides a real
+    // signal as noise: an ion particle is both longer-reaching and narrower-coned by
+    // design, so across the whole set `reach` and `coneX` correlate at ~0.17 — which is
+    // the ion class, not a hash defect. Within dust, and within ion, all three pairs are
+    // independent, and *that* is the property that matters: if the cone were derived
+    // from the reach roll, every long particle would be a wide one and the plume's
+    // envelope would be a cone shell instead of a plume.
+    for (const wantIon of [0, 1]) {
+      const life: number[] = []
+      const reach: number[] = []
+      const coneX: number[] = []
+      for (let i = core; i < n; i++) {
+        if (s.tailIon[i] !== wantIon) continue
+        life.push(s.tailLife[i])
+        reach.push(s.tailReach[i])
+        coneX.push(s.tailCone[i * 3])
+      }
+      expect(life.length).toBeGreaterThan(200)
+      expect(Math.abs(corr(life, reach))).toBeLessThan(0.12)
+      expect(Math.abs(corr(life, coneX))).toBeLessThan(0.12)
+      expect(Math.abs(corr(reach, coneX))).toBeLessThan(0.12)
+    }
+  })
+})
+
+describe('tailFade', () => {
+  it('is bright at birth and exactly zero at the end of life', () => {
+    // Exactly zero, not nearly: a recycled particle is evaluated at `u` just past 1 on
+    // the frame it is reused, and anything other than 0 here would pop.
+    expect(tailFade(0)).toBe(1)
+    expect(tailFade(1)).toBe(0)
+    expect(tailFade(1.5)).toBe(0)
+    expect(tailFade(Number.NaN)).toBe(0)
+  })
+
+  it('decreases monotonically, so nothing brightens as it dies', () => {
+    let previous = Infinity
+    for (let k = 0; k <= 100; k++) {
+      const v = tailFade(k / 100)
+      expect(v).toBeLessThanOrEqual(previous)
+      previous = v
+    }
+  })
+
+  it('declines gradually rather than holding and then dropping', () => {
+    // The user's requirement is a fade to nothing, not a cut. At the halfway point a
+    // fade is still substantially visible; the exact value is the chosen exponent.
+    expect(tailFade(0.5)).toBeCloseTo(Math.pow(0.5, TAIL_FADE_POWER), 6)
+    expect(tailFade(0.5)).toBeGreaterThan(0.5)
+    expect(tailFade(0.9)).toBeGreaterThan(0)
+    expect(tailFade(0.9)).toBeLessThan(0.35)
+  })
+})
+
+describe('fillEmissionTable', () => {
+  /**
+   * A synthetic path so the table can be checked without a choreography: the head
+   * walks along +X at a constant speed. Expected values are then trivial to state, and
+   * any sign error in the velocity or the axis shows up immediately.
+   */
+  function constantPath(speed: number) {
+    return {
+      sampleTrail(delay: number, target: { x: number; y: number; z: number }) {
+        target.x = 10 - speed * delay
+        target.y = 0
+        target.z = 0
+        return target
+      },
+    }
+  }
+
+  it('records the path newest-first at uniform time', () => {
+    const table = createEmissionTable(17)
+    fillEmissionTable(table, constantPath(2), { x: 0, y: 0, z: 0 })
+    expect(table.xyz[0]).toBeCloseTo(10, 5)
+    const step = TAIL_SECONDS / 16
+    expect(table.xyz[3]).toBeCloseTo(10 - 2 * step, 5)
+    expect(table.xyz[16 * 3]).toBeCloseTo(10 - 2 * TAIL_SECONDS, 5)
+  })
+
+  it('stores the FORWARD head velocity, not the backward one', () => {
+    // This sign is the single most dangerous thing in the emission model. Stored
+    // backwards, `birthPos + vel * age` puts every particle ahead of the comet and the
+    // plume emerges from the nose, which reads as a shockwave rather than a tail.
+    const table = createEmissionTable(17)
+    fillEmissionTable(table, constantPath(2), { x: 0, y: 0, z: 0 })
+    for (let k = 0; k < 17; k++) {
+      expect(table.vel[k * 3], `probe ${k}`).toBeCloseTo(2, 4)
+      expect(table.vel[k * 3 + 1]).toBeCloseTo(0, 6)
+      expect(table.vel[k * 3 + 2]).toBeCloseTo(0, 6)
+    }
+  })
+
+  it('points the ejection axis backward, opposite the velocity', () => {
+    const table = createEmissionTable(17)
+    fillEmissionTable(table, constantPath(2), { x: 0, y: 0, z: 0 })
+    for (let k = 0; k < 17; k++) {
+      // A head moving +X sheds its tail along -X.
+      expect(table.axis[k * 3], `probe ${k}`).toBeCloseTo(-1, 5)
+      expect(table.axis[k * 3 + 1]).toBeCloseTo(0, 6)
+      expect(table.axis[k * 3 + 2]).toBeCloseTo(0, 6)
+    }
+  })
+
+  it('builds an orthonormal basis at every probe, normal to the axis', () => {
+    // The cone is expressed in this basis. A basis that is not orthonormal would skew
+    // the cone into an ellipse, and one that is not unit length would scale `reach`.
+    const table = createEmissionTable(33)
+    fillEmissionTable(table, constantPath(3), { x: 0, y: 0, z: 0 })
+    for (let k = 0; k < 33; k++) {
+      const a = [table.axis[k * 3], table.axis[k * 3 + 1], table.axis[k * 3 + 2]]
+      const s1 = [table.side1[k * 3], table.side1[k * 3 + 1], table.side1[k * 3 + 2]]
+      const s2 = [table.side2[k * 3], table.side2[k * 3 + 1], table.side2[k * 3 + 2]]
+      const len = (v: number[]) => Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+      const dot = (u: number[], v: number[]) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+      expect(len(a), `axis ${k}`).toBeCloseTo(1, 5)
+      expect(len(s1), `side1 ${k}`).toBeCloseTo(1, 5)
+      expect(len(s2), `side2 ${k}`).toBeCloseTo(1, 5)
+      expect(dot(a, s1), `axis·side1 ${k}`).toBeCloseTo(0, 5)
+      expect(dot(a, s2), `axis·side2 ${k}`).toBeCloseTo(0, 5)
+      expect(dot(s1, s2), `side1·side2 ${k}`).toBeCloseTo(0, 5)
+    }
+  })
+
+  it('copes with a stationary head instead of dividing by zero', () => {
+    // A held glyph pins the head, so its velocity is genuinely zero. The axis is then
+    // undefined and the table must still be finite and unit-length.
+    const table = createEmissionTable(9)
+    fillEmissionTable(
+      table,
+      {
+        sampleTrail(_delay: number, target: { x: number; y: number; z: number }) {
+          target.x = 4
+          target.y = -1
+          target.z = 2
+          return target
+        },
+      },
+      { x: 0, y: 0, z: 0 }
+    )
+    for (let k = 0; k < 9; k++) {
+      const ax = table.axis[k * 3]
+      const ay = table.axis[k * 3 + 1]
+      const az = table.axis[k * 3 + 2]
+      expect(Number.isFinite(ax) && Number.isFinite(ay) && Number.isFinite(az)).toBe(true)
+      expect(Math.sqrt(ax * ax + ay * ay + az * az)).toBeCloseTo(1, 5)
+    }
+  })
+
+  it('writes nothing outside the table for any probe count a profile can ask for', () => {
+    for (const n of [2, 3, 8, 48, 96, 200]) {
+      const table = createEmissionTable(n)
+      fillEmissionTable(table, constantPath(1), { x: 0, y: 0, z: 0 })
+      for (const buf of [table.xyz, table.vel, table.axis, table.side1, table.side2]) {
+        for (let i = 0; i < buf.length; i++) {
+          expect(Number.isFinite(buf[i]), `n=${n} index=${i}`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('allocates nothing across repeated refills', () => {
+    // The frame loop calls this every frame. A fresh Float32Array per call would be
+    // ~5 KB of garbage at 60 Hz, which is exactly what §6 item 2 forbids.
+    const table = createEmissionTable(96)
+    const source = constantPath(2)
+    const point = { x: 0, y: 0, z: 0 }
+    fillEmissionTable(table, source, point)
+    const snapshot = Array.from(table.xyz)
+    for (let f = 0; f < 5; f++) fillEmissionTable(table, source, point)
+    expect(Array.from(table.xyz)).toEqual(snapshot)
+    // The buffers are the same objects throughout, not replacements.
+    expect(table.xyz).toBeInstanceOf(Float32Array)
+    expect(table.xyz.length).toBe(96 * 3)
+  })
+})
+
+describe('writeTailParticlePosition', () => {
+  /** A head cruising along +X at 4 units/s, tabulated. */
+  function cruisingTable(probes = 65) {
+    const table = createEmissionTable(probes)
+    fillEmissionTable(
+      table,
+      {
+        sampleTrail(delay: number, target: { x: number; y: number; z: number }) {
+          target.x = 6 - 4 * delay
+          target.y = 0
+          target.z = 0
+          return target
+        },
+      },
+      { x: 0, y: 0, z: 0 }
+    )
+    return table
+  }
+
+  const out = new Float32Array(3)
+
+  it('emits particles behind the nucleus, never ahead of it', () => {
+    // The whole point of the model. A particle must be shed backward.
+    const table = cruisingTable()
+    for (const age of [0.2, 0.8, 1.6, 2.4]) {
+      const life = 2.5
+      writeTailParticlePosition(table, age, life, 10, 1, 0, 0, 0, 0, 0, out)
+      expect(out[0], `age=${age}`).toBeLessThan(table.xyz[0])
+    }
+  })
+
+  it('starts at the nucleus and moves monotonically away from it', () => {
+    const table = cruisingTable()
+    const life = 2.5
+    let previous = -Infinity
+    for (let k = 0; k <= 20; k++) {
+      const age = (k / 20) * life
+      writeTailParticlePosition(table, age, life, 10, 1, 0, 0, 0, 0, 0, out)
+      const travelled = table.xyz[0] - out[0]
+      expect(travelled).toBeGreaterThanOrEqual(previous - 1e-5)
+      previous = travelled
+    }
+    // At birth the particle is at the head.
+    writeTailParticlePosition(table, 0, life, 10, 1, 0, 0, 0, 0, 0, out)
+    expect(out[0]).toBeCloseTo(table.xyz[0], 3)
+  })
+
+  it('is exactly `reach` behind the head plus the un-inherited head travel', () => {
+    // The load-bearing identity of the whole model, and the one worth pinning:
+    //
+    //   distance behind the head = headTravel·(1 - TAIL_ENTRAIN) + reach
+    //
+    // Read it at ENTRAIN = 1 and the headTravel term vanishes — the plume's length is
+    // `reach` alone, independent of how fast the head is moving. That is the property
+    // the old rigid arc-length tail was built to fake, and this is where it comes from
+    // for real. At the shipped 0.25 a quarter of the head's motion is inherited, so the
+    // length keeps a mild dependence on head speed, which is what stops the plume
+    // smearing tangent to the S-curve.
+    const table = cruisingTable()
+    const life = 2.0
+    const reach = 9
+    writeTailParticlePosition(table, life, life, reach, 1, 0, 0, 0, 0, 0, out)
+    const behind = table.xyz[0] - out[0]
+    // The head cruises at 4 u/s, so over `life` seconds it covers 8 units; the birth
+    // probe is that far back along the path.
+    const headTravel = 4 * life
+    expect(behind).toBeCloseTo(headTravel * (1 - TAIL_ENTRAIN) + reach, 3)
+  })
+
+  it('scales the emitted distance one-for-one with reach', () => {
+    // Isolating `reach`: at the end of life the displacement along the birth axis *is*
+    // the reach, so two particles that differ only in reach differ in position by
+    // exactly that difference. This is the invariant the note on `TAIL_DUST_REACH_MIN`
+    // promises — length is a property of `reach` alone, never of `life`.
+    const table = cruisingTable()
+    const a = new Float32Array(3)
+    const b = new Float32Array(3)
+    // age === life, so `age / life` is 1 and the emission term is the full reach.
+    writeTailParticlePosition(table, 2.0, 2.0, 5, 1, 0, 0, 0, 0, 0, a)
+    writeTailParticlePosition(table, 2.0, 2.0, 10, 1, 0, 0, 0, 0, 0, b)
+    // The cone is (1, 0, 0) and the newest backward axis is (-1, 0, 0), so the extra 5
+    // units of reach move the particle 5 units further back.
+    expect(a[0] - b[0]).toBeCloseTo(5, 4)
+  })
+
+  it('scales the emitted distance with the fraction of life elapsed, not with life', () => {
+    // The complement of the check above, and the reason `reach` rather than a speed is
+    // what gets baked: at a *given* fraction of life, two particles with different
+    // lifetimes but the same reach sit at the same distance. If speed were baked instead,
+    // the long-lived one would be further out and the far end of the plume would be built
+    // only from long-lived particles — a visible stratification.
+    const table = cruisingTable()
+    const a = new Float32Array(3)
+    const b = new Float32Array(3)
+    // Same fraction (0.5), same reach, different lifetimes.
+    writeTailParticlePosition(table, 0.5, 1.0, 8, 1, 0, 0, 0, 0, 0, a)
+    writeTailParticlePosition(table, 1.5, 3.0, 8, 1, 0, 0, 0, 0, 0, b)
+    // Both cover half their reach, so their emitted displacements differ only by the
+    // entrainment term, which is `headSpeed · (ageB - ageA) · (1 - TAIL_ENTRAIN)`.
+    const emittedA = table.xyz[0] - a[0]
+    const emittedB = table.xyz[0] - b[0]
+    const headSpeed = 4
+    const expectedGap = headSpeed * (1.5 - 0.5) * (1 - TAIL_ENTRAIN)
+    expect(Math.abs(emittedA - emittedB)).toBeCloseTo(expectedGap, 3)
+    // ...and the part that is *not* entrainment is identical: half the reach, in both.
+    expect(emittedA - headSpeed * 0.5 * (1 - TAIL_ENTRAIN)).toBeCloseTo(4, 3)
+    expect(emittedB - headSpeed * 1.5 * (1 - TAIL_ENTRAIN)).toBeCloseTo(4, 3)
+  })
+
+  it('keeps the plume length nearly independent of head speed', () => {
+    // The regression guard for the defect that started this rewrite. The old rigid tail
+    // existed because a time-keyed one stretched and collapsed with the head's speed;
+    // the emission model has to reproduce that immunity. A slow head (1 u/s) and a fast
+    // one (9 u/s) must produce plumes of comparable depth.
+    const slow = cruisingTable()
+    const fast = createEmissionTable(65)
+    const birth = { x: 0, y: 0, z: 0 }
+    const slowSource = {
+      sampleTrail(delay: number, target: { x: number; y: number; z: number }) {
+        target.x = 6 - 1 * delay
+        target.y = 0
+        target.z = 0
+        return target
+      },
+    }
+    const fastSource = {
+      sampleTrail(delay: number, target: { x: number; y: number; z: number }) {
+        target.x = 6 - 9 * delay
+        target.y = 0
+        target.z = 0
+        return target
+      },
+    }
+    fillEmissionTable(slow, slowSource, birth)
+    fillEmissionTable(fast, fastSource, birth)
+    const life = 2.0
+    writeTailParticlePosition(slow, life, life, 10, 1, 0, 0, 0, 0, 0, out)
+    const slowDepth = slow.xyz[0] - out[0]
+    writeTailParticlePosition(fast, life, life, 10, 1, 0, 0, 0, 0, 0, out)
+    const fastDepth = fast.xyz[0] - out[0]
+    // With no inheritance at all the ratio would be 9:1 (the speeds); with full
+    // inheritance it would be 1:1. At 0.25 it must sit far closer to parity than to the
+    // naive ratio — this is the quantitative version of "the tail keeps its shape
+    // through the turn".
+    const ratio = fastDepth / slowDepth
+    expect(ratio).toBeLessThan(2.5)
+    // ...and it must not have gone the other way and inverted the physics.
+    expect(ratio).toBeGreaterThan(0.8)
+  })
+
+  it('opens a cone in the plane normal to the axis', () => {
+    const table = cruisingTable()
+    const life = 2.0
+    // Pure sideways ejection: cone = (0, 1, 0), so the particle lands off-axis by its
+    // full reach and does not advance along the travel direction at all.
+    writeTailParticlePosition(table, life, life, 5, 0, 1, 0, 0, 0, 0, out)
+    const lateral = Math.hypot(out[1] - table.xyz[1], out[2] - table.xyz[2])
+    expect(lateral).toBeCloseTo(5, 3)
+  })
+
+  it('never writes a non-finite value, whatever it is handed', () => {
+    const table = cruisingTable()
+    for (const [age, life, reach] of [
+      [0, 1, 1],
+      [-5, 1, 1],
+      [1e9, 1, 1],
+      [1, 0, 5],
+      [1, 1, 0],
+      [Number.NaN, 1, 1],
+      [1, 1, Number.NaN],
+    ] as const) {
+      writeTailParticlePosition(table, age, life, reach, 1, 0, 0, 0, 0, 0, out)
+      for (let i = 0; i < 3; i++) {
+        expect(
+          Number.isFinite(out[i]),
+          `age=${age} life=${life} reach=${reach} i=${i}`
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('clamps an age past the table instead of reading out of bounds', () => {
+    // TAIL_SECONDS has to exceed the longest life precisely so this is unreachable in
+    // normal travel; if it does become reachable, the tail must not read garbage.
+    const table = cruisingTable(17)
+    writeTailParticlePosition(table, TAIL_SECONDS * 10, 3, 5, 1, 0, 0, 0, 0, 0, out)
+    expect(Number.isFinite(out[0])).toBe(true)
   })
 })
 
@@ -264,174 +675,199 @@ describe('followSpeedFor', () => {
   })
 })
 
-describe('accumulateArcLength', () => {
-  it('is zero at the start and strictly increasing along a real path', () => {
-    const points = new Float32Array(TAIL_PROBE_COUNT * 3)
-    for (let i = 0; i < TAIL_PROBE_COUNT; i++) {
-      points[i * 3] = i * 0.5
-      points[i * 3 + 1] = Math.sin(i * 0.2)
-      points[i * 3 + 2] = 0
-    }
-    const arc = new Float32Array(TAIL_PROBE_COUNT)
-    const total = accumulateArcLength(points, TAIL_PROBE_COUNT, arc)
-
-    expect(arc[0]).toBe(0)
-    for (let i = 1; i < TAIL_PROBE_COUNT; i++) {
-      expect(arc[i]).toBeGreaterThan(arc[i - 1])
-    }
-    expect(arc[TAIL_PROBE_COUNT - 1]).toBeCloseTo(total, 5)
-    // A path whose samples advance in x must be at least as long as its extent.
-    expect(total).toBeGreaterThan(TAIL_PROBE_COUNT * 0.5 - 1)
+/**
+ * Measure the live plume the way the acceptance data does, using the real model and
+ * the real choreography.
+ *
+ * This is the replacement for the old arc-length assertions. It does not *look* at
+ * anything — jsdom has no GPU — but it runs the same arithmetic the engine runs, over
+ * the same baked buffers, against the actual S-curve, and bins the result by distance
+ * along the tail axis. That is enough to pin the two things the user's complaint was
+ * about: that the plume falls off monotonically and reaches ~0, and that the particle
+ * ages are spread rather than synchronised.
+ *
+ * `phaseSeconds` is the clock offset into the beat, so a test can sample the middle of
+ * a travel leg (where the comet is a comet) rather than a hold.
+ */
+function measurePlume(phaseSeconds = 4.0, count = 18000, probes = 96) {
+  const scratch = createEngineScratch(count, probes)
+  const choreography = createChoreography({
+    brandCount: 28,
+    amplitudeX: 9,
+    swayY: 1.6,
+    swayZ: 2.2,
+    legSeconds: 6.5,
+    gatherSeconds: 1.4,
+    holdSeconds: 3,
+    scatterSeconds: 1.1,
   })
+  choreography.update(phaseSeconds)
+  fillEmissionTable(scratch.tailTable, choreography, scratch.probePoint)
 
-  it('reports zero for a stationary path, which is what a held glyph is', () => {
-    const points = new Float32Array(TAIL_PROBE_COUNT * 3)
-    for (let i = 0; i < TAIL_PROBE_COUNT; i++) {
-      points[i * 3] = 3.5
-      points[i * 3 + 1] = -1.25
-    }
-    const arc = new Float32Array(TAIL_PROBE_COUNT)
-    const total = accumulateArcLength(points, TAIL_PROBE_COUNT, arc)
-    expect(total).toBe(0)
-    expect(arc[TAIL_PROBE_COUNT - 1]).toBe(0)
-  })
-})
+  const table = scratch.tailTable
+  const head = { x: table.xyz[0], y: table.xyz[1], z: table.xyz[2] }
+  // The axis is the table's own newest backward tangent — the same direction the
+  // engine measures the plume along.
+  const axis = { x: table.axis[0], y: table.axis[1], z: table.axis[2] }
 
-describe('resampleByArcLength', () => {
-  /** A straight path along x, so expected positions are trivial to state. */
-  function straightPath(length: number): {
-    points: Float32Array
-    arc: Float32Array
-    total: number
-  } {
-    const points = new Float32Array(TAIL_PROBE_COUNT * 3)
-    for (let i = 0; i < TAIL_PROBE_COUNT; i++) {
-      points[i * 3] = (i / (TAIL_PROBE_COUNT - 1)) * length
-    }
-    const arc = new Float32Array(TAIL_PROBE_COUNT)
-    const total = accumulateArcLength(points, TAIL_PROBE_COUNT, arc)
-    return { points, arc, total }
+  const BIN = 1
+  const BINS = 24
+  const luminosity = new Array(BINS).fill(0)
+  const ages: number[] = []
+  const axial: number[] = []
+  const out = new Float32Array(3)
+
+  const coreCount = Math.floor(count * HEAD_CORE_SHARE)
+  for (let i = coreCount; i < count; i++) {
+    const age = scratch.tailAge[i]
+    const life = scratch.tailLife[i]
+    writeTailParticlePosition(
+      table,
+      age,
+      life,
+      scratch.tailReach[i],
+      scratch.tailCone[i * 3],
+      scratch.tailCone[i * 3 + 1],
+      scratch.tailCone[i * 3 + 2],
+      scratch.headOffset[i * 3],
+      scratch.headOffset[i * 3 + 1],
+      scratch.headOffset[i * 3 + 2],
+      out
+    )
+    const rx = out[0] - head.x
+    const ry = out[1] - head.y
+    const rz = out[2] - head.z
+    const d = rx * axis.x + ry * axis.y + rz * axis.z
+
+    const w = tailFade(life > 1e-6 ? age / life : 1)
+    const bin = Math.floor(d / BIN)
+    if (bin >= 0 && bin < BINS) luminosity[bin] += w
+    ages.push(age / life)
+    axial.push(d)
   }
+  return { luminosity, ages, axial, BINS, BIN }
+}
 
-  it('places samples at even spacing, which is the whole point of the pass', () => {
-    const { points, arc } = straightPath(20)
-    const out = new Float32Array(33 * 3)
-    resampleByArcLength(points, arc, TAIL_PROBE_COUNT, out, 33, TAIL_LENGTH)
+describe('the emitted plume has a comet shape', () => {
+  const measured = measurePlume(4.0)
 
-    // Evenly spaced means uniform gaps along x for a straight path.
-    const gaps: number[] = []
-    for (let k = 1; k < 33; k++) gaps.push(out[k * 3] - out[(k - 1) * 3])
-    const first = gaps[0]
-    for (const gap of gaps) expect(gap).toBeCloseTo(first, 4)
-    // ...and the total span is TAIL_LENGTH, not the path's own length.
-    expect(out[32 * 3] - out[0]).toBeCloseTo(TAIL_LENGTH, 4)
-  })
-
-  it('returns the spanned length, capped at the path when the path is shorter', () => {
-    const short = straightPath(4)
-    const out = new Float32Array(17 * 3)
-    const reach = resampleByArcLength(short.points, short.arc, TAIL_PROBE_COUNT, out, 17, TAIL_LENGTH)
-    // A 4-unit path cannot span a 13-unit tail.
-    expect(reach).toBeCloseTo(4, 4)
-    expect(out[16 * 3] - out[0]).toBeCloseTo(4, 4)
-  })
-
-  it('collapses a stationary path onto one point instead of leaving a stale tail', () => {
-    const points = new Float32Array(TAIL_PROBE_COUNT * 3)
-    for (let i = 0; i < TAIL_PROBE_COUNT; i++) {
-      points[i * 3] = 7
-      points[i * 3 + 1] = -2
-      points[i * 3 + 2] = 1
+  it('fades monotonically from the nucleus outward', () => {
+    // The user's requirement in one assertion: "达到一定距离后渐变消失". Every bin from
+    // the nucleus outward must hold no more light than the one closer in. A bump
+    // anywhere would read as a shell or a ring rather than as a plume.
+    const { luminosity } = measured
+    expect(luminosity[0]).toBeGreaterThan(0)
+    let rises = 0
+    for (let k = 1; k < luminosity.length; k++) {
+      if (luminosity[k] > luminosity[k - 1] * 1.02) rises += 1
     }
-    const arc = new Float32Array(TAIL_PROBE_COUNT)
-    accumulateArcLength(points, TAIL_PROBE_COUNT, arc)
-    const out = new Float32Array(24 * 3)
-    out.fill(999) // poison, so a no-op would be visible
+    // Bin noise is allowed to wobble slightly; a real inversion is not. Two or three
+    // bins out of 24 is noise at 18 000 samples.
+    expect(rises, `luminosity profile: ${luminosity.map((v) => v.toFixed(0))}`).toBeLessThan(4)
+  })
 
-    const reach = resampleByArcLength(points, arc, TAIL_PROBE_COUNT, out, 24, TAIL_LENGTH)
+  it('reaches essentially zero at the tip, rather than being cut off', () => {
+    const { luminosity } = measured
+    const total = luminosity.reduce((a, b) => a + b, 0)
+    const last = luminosity[luminosity.length - 1] / total
+    expect(last).toBeLessThan(0.01)
 
-    expect(reach).toBe(0)
-    for (let k = 0; k < 24; k++) {
-      expect(out[k * 3]).toBe(7)
-      expect(out[k * 3 + 1]).toBe(-2)
-      expect(out[k * 3 + 2]).toBe(1)
+    // And it must be a *gradual* decline, not a cliff: the bin where half the light
+    // has gone has to sit well inside the plume, not at its edge.
+    let cumulative = 0
+    let medianBin = -1
+    for (let k = 0; k < luminosity.length; k++) {
+      cumulative += luminosity[k]
+      if (medianBin < 0 && cumulative >= total / 2) medianBin = k
     }
+    expect(medianBin).toBeGreaterThan(3)
+    expect(medianBin).toBeLessThan(12)
   })
 
-  it('starts exactly at the head, so the tail is attached to the comet', () => {
-    const { points, arc } = straightPath(20)
-    const out = new Float32Array(40 * 3)
-    resampleByArcLength(points, arc, TAIL_PROBE_COUNT, out, 40, TAIL_LENGTH)
-    // Sample 0 is zero distance along the path, which is the head itself.
-    expect(out[0]).toBeCloseTo(points[0], 5)
-    expect(out[1]).toBeCloseTo(points[1], 5)
-    expect(out[2]).toBeCloseTo(points[2], 5)
+  it('spans roughly the designed visible length', () => {
+    // The 1%-of-light contour, in world units along the tail axis. This is the measured
+    // counterpart of `TAIL_DUST_REACH_MAX`.
+    const { luminosity, BIN } = measured
+    const total = luminosity.reduce((a, b) => a + b, 0)
+    let cumulative = 0
+    let onePercent = 0
+    for (let k = 0; k < luminosity.length; k++) {
+      cumulative += luminosity[k]
+      if (cumulative / total <= 0.99) onePercent = (k + 1) * BIN
+    }
+    expect(onePercent).toBeGreaterThan(8)
+    expect(onePercent).toBeLessThan(18)
   })
 
-  it('never writes a non-finite value, for any sample count a profile can ask for', () => {
-    const { points, arc } = straightPath(20)
-    for (const n of [1, 2, 3, 8, 48, 96, 2000]) {
-      const out = new Float32Array(n * 3)
-      resampleByArcLength(points, arc, TAIL_PROBE_COUNT, out, n, TAIL_LENGTH)
-      for (let i = 0; i < out.length; i++) {
-        expect(Number.isFinite(out[i]), `n=${n} index=${i}`).toBe(true)
+  it('holds a mixture of newborn, mid-life and dying particles at once', () => {
+    // The property the rigid arc-length tail could not have and the reason this was
+    // rewritten: a fixed slot was the same age forever. Every eighth of the lifetime
+    // must be occupied, or the plume is a synchronised slab that breathes as one.
+    const { ages } = measured
+    const bins = new Array(8).fill(0)
+    for (const u of ages) {
+      bins[Math.min(7, Math.floor(u * 8))] += 1
+    }
+    const n = ages.length
+    for (let k = 0; k < 8; k++) {
+      expect(bins[k] / n, `bin ${k} of ${bins.map((b) => b.toFixed(0))}`).toBeGreaterThan(0.02)
+    }
+    // ...and no single eighth may dominate, which is what a shared lifetime produces.
+    expect(Math.max(...bins) / n).toBeLessThan(0.35)
+  })
+
+  it('keeps the nucleus the widest, brightest part of the comet', () => {
+    // The user's second complaint was that the comet had been made *smaller*. Nothing
+    // in this rewrite may shrink it, so the near field must stay the densest part.
+    const { luminosity } = measured
+    const near = luminosity[0] + luminosity[1]
+    const far = luminosity[luminosity.length - 2] + luminosity[luminosity.length - 1]
+    expect(near).toBeGreaterThan(far * 20)
+  })
+
+  it('gives the plume a tip radius inside the required window', () => {
+    // `r_tip = TAIL_RADIUS + TAIL_SPREAD * TAIL_DUST_REACH_MAX`, the derivation the
+    // constants file states. 2.5-4.0 world units is the band the brief mandates: below
+    // it the tail is a needle (the 0.123 era), above it the tail is a fog bank (the
+    // 1.15 era).
+    const tipRadius = TAIL_RADIUS + TAIL_SPREAD * TAIL_DUST_REACH_MAX
+    expect(tipRadius).toBeGreaterThan(2.5)
+    expect(tipRadius).toBeLessThan(4.0)
+    // ...and the median particle must still be much closer to the axis than the edge,
+    // or the cone has no core to catch the eye.
+    expect(TAIL_RADIUS / tipRadius).toBeLessThan(0.2)
+  })
+
+  it('survives every phase of the beat without leaving the frame', () => {
+    // The emission model has to behave at the extremes too: mid-leg, arriving, and
+    // deep into a hold, when the head is pinned to the glyph's anchor and the tail has
+    // no travel left to inherit. A blow-up here would be a comet that explodes once a
+    // minute, which a screenshot at t = 4 s would never show.
+    for (const phase of [0.5, 2.0, 4.0, 6.0, 6.4, 7.5, 9.0, 11.5]) {
+      const m = measurePlume(phase, 4000, 48)
+      for (const d of m.axial) {
+        expect(Number.isFinite(d), `phase=${phase}`).toBe(true)
+        expect(Math.abs(d), `phase=${phase} distance ${d}`).toBeLessThan(40)
       }
+      const total = m.luminosity.reduce((a, b) => a + b, 0)
+      expect(Number.isFinite(total), `phase=${phase}`).toBe(true)
     }
   })
 
-  it('degrades safely on degenerate arguments rather than throwing', () => {
-    const { points, arc } = straightPath(20)
-    const out = new Float32Array(9 * 3)
-    // A probe count below 2 has no path at all, and a sample count of 0 has nothing
-    // to fill. Both are reachable through a misconfigured profile, so both must
-    // return rather than throw or write out of bounds.
-    expect(() => resampleByArcLength(points, arc, 1, out, 9, TAIL_LENGTH)).not.toThrow()
-    expect(resampleByArcLength(points, arc, 1, out, 9, TAIL_LENGTH)).toBe(0)
-    expect(() =>
-      resampleByArcLength(points, arc, TAIL_PROBE_COUNT, out, 0, TAIL_LENGTH)
-    ).not.toThrow()
-    expect(resampleByArcLength(points, arc, TAIL_PROBE_COUNT, out, 0, TAIL_LENGTH)).toBe(0)
-  })
-})
-
-describe('the tail is shaped like a comet, not a blob', () => {
-  /**
-   * The measurement that decided this file's constants.
-   *
-   * The first version of the tail was laid out at uniform *time*, and because the
-   * head eases into each extreme the tail stretched and collapsed with the head's
-   * speed. On screen it read as concentric rings rather than a streak. These two
-   * assertions pin the property that was wrong, in the units that were wrong, so a
-   * future retune cannot silently bring it back.
-   */
-  it('is markedly longer than it is wide', () => {
-    const tipRadius = TAIL_RADIUS + TAIL_SPREAD * TAIL_LENGTH
-    const aspect = TAIL_LENGTH / (2 * tipRadius)
-    // Below ~3:1 the eye stops reading a streak and starts reading a cloud.
-    expect(aspect).toBeGreaterThan(3)
-  })
-
-  it('keeps the head far denser than the tip, as a comet head is', () => {
-    // The radius tapers linearly with distance along the tail, so the cross-section
-    // at the head is a small fraction of the tip's — that ratio is what makes the
-    // head read as a bright core.
-    const headRadius = TAIL_RADIUS
-    const tipRadius = TAIL_RADIUS + TAIL_SPREAD * TAIL_LENGTH
-    expect(headRadius / tipRadius).toBeLessThan(0.3)
-  })
-
-  it('spans a distance that leaves the glyph room to be seen at the extreme', () => {
-    // The glyph's own box is ~12.6 units across. A tail longer than the leg would
-    // still be crossing the frame while the shape tries to form.
-    expect(TAIL_LENGTH).toBeLessThan(18)
-    expect(TAIL_LENGTH).toBeGreaterThan(8)
-  })
-
-  it('samples the past often enough to integrate length accurately', () => {
-    // The arc-length pass walks TAIL_SECONDS at TAIL_PROBE_COUNT points; too few
-    // and the accumulated length underestimates the path, which shortens the tail.
-    expect(TAIL_PROBE_COUNT).toBeGreaterThanOrEqual(64)
-    expect(TAIL_SECONDS / (TAIL_PROBE_COUNT - 1)).toBeLessThan(0.05)
+  it('keeps the particle count unchanged, so nothing was made smaller', () => {
+    // A cheap guard on the other half of the user's feedback: the rewrite must not have
+    // quietly reduced how much material the comet is made of.
+    const scratch = createEngineScratch(18000, 96)
+    expect(scratch.tailLife.length).toBe(18000)
+    expect(scratch.tailCone.length).toBe(18000 * 3)
+    const tailParticles = 18000 - Math.floor(18000 * HEAD_CORE_SHARE)
+    let alive = 0
+    for (let i = 0; i < 18000; i++) {
+      if (scratch.tailAge[i] < scratch.tailLife[i]) alive += 1
+    }
+    // Every tail particle is inside its own lifetime at construction.
+    expect(tailParticles).toBeGreaterThan(14000)
+    expect(alive).toBe(tailParticles)
   })
 })
 
