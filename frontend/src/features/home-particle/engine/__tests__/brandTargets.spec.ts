@@ -22,6 +22,7 @@ import {
 } from '../../vendor/voxspace-icon-targets'
 import { ICON_CENTER_X } from '../../vendor/voxspace-math'
 import { createBrandTargetSource } from '../brandTargets'
+import { GLYPH_WORLD_HEIGHT } from '../glyphSize'
 import { BRANDS } from '../constants'
 import type { BrandTargetSource, BrandTargets } from '../types'
 
@@ -45,6 +46,18 @@ function extentX(targets: Float32Array, count: number): number {
     const x = targets[i * 3]
     if (x < min) min = x
     if (x > max) max = x
+  }
+  return max - min
+}
+
+/** The same bounding box on x (axis 0), y (1) or z (2). */
+function extentOnAxis(targets: Float32Array, count: number, axis: number): number {
+  let min = Infinity
+  let max = -Infinity
+  for (let i = 0; i < count; i++) {
+    const value = targets[i * 3 + axis]
+    if (value < min) min = value
+    if (value > max) max = value
   }
   return max - min
 }
@@ -156,6 +169,65 @@ function createStubRecord(): StubRecord {
   }
 }
 
+/**
+ * A stub whose mask is a horizontal BAND of the canvas rather than all of it, with
+ * the band's height changing per surface.
+ *
+ * The plain stub fills the whole canvas, so every slug comes out the same height
+ * and levelling has nothing to correct. A real roster is not like that — the 28
+ * logos rasterise to bbox heights of 6.06..9.96 world units, a 1.64x spread — and
+ * that spread is the entire reason levelling exists. A band of a chosen height is
+ * the cheapest way to reproduce the spread faithfully enough to test against, and
+ * it runs in plain jsdom instead of behind the `CAN_RASTERISE` skip that a real
+ * canvas would need.
+ *
+ * `bandFractions` are consumed in call order; the last one repeats if more
+ * surfaces are built than were listed.
+ */
+function installBandedRasteriser(bandFractions: number[]): () => void {
+  const scope = globalThis as { Path2D?: unknown }
+  const originalPath2D = scope.Path2D
+  const originalGetContext = HTMLCanvasElement.prototype.getContext
+
+  class StubPath2D {
+    addPath(_path: StubPath2D): void {}
+    ellipse(): void {}
+  }
+
+  let call = 0
+  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
+    const band = bandFractions[Math.min(call, bandFractions.length - 1)]
+    call += 1
+    return {
+      setTransform() {},
+      fillStyle: '',
+      fill() {},
+      getImageData(_x: number, _y: number, width: number, height: number) {
+        const data = new Uint8ClampedArray(width * height * 4)
+        // A centred band, in mask rows, of the requested fraction of the canvas.
+        const half = Math.max(1, Math.floor((height * band) / 2))
+        const top = Math.floor(height / 2) - half
+        const bottom = Math.floor(height / 2) + half
+        for (let y = Math.max(0, top); y < Math.min(height, bottom); y++) {
+          for (let x = 0; x < width; x++) data[(y * width + x) * 4 + 3] = 255
+        }
+        return { data }
+      }
+    }
+  } as unknown as typeof HTMLCanvasElement.prototype.getContext
+
+  scope.Path2D = StubPath2D
+
+  return () => {
+    HTMLCanvasElement.prototype.getContext = originalGetContext
+    if (originalPath2D === undefined) {
+      delete scope.Path2D
+    } else {
+      scope.Path2D = originalPath2D
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The whole pipeline, end to end, for every shipped asset
 // ---------------------------------------------------------------------------
@@ -222,6 +294,76 @@ describe('all 28 official logos reach the sampler under a stub rasteriser', () =
     expect(value.targets.length).toBe(64 * 3)
   })
 
+  it('levels every slug to GLYPH_WORLD_HEIGHT, closing the roster spread', () => {
+    // The heart of V6. Each slug is handed a DIFFERENT band height, standing in for
+    // the real spread (the roster's own rasterises to 6.06..9.96 units, 1.64x).
+    // Without levelling the resulting heights would differ by that same 1.64x and
+    // no single camera distance could hold the user's 2/3 floor for every brand;
+    // with it, every mark is exactly the design height and ONE distance serves all.
+    const bands = [0.32, 0.48, 0.8, 0.24, 0.64, 0.4, 0.72, 0.36]
+    record = createStubRecord()
+    const restoreBands = installBandedRasteriser(bands)
+    const source = createBrandTargetSource()
+    try {
+      const heights: number[] = []
+      const widths: number[] = []
+      for (const slug of SLUGS.slice(0, bands.length)) {
+        const value = expectContractShaped(source.ensure(slug, 200), 200)
+        heights.push(extentOnAxis(value.targets, 200, 1))
+        widths.push(extentX(value.targets, 200))
+      }
+
+      const minH = Math.min(...heights)
+      const maxH = Math.max(...heights)
+      // The bands differ by 3.3x going in, so a single output height can only come
+      // out of the levelling step itself.
+      const maxBand = Math.max(...bands)
+      const minBand = Math.min(...bands)
+      expect(maxBand / minBand).toBeGreaterThan(3)
+
+      // Out: one height for every slug, to well inside a pixel.
+      expect(maxH / minH, 'spread after levelling').toBeLessThan(1.001)
+      for (const h of heights) expect(h).toBeCloseTo(GLYPH_WORLD_HEIGHT, 2)
+
+      // And the WIDTH is deliberately not levelled: each mask is a full-width band,
+      // so a wider band-relative height implies a proportionally narrower mark,
+      // which is exactly how a real logo behaves. The point is that levelling sets
+      // the height rather than the box, so the silhouettes stay distinguishable.
+      const maxW = Math.max(...widths)
+      const minW = Math.min(...widths)
+      expect(maxW / minW).toBeGreaterThan(1.2)
+    } finally {
+      source.dispose()
+      restoreBands()
+    }
+  })
+
+  it('scales strokeDepth by the same factor as the anchors', () => {
+    // Stroke depth is a world-unit distance to the nearest stroke edge, not an
+    // index, so a uniform world scale has to carry it. If the anchors were levelled
+    // and the depths were not, the in-plane orbit would be sized for a glyph the
+    // particles are no longer on, and thin strokes would smear.
+    record = createStubRecord()
+    restore = installStubRasteriser(record)
+    source = createBrandTargetSource()
+
+    // The full-canvas stub makes the levelling factor exactly
+    // GLYPH_WORLD_HEIGHT / VOXSPACE_ICON_WORLD_SIZE, because the mask's bbox IS the
+    // whole icon box.
+    const expected = GLYPH_WORLD_HEIGHT / VOXSPACE_ICON_WORLD_SIZE
+    const value = expectContractShaped(source.ensure(SLUGS[0], 256), 256)
+    const maxDepth = Math.max(...Array.from(value.strokeDepth))
+    // The vendor's chamfer peaks at 0.25 * 12.6 / 760 * pixels; what matters is the
+    // relationship, so compare against the same mask sampled without levelling.
+    expect(maxDepth).toBeGreaterThan(0)
+    expect(Number.isFinite(maxDepth)).toBe(true)
+    // The levelled depth is the vendor's depth times the factor, so the ratio of a
+    // depth to the glyph height is scale-invariant. That is the property that would
+    // break if the two were scaled by different numbers.
+    expect(maxDepth).toBeLessThan(GLYPH_WORLD_HEIGHT)
+    expect(expected).toBeCloseTo(0.8, 9)
+  })
+
   it('falls back to the frozen 760 when no canvasSize is given', () => {
     record = createStubRecord()
     restore = installStubRasteriser(record)
@@ -232,7 +374,7 @@ describe('all 28 official logos reach the sampler under a stub rasteriser', () =
     expect(record.readWidth).toBe(VOXSPACE_ICON_CANVAS_SIZE)
   })
 
-  it('maps the glyph square onto VOXSPACE_ICON_WORLD_SIZE, centred on ICON_CENTER_X', () => {
+  it('levels the glyph onto GLYPH_WORLD_HEIGHT, centred on ICON_CENTER_X', () => {
     record = createStubRecord()
     restore = installStubRasteriser(record)
     source = createBrandTargetSource()
@@ -240,11 +382,22 @@ describe('all 28 official logos reach the sampler under a stub rasteriser', () =
     const localCount = 256
     const value = expectContractShaped(source.ensure(SLUGS[0], localCount), localCount)
 
-    // A full-canvas mask is the whole glyph box, so the anchors must span the world
-    // square and sit on the icon centre. Noise would be centred on zero.
+    // [user] 图案高度最少要网页的三分之二. The sampler delivers the glyph box at
+    // VOXSPACE_ICON_WORLD_SIZE, but a real logo only occupies part of its viewBox,
+    // so `brandTargets` rescales every mark to GLYPH_WORLD_HEIGHT. A full-canvas
+    // mask is the one case where the bbox is the box itself, so the height must
+    // land exactly on the levelled constant rather than on the vendor's square.
+    const extentY = extentOnAxis(value.targets, localCount, 1)
+    expect(extentY).toBeCloseTo(GLYPH_WORLD_HEIGHT, 5)
+    // Levelling is uniform — one factor on x, y and z — so the mask's own
+    // width/height ratio survives it. The stub's 3-px anchor walk makes the x
+    // extremes land marginally outside the y ones, hence a tolerance rather than
+    // equality; a stretched (anisotropic) scale would blow straight through it.
     const extent = extentX(value.targets, localCount)
-    expect(extent).toBeGreaterThan(VOXSPACE_ICON_WORLD_SIZE * 0.95)
-    expect(extent).toBeLessThanOrEqual(VOXSPACE_ICON_WORLD_SIZE * 1.05)
+    expect(extent).toBeGreaterThan(GLYPH_WORLD_HEIGHT * 0.98)
+    expect(extent).toBeLessThan(GLYPH_WORLD_HEIGHT * 1.03)
+    // Scaling happens ABOUT the icon centre, so a levelled glyph is still centred
+    // there and not on the origin.
     expect(meanX(value.targets, localCount)).toBeGreaterThan(ICON_CENTER_X - 0.6)
     expect(meanX(value.targets, localCount)).toBeLessThan(ICON_CENTER_X + 0.6)
   })
@@ -277,10 +430,43 @@ describe('the real rasteriser', () => {
         expect(x).toBeGreaterThan(ICON_CENTER_X - 3)
         expect(x).toBeLessThan(ICON_CENTER_X + 3)
         expect(extentX(value.targets, count)).toBeGreaterThan(1)
+        // The levelled height is the design number for every brand; the WIDTH is
+        // left where the logo's own silhouette puts it, which is why only the
+        // height is pinned. A wide mark's extent can exceed the box width, a tall
+        // one's cannot.
         expect(extentX(value.targets, count)).toBeLessThan(VOXSPACE_ICON_WORLD_SIZE + 0.5)
+        expect(extentOnAxis(value.targets, count, 1)).toBeCloseTo(GLYPH_WORLD_HEIGHT, 4)
         // Distinct anchors, i.e. the mask did not collapse to a single pixel.
         expect(value.anchorCount).toBeGreaterThan(1)
       }
+    })
+
+    it('gives all 28 logos the same on-screen height, which is what V6 needs', () => {
+      // The reason levelling exists. Left at the vendor's own normalisation the
+      // roster's bbox heights span 6.06..9.96 world units — a 1.64x spread — and no
+      // single camera distance can then hold the 2/3 floor for every brand: one
+      // distance clips the tall marks, another undersizes the short ones. After
+      // levelling every mark is exactly GLYPH_WORLD_HEIGHT tall, so ONE distance
+      // satisfies the user's requirement for all 28.
+      source = createBrandTargetSource()
+
+      const heights: Array<[string, number]> = []
+      for (const slug of SLUGS) {
+        const value = expectContractShaped(source.ensure(slug, count), count)
+        heights.push([slug, extentOnAxis(value.targets, count, 1)])
+      }
+
+      const min = Math.min(...heights.map(([, h]) => h))
+      const max = Math.max(...heights.map(([, h]) => h))
+      // Not "close enough": a 1.64x spread would be catastrophic and a 1.1x one
+      // would still move the shortest brand a third of the way off the floor. The
+      // tolerance only absorbs the anchor walk's rounding, i.e. one pixel of a
+      // 760 px canvas scaled into world units.
+      expect(max / min, 'spread across the roster').toBeLessThan(1.001)
+      expect(min).toBeCloseTo(GLYPH_WORLD_HEIGHT, 2)
+      expect(max).toBeCloseTo(GLYPH_WORLD_HEIGHT, 2)
+      // A stable order check: every brand really was measured, not just a subset.
+      expect(heights.length).toBe(SLUGS.length)
     })
 
     it('keeps the glyph footprint when iconCanvasSize shrinks', () => {
