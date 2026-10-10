@@ -61,7 +61,7 @@
             </p>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.stats.accumulatedCost') }}
-              <span class="text-gray-400 dark:text-gray-500">
+              <span class="text-gray-500 dark:text-gray-400">
                 ({{ t('usage.userBilled') }}: ${{ formatCost(stats.summary.total_user_cost) }} ·
                 {{ t('admin.accounts.stats.standardCost') }}: ${{
                   formatCost(stats.summary.total_standard_cost)
@@ -115,7 +115,7 @@
                   days: stats.summary.actual_days_used
                 })
               }}
-              <span class="text-gray-400 dark:text-gray-500">
+              <span class="text-gray-500 dark:text-gray-400">
                 ({{ t('usage.userBilled') }}: ${{ formatCost(stats.summary.avg_daily_user_cost) }})
               </span>
             </p>
@@ -131,7 +131,7 @@
               }}</span>
               <div class="rounded-lg bg-gray-100 p-1.5 dark:bg-dark-800">
                 <svg
-                  class="h-4 w-4 text-primary-600 dark:text-primary-400"
+                  class="h-4 w-4 text-primary-700 dark:text-primary-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -247,7 +247,7 @@
                 <Icon
                   name="trendingUp"
                   size="sm"
-                  class="text-primary-600 dark:text-primary-400"
+                  class="text-primary-700 dark:text-primary-400"
                 />
               </div>
               <span class="text-sm font-semibold text-gray-900 dark:text-white">{{
@@ -293,7 +293,7 @@
           <div class="card p-4">
             <div class="mb-3 flex items-center gap-2">
               <div class="rounded-lg bg-gray-100 p-1.5 dark:bg-dark-800">
-                <Icon name="cube" size="sm" class="text-primary-600 dark:text-primary-400" />
+                <Icon name="cube" size="sm" class="text-primary-700 dark:text-primary-400" />
               </div>
               <span class="text-sm font-semibold text-gray-900 dark:text-white">{{
                 t('admin.accounts.stats.accumulatedTokens')

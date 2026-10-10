@@ -27,7 +27,7 @@
         <!-- Search and Batch Test Header -->
         <div class="select-header">
           <div class="select-search">
-            <Icon name="search" size="sm" class="text-gray-400" />
+            <Icon name="search" size="sm" class="text-gray-500" />
             <input
               ref="searchInputRef"
               v-model="searchQuery"
@@ -338,7 +338,7 @@ onUnmounted(() => {
 }
 
 .select-icon {
-  @apply flex-shrink-0 text-gray-400 dark:text-dark-400;
+  @apply flex-shrink-0 text-gray-500 dark:text-dark-400;
 }
 
 .select-dropdown {
@@ -362,7 +362,7 @@ onUnmounted(() => {
 .select-search-input {
   @apply flex-1 bg-transparent text-sm;
   @apply text-gray-900 dark:text-gray-100;
-  @apply placeholder:text-gray-400 dark:placeholder:text-dark-400;
+  @apply placeholder:text-gray-500 dark:placeholder:text-dark-400;
   @apply focus:outline-none;
 }
 
@@ -401,7 +401,7 @@ onUnmounted(() => {
 
 .test-btn {
   @apply flex-shrink-0 rounded p-1;
-  @apply text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400;
+  @apply text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400;
   @apply hover:bg-emerald-50 dark:hover:bg-emerald-900/20;
   @apply transition-colors disabled:cursor-not-allowed disabled:opacity-50;
 }

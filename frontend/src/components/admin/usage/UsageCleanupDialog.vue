@@ -42,7 +42,7 @@
                   <span :class="statusClass(task.status)" class="rounded-full px-2 py-0.5 text-xs font-semibold">
                     {{ statusLabel(task.status) }}
                   </span>
-                  <span class="text-xs text-gray-400">#{{ task.id }}</span>
+                  <span class="text-xs text-gray-500">#{{ task.id }}</span>
                   <button
                     v-if="canCancel(task)"
                     type="button"
@@ -52,7 +52,7 @@
                     {{ t('admin.usage.cleanup.cancel') }}
                   </button>
                 </div>
-                <div class="text-xs text-gray-400">
+                <div class="text-xs text-gray-500">
                   {{ formatDateTime(task.created_at) }}
                 </div>
               </div>

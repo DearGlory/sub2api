@@ -8,11 +8,11 @@
       {{ t('admin.channelMonitor.template.applyPickerHint') }}
     </p>
 
-    <div v-if="loading" class="py-6 text-center text-sm text-gray-400">
+    <div v-if="loading" class="py-6 text-center text-sm text-gray-500">
       {{ t('common.loading') }}
     </div>
 
-    <div v-else-if="monitors.length === 0" class="py-6 text-center text-sm text-gray-400">
+    <div v-else-if="monitors.length === 0" class="py-6 text-center text-sm text-gray-500">
       {{ t('admin.channelMonitor.template.applyPickerEmpty') }}
     </div>
 
@@ -21,7 +21,7 @@
       <div class="mb-2 flex items-center gap-3 text-xs">
         <button
           type="button"
-          class="text-primary-600 hover:underline dark:text-primary-400"
+          class="text-primary-700 hover:underline dark:text-primary-400"
           @click="selectAll"
         >
           {{ t('common.selectAll') }}
@@ -51,12 +51,12 @@
           <input
             type="checkbox"
             :checked="selectedSet.has(m.id)"
-            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
             @click.stop="toggle(m.id)"
           />
           <span class="font-medium text-gray-900 dark:text-white">{{ m.name }}</span>
-          <span class="text-xs text-gray-400">{{ m.provider }}</span>
-          <span v-if="m.provider === 'openai'" class="text-xs text-gray-400">{{ m.api_mode }}</span>
+          <span class="text-xs text-gray-500">{{ m.provider }}</span>
+          <span v-if="m.provider === 'openai'" class="text-xs text-gray-500">{{ m.api_mode }}</span>
           <span
             v-if="!m.enabled"
             class="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-dark-700 dark:text-gray-400"

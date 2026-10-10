@@ -112,7 +112,7 @@ const options = computed(() => ({
   <div class="flex h-full flex-col rounded-xl bg-white p-5 ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
     <div class="mb-4 flex items-center justify-between">
       <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-        <svg class="h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -153,7 +153,7 @@ const options = computed(() => ({
       </div>
 
       <div v-else class="flex h-full items-center justify-center">
-        <div v-if="state === 'loading'" class="text-sm text-gray-400 dark:text-gray-500">{{ t('common.loading') }}</div>
+        <div v-if="state === 'loading'" class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</div>
         <EmptyState v-else :title="t('common.noData')" :description="t('admin.ops.charts.emptyError')" />
       </div>
     </div>

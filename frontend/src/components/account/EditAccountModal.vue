@@ -364,7 +364,7 @@
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
+                  class="h-4 w-4 flex-shrink-0 text-gray-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -591,7 +591,7 @@
                   <Icon name="x" size="sm" :stroke-width="2" />
                 </button>
               </span>
-              <span v-if="selectedErrorCodes.length === 0" class="text-xs text-gray-400">
+              <span v-if="selectedErrorCodes.length === 0" class="text-xs text-gray-500">
                 {{ t('admin.accounts.noneSelectedUsesDefault') }}
               </span>
             </div>
@@ -830,7 +830,7 @@
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
+                  class="h-4 w-4 flex-shrink-0 text-gray-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1056,7 +1056,7 @@
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
+                  class="h-4 w-4 flex-shrink-0 text-gray-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1193,7 +1193,7 @@
             <input
               v-model="editBedrockForceGlobal"
               type="checkbox"
-              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
+              class="rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.bedrockForceGlobal') }}</span>
           </label>
@@ -1245,7 +1245,7 @@
           <div v-else class="space-y-3">
             <div v-for="(mapping, index) in modelMappings" :key="getModelMappingKey(mapping)" class="flex items-center gap-2">
               <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
-              <span class="text-gray-400">→</span>
+              <span class="text-gray-500">→</span>
               <input v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
               <button type="button" @click="modelMappings.splice(index, 1)" class="text-red-500 hover:text-red-700">
                 <Icon name="trash" size="sm" />
@@ -1388,7 +1388,7 @@
                   ]"
                   :placeholder="t('admin.accounts.requestModel')"
                 />
-                <svg class="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="h-4 w-4 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
                 <input
@@ -1511,7 +1511,7 @@
                     type="button"
                     :disabled="index === 0"
                     @click="moveTempUnschedRule(index, -1)"
-                    class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
+                    class="rounded p-1 text-gray-500 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
                   >
                     <Icon name="chevronUp" size="sm" :stroke-width="2" />
                   </button>
@@ -1519,7 +1519,7 @@
                     type="button"
                     :disabled="index === tempUnschedRules.length - 1"
                     @click="moveTempUnschedRule(index, 1)"
-                    class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
+                    class="rounded p-1 text-gray-500 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
                   >
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -1615,7 +1615,7 @@
             v-model="accountSchedulingThresholdOverrideEnabled"
             data-testid="account-scheduling-threshold-override-enabled"
             type="checkbox"
-            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
           />
         </div>
         <div v-if="accountSchedulingThresholdOverrideEnabled">
@@ -1946,7 +1946,7 @@
             >
               <input
                 type="checkbox"
-                class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
+                class="rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-500"
                 :data-testid="`openai-endpoint-capability-${option.value}`"
                 :checked="openAIEndpointCapabilities.includes(option.value)"
                 @change="toggleOpenAIEndpointCapability(option.value, $event)"
@@ -2037,7 +2037,7 @@
           </span>
         </div>
 
-        <div v-if="opencodeGoLoading" class="flex h-20 items-center justify-center text-gray-400">
+        <div v-if="opencodeGoLoading" class="flex h-20 items-center justify-center text-gray-500">
           <Icon name="refresh" size="sm" class="animate-spin" />
         </div>
         <template v-else>
@@ -2433,7 +2433,7 @@
                 class="input flex-1"
                 :placeholder="t('admin.accounts.fromModel')"
               />
-              <span class="text-gray-400">→</span>
+              <span class="text-gray-500">→</span>
               <input
                 v-model="mapping.to"
                 type="text"
@@ -2850,7 +2850,7 @@
                 :class="[
                   'px-3 py-1.5 text-sm rounded-md border transition-colors',
                   userMsgQueueMode === opt.value
-                    ? 'bg-primary-600 text-white border-primary-600'
+                    ? 'bg-primary-700 text-white border-primary-600'
                     : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-500 hover:bg-gray-50 dark:hover:bg-dark-600'
                 ]">
                 {{ opt.label }}

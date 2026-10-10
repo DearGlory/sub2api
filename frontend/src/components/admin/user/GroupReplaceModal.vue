@@ -11,11 +11,11 @@
         <div class="flex items-center gap-2">
           <Icon name="shield" size="sm" class="text-purple-500" />
           <span class="font-medium text-gray-900 dark:text-white">{{ oldGroup.name }}</span>
-          <Icon name="arrowRight" size="sm" class="ml-auto text-gray-400" />
-          <span v-if="selectedGroupId" class="font-medium text-primary-600 dark:text-primary-400">
+          <Icon name="arrowRight" size="sm" class="ml-auto text-gray-500" />
+          <span v-if="selectedGroupId" class="font-medium text-primary-700 dark:text-primary-400">
             {{ availableGroups.find(g => g.id === selectedGroupId)?.name }}
           </span>
-          <span v-else class="text-sm text-gray-400">?</span>
+          <span v-else class="text-sm text-gray-500">?</span>
         </div>
       </div>
 
@@ -45,13 +45,13 @@
           </div>
           <div class="flex-1">
             <span class="font-medium text-gray-900 dark:text-white">{{ group.name }}</span>
-            <span class="ml-2 text-xs text-gray-400">{{ group.platform }}</span>
+            <span class="ml-2 text-xs text-gray-500">{{ group.platform }}</span>
           </div>
         </label>
       </div>
 
       <!-- 无可选分组 -->
-      <div v-else class="py-6 text-center text-sm text-gray-400">
+      <div v-else class="py-6 text-center text-sm text-gray-500">
         {{ t('admin.users.noOtherGroups') }}
       </div>
     </div>

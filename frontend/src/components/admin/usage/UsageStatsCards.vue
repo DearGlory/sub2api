@@ -5,17 +5,17 @@
         <Icon name="document" size="md" />
       </div>
       <div>
-        <p class="text-xs font-medium text-gray-500">{{ t('usage.totalRequests') }}</p>
+        <p class="text-xs font-medium text-gray-500 dark:text-dark-400">{{ t('usage.totalRequests') }}</p>
         <p class="text-xl font-semibold">{{ stats?.total_requests?.toLocaleString() || '0' }}</p>
-        <p class="text-xs text-gray-400">{{ t('usage.inSelectedRange') }}</p>
+        <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('usage.inSelectedRange') }}</p>
       </div>
     </div>
     <div class="card p-4 flex items-center gap-3">
       <div class="rounded-lg bg-gray-100 p-2 dark:bg-dark-800 text-gray-500 dark:text-dark-300"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" /></svg></div>
       <div>
-        <p class="text-xs font-medium text-gray-500">{{ t('usage.totalTokens') }}</p>
+        <p class="text-xs font-medium text-gray-500 dark:text-dark-400">{{ t('usage.totalTokens') }}</p>
         <p class="text-xl font-semibold">{{ formatTokens(stats?.total_tokens || 0) }}</p>
-        <p class="flex flex-wrap items-center gap-x-1 text-xs text-gray-500">
+        <p class="flex flex-wrap items-center gap-x-1 text-xs text-gray-500 dark:text-dark-400">
           <span>{{ t('usage.in') }}: {{ formatTokens(stats?.total_input_tokens || 0) }}</span>
           <span>/</span>
           <span>{{ t('usage.out') }}: {{ formatTokens(stats?.total_output_tokens || 0) }}</span>
@@ -23,7 +23,7 @@
           <span class="group relative inline-flex cursor-help items-center gap-0.5" tabindex="0">
             <span>{{ cacheLabel() }}: {{ formatTokens(stats?.total_cache_tokens || 0) }}</span>
             <svg
-              class="h-3.5 w-3.5 text-gray-400"
+              class="h-3.5 w-3.5 text-gray-500 dark:text-dark-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -63,11 +63,11 @@
         <Icon name="dollar" size="md" />
       </div>
       <div class="min-w-0 flex-1">
-        <p class="text-xs font-medium text-gray-500">{{ t('usage.totalCost') }}</p>
+        <p class="text-xs font-medium text-gray-500 dark:text-dark-400">{{ t('usage.totalCost') }}</p>
         <p class="text-xl font-semibold text-emerald-600 dark:text-emerald-400">
           ${{ (stats?.total_actual_cost || 0).toFixed(4) }}
         </p>
-        <p class="text-xs text-gray-400">
+        <p class="text-xs text-gray-500 dark:text-dark-400">
           <template v-if="showAccountCost && totalAccountCost != null">
             <span class="text-orange-500">{{ t('usage.accountCost') }} ${{ totalAccountCost.toFixed(4) }}</span>
             <span> · </span>
@@ -83,7 +83,7 @@
       <div class="rounded-lg bg-gray-100 p-2 dark:bg-dark-800 text-gray-500 dark:text-dark-300">
         <Icon name="clock" size="md" />
       </div>
-      <div><p class="text-xs font-medium text-gray-500">{{ t('usage.avgDuration') }}</p><p class="text-xl font-semibold">{{ formatDuration(stats?.average_duration_ms || 0) }}</p></div>
+      <div><p class="text-xs font-medium text-gray-500 dark:text-dark-400">{{ t('usage.avgDuration') }}</p><p class="text-xl font-semibold">{{ formatDuration(stats?.average_duration_ms || 0) }}</p></div>
     </div>
   </div>
 </template>

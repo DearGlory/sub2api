@@ -280,7 +280,7 @@ onMounted(() => {
           </div>
 
           <details class="col-span-1 md:col-span-2">
-            <summary class="cursor-pointer text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            <summary class="cursor-pointer text-xs font-medium text-primary-700 hover:text-primary-700 dark:text-primary-400">
               {{ t('admin.ops.runtime.showAdvancedDeveloperSettings') }}
             </summary>
             <div class="mt-2 grid grid-cols-1 gap-3 rounded-lg bg-gray-100 p-3 dark:bg-dark-800 md:grid-cols-2">

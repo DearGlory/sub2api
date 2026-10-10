@@ -34,7 +34,7 @@ withDefaults(
         <p
           class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-300"
         >
-          <Icon name="bolt" size="sm" class="text-gray-400 dark:text-dark-500" />
+          <Icon name="bolt" size="sm" class="text-gray-500 dark:text-dark-400" />
           {{ t('home.sections.cta.eyebrow') }}
         </p>
 

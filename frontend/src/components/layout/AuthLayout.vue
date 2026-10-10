@@ -31,7 +31,7 @@
       </div>
 
       <!-- Copyright -->
-      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
+      <div class="mt-8 text-center text-xs text-gray-500 dark:text-dark-400">
         &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
       </div>
     </div>

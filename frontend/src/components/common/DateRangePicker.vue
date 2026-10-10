@@ -49,7 +49,7 @@
             />
           </div>
           <div class="date-picker-separator">
-            <Icon name="arrowRight" size="sm" class="text-gray-400" />
+            <Icon name="arrowRight" size="sm" class="text-gray-500" />
           </div>
           <div class="date-picker-field">
             <label class="date-picker-label">{{ t('dates.endDate') }}</label>
@@ -339,7 +339,7 @@ onUnmounted(() => {
 }
 
 .date-picker-icon {
-  @apply text-gray-400 dark:text-dark-400;
+  @apply text-gray-500 dark:text-dark-400;
 }
 
 .date-picker-value {
@@ -347,7 +347,7 @@ onUnmounted(() => {
 }
 
 .date-picker-chevron {
-  @apply text-gray-400 dark:text-dark-400;
+  @apply text-gray-500 dark:text-dark-400;
 }
 
 .date-picker-dropdown {

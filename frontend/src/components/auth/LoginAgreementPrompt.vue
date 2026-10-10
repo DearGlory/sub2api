@@ -8,7 +8,7 @@
         id="login-agreement-consent"
         type="checkbox"
         :checked="accepted"
-        class="mt-[2px] h-4 w-4 flex-shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-900"
+        class="mt-[2px] h-4 w-4 flex-shrink-0 rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-900"
         @change="handleCheckboxChange"
       />
       <div class="min-w-0 flex-1">
@@ -24,7 +24,7 @@
               :to="documentRoute(doc)"
               target="_blank"
               rel="noopener noreferrer"
-              class="font-medium text-primary-600 underline-offset-4 transition hover:text-primary-700 hover:underline dark:text-primary-300 dark:hover:text-primary-200"
+              class="font-medium text-primary-700 underline-offset-4 transition hover:text-primary-700 hover:underline dark:text-primary-300 dark:hover:text-primary-200"
             >
               {{ doc.title }}
             </RouterLink>
@@ -111,7 +111,7 @@
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-semibold text-gray-950 dark:text-white">{{ doc.title }}</span>
                 </span>
-                <span class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-gray-400 transition group-hover:bg-gray-100 group-hover:text-gray-600 dark:group-hover:bg-dark-800 dark:group-hover:text-dark-200">
+                <span class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-gray-500 transition group-hover:bg-gray-100 group-hover:text-gray-600 dark:group-hover:bg-dark-800 dark:group-hover:text-dark-200">
                   <Icon name="externalLink" size="sm" />
                 </span>
               </RouterLink>
@@ -129,7 +129,7 @@
               </button>
               <button
                 type="button"
-                class="rounded-lg bg-primary-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400"
+                class="rounded-lg bg-primary-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-800 dark:bg-primary-700 dark:hover:bg-primary-600"
                 @click="emit('accept')"
               >
                 {{ t('legal.loginAgreementPrompt.accept') }}

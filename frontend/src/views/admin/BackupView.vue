@@ -9,7 +9,7 @@
             </h3>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {{ t('admin.backup.s3.descriptionPrefix') }}
-              <button type="button" class="text-primary-600 underline hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300" @click="showR2Guide = true">Cloudflare R2</button>
+              <button type="button" class="text-primary-700 underline hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300" @click="showR2Guide = true">Cloudflare R2</button>
               {{ t('admin.backup.s3.descriptionSuffix') }}
             </p>
           </div>
@@ -291,7 +291,7 @@
         <div v-if="showR2Guide" class="fixed inset-0 z-50 flex items-center justify-center p-4" @mousedown.self="showR2Guide = false">
           <div class="fixed inset-0 bg-black/50" @click="showR2Guide = false"></div>
           <div class="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-pop dark:border-dark-800 dark:bg-dark-900">
-            <button type="button" class="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" @click="showR2Guide = false">
+            <button type="button" class="absolute right-4 top-4 text-gray-500 hover:text-gray-600 dark:hover:text-gray-200" @click="showR2Guide = false">
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
 
@@ -380,7 +380,7 @@
           <div class="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-pop dark:border-dark-800 dark:bg-dark-900">
             <button
               type="button"
-              class="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              class="absolute right-4 top-4 text-gray-500 hover:text-gray-600 dark:hover:text-gray-200"
               :aria-label="t('common.close')"
               @click="closeDownloadParts"
             >

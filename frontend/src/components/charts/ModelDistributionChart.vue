@@ -148,7 +148,7 @@
                 <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
                   ${{ formatCost(model.account_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="py-1.5 text-right text-gray-500 dark:text-gray-400">
                   ${{ formatCost(model.cost) }}
                 </td>
               </tr>

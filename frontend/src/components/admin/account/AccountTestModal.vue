@@ -217,7 +217,7 @@
         <button
           v-if="outputLines.length > 0"
           @click="copyOutput"
-          class="absolute right-2 top-2 rounded-lg bg-gray-800/80 p-1.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-700 hover:text-white group-hover:opacity-100"
+          class="absolute right-2 top-2 rounded-lg bg-gray-800/80 p-1.5 text-gray-500 opacity-0 transition-opacity hover:bg-gray-700 hover:text-white group-hover:opacity-100"
           :title="t('admin.accounts.copyOutput')"
         >
           <Icon name="link" size="sm" :stroke-width="2" />
@@ -337,7 +337,7 @@
                 ? 'bg-green-500 text-white hover:bg-green-600'
                 : status === 'error'
                   ? 'bg-orange-500 text-white hover:bg-orange-600'
-                  : 'bg-primary-500 text-white hover:bg-primary-600'
+                  : 'bg-primary-700 text-white hover:bg-primary-800'
           ]"
         >
           <Icon
@@ -831,11 +831,11 @@ const startTest = async () => {
   resetState()
   status.value = 'connecting'
   addLine(t('admin.accounts.startingTestForAccount', { name: props.account.name }), 'text-blue-400')
-  addLine(t('admin.accounts.testAccountTypeLabel', { type: props.account.type }), 'text-gray-400')
+  addLine(t('admin.accounts.testAccountTypeLabel', { type: props.account.type }), 'text-gray-500')
   if (isGrokAccount.value) {
     const modeLabel =
       grokTestModeOptions.value.find((o) => o.value === grokTestMode.value)?.label || grokTestMode.value
-    addLine(t('admin.accounts.grok.selectedTestMode', { mode: modeLabel }), 'text-gray-400')
+    addLine(t('admin.accounts.grok.selectedTestMode', { mode: modeLabel }), 'text-gray-500')
   }
   addLine('', 'text-gray-300')
 
@@ -973,7 +973,7 @@ const handleEvent = (event: {
           : supportsImageTest.value
             ? t('admin.accounts.sendingImageRequest')
             : t('admin.accounts.sendingTestMessage'),
-        'text-gray-400'
+        'text-gray-500'
       )
       addLine('', 'text-gray-300')
       addLine(t('admin.accounts.response'), 'text-yellow-400')

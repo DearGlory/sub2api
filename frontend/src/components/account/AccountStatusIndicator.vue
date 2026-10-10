@@ -3,13 +3,13 @@
     <!-- Rate Limit Display (429) - Two-line layout -->
     <div v-if="isRateLimited" class="flex flex-col items-center gap-1">
       <span class="badge text-xs badge-warning">{{ t('admin.accounts.status.rateLimited') }}</span>
-      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ rateLimitResumeText }}</span>
+      <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ rateLimitResumeText }}</span>
     </div>
 
     <!-- Overload Display (529) - Two-line layout -->
     <div v-else-if="isOverloaded" class="flex flex-col items-center gap-1">
       <span class="badge text-xs badge-danger">{{ t('admin.accounts.status.overloaded') }}</span>
-      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ overloadCountdown }}</span>
+      <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ overloadCountdown }}</span>
     </div>
 
     <!-- Main Status Badge (shown when not rate limited/overloaded) -->

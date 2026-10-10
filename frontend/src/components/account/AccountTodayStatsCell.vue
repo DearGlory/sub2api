@@ -49,7 +49,7 @@
     </div>
 
     <!-- No data -->
-    <div v-else class="text-xs text-gray-400">-</div>
+    <div v-else class="text-xs text-gray-500">-</div>
   </div>
 </template>
 

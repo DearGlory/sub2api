@@ -141,7 +141,7 @@
             v-if="countdown > 0"
             type="button"
             disabled
-            class="cursor-not-allowed text-sm text-gray-400 dark:text-dark-500"
+            class="cursor-not-allowed text-sm text-gray-500 dark:text-dark-400"
           >
             {{ t('auth.resendCountdown', { countdown }) }}
           </button>
@@ -152,7 +152,7 @@
             :disabled="
               isSendingCode || (turnstileEnabled && showResendTurnstile && !resendTurnstileToken)
             "
-            class="text-sm text-primary-600 transition-colors hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:text-primary-300"
+            class="text-sm text-primary-700 transition-colors hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:text-primary-300"
           >
             <span v-if="isSendingCode">{{ t('auth.sendingCode') }}</span>
             <span v-else-if="captchaEnabled && !showResendTurnstile">

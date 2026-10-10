@@ -225,7 +225,7 @@ watch(
             <div class="relative group">
               <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                 <svg
-                  class="h-3.5 w-3.5 text-gray-400 transition-colors group-focus-within:text-blue-500"
+                  class="h-3.5 w-3.5 text-gray-500 transition-colors group-focus-within:text-blue-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"

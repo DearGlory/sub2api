@@ -28,7 +28,7 @@
       <div v-else class="text-center">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ qrUrl ? t('payment.qr.expiresIn') : '' }}</p>
         <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
-        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t('payment.qr.waitingPayment') }}</p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.qr.waitingPayment') }}</p>
       </div>
     </div>
     <!-- Success State -->

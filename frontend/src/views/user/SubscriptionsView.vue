@@ -13,7 +13,7 @@
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
         >
-          <Icon name="creditCard" size="xl" class="text-gray-400" />
+          <Icon name="creditCard" size="xl" class="text-gray-500" />
         </div>
         <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
           {{ t('userSubscriptions.noActiveSubscriptions') }}
@@ -49,7 +49,7 @@
                 <p v-if="subscription.group?.description" class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
                   {{ subscription.group.description }}
                 </p>
-                <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400 dark:text-gray-500">
+                <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
                   <span>{{ t('payment.planCard.rate') }}: ×{{ subscription.group?.rate_multiplier ?? 1 }}</span>
                   <span v-if="subscriptionHasPeakRate(subscription)" class="text-amber-700 dark:text-amber-300">
                     {{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(subscription) }}

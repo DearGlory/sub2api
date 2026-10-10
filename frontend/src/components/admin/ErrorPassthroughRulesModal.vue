@@ -19,12 +19,12 @@
 
       <!-- Rules Table -->
       <div v-if="loading" class="flex items-center justify-center py-8">
-        <Icon name="refresh" size="lg" class="animate-spin text-gray-400" />
+        <Icon name="refresh" size="lg" class="animate-spin text-gray-500" />
       </div>
 
       <div v-else-if="rules.length === 0" class="py-8 text-center">
         <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700">
-          <Icon name="shield" size="lg" class="text-gray-400" />
+          <Icon name="shield" size="lg" class="text-gray-500" />
         </div>
         <h4 class="mb-1 text-sm font-medium text-gray-900 dark:text-white">
           {{ t('admin.errorPassthrough.noRules') }}
@@ -130,7 +130,7 @@
                     <Icon
                       :name="rule.passthrough_code ? 'checkCircle' : 'xCircle'"
                       size="xs"
-                      :class="rule.passthrough_code ? 'text-green-500' : 'text-gray-400'"
+                      :class="rule.passthrough_code ? 'text-green-500' : 'text-gray-500'"
                     />
                     <span class="text-gray-600 dark:text-gray-400">
                       {{ t('admin.errorPassthrough.code') }}:
@@ -141,7 +141,7 @@
                     <Icon
                       :name="rule.passthrough_body ? 'checkCircle' : 'xCircle'"
                       size="xs"
-                      :class="rule.passthrough_body ? 'text-green-500' : 'text-gray-400'"
+                      :class="rule.passthrough_body ? 'text-green-500' : 'text-gray-500'"
                     />
                     <span class="text-gray-600 dark:text-gray-400">
                       {{ t('admin.errorPassthrough.body') }}:
@@ -180,7 +180,7 @@
                 <div class="flex items-center gap-1">
                   <button
                     @click="handleEdit(rule)"
-                    class="p-1 text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
+                    class="p-1 text-gray-500 hover:text-primary-700 dark:hover:text-primary-400"
                     :title="t('common.edit')"
                   >
                     <Icon name="edit" size="sm" />
@@ -291,7 +291,7 @@
                   type="radio"
                   :value="option.value"
                   v-model="form.match_mode"
-                  class="mt-0.5 h-3.5 w-3.5 border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="mt-0.5 h-3.5 w-3.5 border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 <div class="flex-1">
                   <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ option.label }}</span>
@@ -313,7 +313,7 @@
                   type="checkbox"
                   :value="platform.value"
                   v-model="form.platforms"
-                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 <span class="text-xs text-gray-700 dark:text-gray-300">{{ platform.label }}</span>
               </label>
@@ -334,7 +334,7 @@
                 <input
                   type="checkbox"
                   v-model="form.passthrough_code"
-                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
                   {{ t('admin.errorPassthrough.form.passthroughCode') }}
@@ -357,7 +357,7 @@
                 <input
                   type="checkbox"
                   v-model="form.passthrough_body"
-                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="h-3.5 w-3.5 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
                   {{ t('admin.errorPassthrough.form.passthroughBody') }}
@@ -394,7 +394,7 @@
           <input
             type="checkbox"
             v-model="form.enabled"
-            class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            class="h-3.5 w-3.5 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
           />
           <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
             {{ t('admin.errorPassthrough.form.enabled') }}

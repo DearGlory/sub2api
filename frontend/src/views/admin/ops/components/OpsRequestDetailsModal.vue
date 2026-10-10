@@ -197,7 +197,7 @@ const kindBadgeClass = (kind: string) => {
         <div v-else class="flex min-h-0 flex-1 flex-col">
           <div v-if="items.length === 0" class="rounded-xl border border-dashed border-gray-200 p-10 text-center dark:border-dark-700">
             <div class="text-sm font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.requestDetails.empty') }}</div>
-            <div class="mt-1 text-xs text-gray-400">{{ t('admin.ops.requestDetails.emptyHint') }}</div>
+            <div class="mt-1 text-xs text-gray-500">{{ t('admin.ops.requestDetails.emptyHint') }}</div>
           </div>
 
           <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 dark:border-dark-700">
@@ -299,7 +299,7 @@ const kindBadgeClass = (kind: string) => {
                         {{ t('admin.ops.requestDetails.copy') }}
                       </button>
                     </div>
-                    <span v-else class="text-xs text-gray-400">-</span>
+                    <span v-else class="text-xs text-gray-500">-</span>
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-right">
                     <button
@@ -309,7 +309,7 @@ const kindBadgeClass = (kind: string) => {
                     >
                       {{ t('admin.ops.requestDetails.viewError') }}
                     </button>
-                    <span v-else class="text-xs text-gray-400">-</span>
+                    <span v-else class="text-xs text-gray-500">-</span>
                   </td>
                 </tr>
               </tbody>

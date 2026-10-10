@@ -20,7 +20,7 @@
           </div>
           <button
             type="button"
-            class="text-lg leading-none text-gray-400 hover:text-red-600 disabled:opacity-50"
+            class="text-lg leading-none text-gray-500 hover:text-red-600 disabled:opacity-50"
             :title="t('admin.affiliates.withdraw.changeUser')"
             :disabled="submitting || outcomeUncertain"
             data-test="withdraw-clear-user"

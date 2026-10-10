@@ -104,7 +104,7 @@ const poolRows = [
           <p
             class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-300"
           >
-            <Icon name="cube" size="sm" class="text-gray-400 dark:text-dark-500" />
+            <Icon name="cube" size="sm" class="text-gray-500 dark:text-dark-400" />
             {{ t('home.sections.features.eyebrow') }}
           </p>
           <h2 class="mt-5 text-3xl font-semibold tracking-[-0.02em] text-gray-900 md:text-4xl dark:text-white">
@@ -134,7 +134,7 @@ const poolRows = [
                 >
                   {{ feature.num }}
                 </span>
-                <Icon :name="feature.icon" size="md" class="text-gray-400 dark:text-dark-500" />
+                <Icon :name="feature.icon" size="md" class="text-gray-500 dark:text-dark-400" />
               </span>
             </div>
 
@@ -179,7 +179,7 @@ const poolRows = [
               <span class="font-mono text-xl font-semibold tabular-nums text-gray-900 dark:text-white">
                 {{ t('home.sections.features.billingExample') }}
               </span>
-              <span class="font-mono text-[11px] text-gray-500 dark:text-dark-500">
+              <span class="font-mono text-[11px] text-gray-500 dark:text-dark-400">
                 {{ t('home.sections.features.billingUnit') }}
               </span>
             </div>

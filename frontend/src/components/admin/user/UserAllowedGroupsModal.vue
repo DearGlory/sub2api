@@ -26,7 +26,7 @@
           <div class="mb-3 flex items-center gap-2">
             <div class="h-1.5 w-1.5 rounded-full bg-purple-500"></div>
             <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{{ t('admin.users.exclusiveGroups') }}</h4>
-            <span class="text-xs text-gray-400">({{ exclusiveGroupConfigs.filter(c => c.isSelected).length }}/{{ exclusiveGroupConfigs.length }})</span>
+            <span class="text-xs text-gray-500">({{ exclusiveGroupConfigs.filter(c => c.isSelected).length }}/{{ exclusiveGroupConfigs.length }})</span>
           </div>
           <div class="grid gap-3">
             <div
@@ -68,7 +68,7 @@
                       <PlatformIcon :platform="config.platform" size="xs" />
                       <span>{{ config.platform }}</span>
                     </span>
-                    <span class="text-gray-300 dark:text-dark-500">•</span>
+                    <span class="text-gray-300 dark:text-dark-400">•</span>
                     <span class="text-gray-500 dark:text-gray-400">
                       {{ t('admin.users.defaultRate') }}: <span class="font-medium text-gray-700 dark:text-gray-300">{{ config.defaultRate }}x</span>
                     </span>
@@ -100,13 +100,13 @@
             <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
               {{ restrictPublicGroups ? t('admin.users.publicGroupsRestricted') : t('admin.users.publicGroups') }}
             </h4>
-            <span class="text-xs text-gray-400">({{ publicGroupConfigs.length }})</span>
+            <span class="text-xs text-gray-500">({{ publicGroupConfigs.length }})</span>
             <label class="ml-auto flex cursor-pointer items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
               <input
                 type="checkbox"
                 :checked="restrictPublicGroups"
                 @change="toggleRestrictPublicGroups"
-                class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
+                class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-500"
               />
               {{ t('admin.users.restrictPublicGroups') }}
             </label>
@@ -148,7 +148,7 @@
                       <PlatformIcon :platform="config.platform" size="xs" />
                       <span>{{ config.platform }}</span>
                     </span>
-                    <span class="text-gray-300 dark:text-dark-500">•</span>
+                    <span class="text-gray-300 dark:text-dark-400">•</span>
                     <span class="text-gray-500 dark:text-gray-400">
                       {{ t('admin.users.defaultRate') }}: <span class="font-medium text-gray-700 dark:text-gray-300">{{ config.defaultRate }}x</span>
                     </span>
@@ -176,7 +176,7 @@
         <!-- 无分组提示 -->
         <div v-if="groups.length === 0" class="flex flex-col items-center justify-center py-12 text-center">
           <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700">
-            <svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
           </div>

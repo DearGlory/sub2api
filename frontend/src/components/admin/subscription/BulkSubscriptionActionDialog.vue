@@ -57,7 +57,7 @@
                 v-model="windows[window]"
                 :name="window"
                 type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 :disabled="parametersLocked"
               />
               {{ t(`admin.subscriptions.${window}`) }}

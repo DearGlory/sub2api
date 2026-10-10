@@ -32,7 +32,7 @@
         <div class="text-center">
           <router-link
             to="/login"
-            class="inline-flex items-center gap-2 font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+            class="inline-flex items-center gap-2 font-medium text-primary-700 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
           >
             <Icon name="arrowLeft" size="sm" />
             {{ t('auth.backToLogin') }}
@@ -49,7 +49,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="mail" size="md" class="text-gray-500 dark:text-dark-400" />
             </div>
             <input
               id="email"
@@ -123,7 +123,7 @@
         {{ t('auth.rememberedPassword') }}
         <router-link
           to="/login"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="font-medium text-primary-700 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
         </router-link>

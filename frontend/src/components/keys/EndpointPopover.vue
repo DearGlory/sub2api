@@ -73,10 +73,10 @@ onBeforeUnmount(() => {
       <span class="font-medium text-gray-600 dark:text-gray-300">{{ item.name }}</span>
       <span
         v-if="item.isDefault"
-        class="rounded bg-primary-50 px-1 py-px text-[10px] font-medium leading-tight text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
+        class="rounded bg-primary-50 px-1 py-px text-[10px] font-medium leading-tight text-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
       >{{ t('keys.endpoints.default') }}</span>
 
-      <span class="text-gray-300 dark:text-dark-500">|</span>
+      <span class="text-gray-300 dark:text-dark-400">|</span>
 
       <div class="group/endpoint relative flex items-center gap-1.5">
         <div
@@ -89,7 +89,7 @@ onBeforeUnmount(() => {
             {{ item.description }}
           </p>
           <p
-            class="flex items-center gap-1.5 text-[11px] leading-4 text-primary-600 dark:text-primary-300"
+            class="flex items-center gap-1.5 text-[11px] leading-4 text-primary-700 dark:text-primary-300"
             :class="item.description ? 'mt-1.5' : ''"
           >
             <span class="h-1.5 w-1.5 rounded-full bg-primary-500 dark:bg-primary-300"></span>
@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
         </div>
 
         <code
-          class="cursor-pointer font-mono text-gray-500 decoration-gray-400 decoration-dashed underline-offset-2 hover:text-primary-600 hover:underline focus:text-primary-600 focus:underline focus:outline-none dark:text-gray-400 dark:decoration-gray-500 dark:hover:text-primary-400 dark:focus:text-primary-400"
+          class="cursor-pointer font-mono text-gray-500 decoration-gray-400 decoration-dashed underline-offset-2 hover:text-primary-700 hover:underline focus:text-primary-700 focus:underline focus:outline-none dark:text-gray-400 dark:decoration-gray-500 dark:hover:text-primary-400 dark:focus:text-primary-400"
           role="button"
           tabindex="0"
           @click="copy(item.endpoint)"
@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
           class="rounded p-0.5 transition-colors"
           :class="copiedEndpoint === item.endpoint
             ? 'text-emerald-500 dark:text-emerald-400'
-            : 'text-gray-400 hover:text-primary-500 dark:text-gray-500 dark:hover:text-primary-400'"
+            : 'text-gray-500 hover:text-primary-500 dark:text-gray-400 dark:hover:text-primary-400'"
           :aria-label="tooltipHint(item.endpoint)"
           @click="copy(item.endpoint)"
         >
@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
           :href="speedTestUrl(item.endpoint)"
           target="_blank"
           rel="noopener noreferrer"
-          class="rounded p-0.5 text-gray-400 transition-colors hover:text-amber-500 dark:text-gray-500 dark:hover:text-amber-400"
+          class="rounded p-0.5 text-gray-500 transition-colors hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-400"
           :title="t('keys.endpoints.speedTest')"
         >
           <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

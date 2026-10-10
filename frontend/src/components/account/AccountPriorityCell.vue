@@ -10,7 +10,7 @@
   >
     <button
       type="button"
-      class="flex h-full w-6 items-center justify-center rounded-l-lg text-gray-500 opacity-0 transition hover:bg-gray-200/70 hover:text-primary-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent disabled:hover:text-gray-300 dark:disabled:text-dark-600 dark:disabled:hover:text-dark-600 group-hover/priority:opacity-100 group-focus-within/priority:opacity-100 dark:text-gray-400 dark:hover:bg-dark-600 dark:hover:text-primary-400 [@media(hover:none)]:opacity-100"
+      class="flex h-full w-6 items-center justify-center rounded-l-lg text-gray-500 opacity-0 transition hover:bg-gray-200/70 hover:text-primary-700 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent disabled:hover:text-gray-300 dark:disabled:text-dark-600 dark:disabled:hover:text-dark-600 group-hover/priority:opacity-100 group-focus-within/priority:opacity-100 dark:text-gray-400 dark:hover:bg-dark-600 dark:hover:text-primary-400 [@media(hover:none)]:opacity-100"
       :class="{ '!opacity-100': editing || dirty }"
       :disabled="saving || draft <= MIN_PRIORITY"
       :title="t('admin.accounts.priorityQuick.raise')"
@@ -42,7 +42,7 @@
       v-else
       type="button"
       class="relative flex h-full min-w-[2rem] items-center justify-center px-1 font-mono text-sm tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-      :class="dirty ? 'font-semibold text-primary-600 dark:text-primary-400' : 'text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'"
+      :class="dirty ? 'font-semibold text-primary-700 dark:text-primary-400' : 'text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'"
       :disabled="saving"
       :title="t('admin.accounts.priorityQuick.editHint')"
       data-testid="account-priority-value"
@@ -58,7 +58,7 @@
 
     <button
       type="button"
-      class="flex h-full w-6 items-center justify-center rounded-r-lg text-gray-500 opacity-0 transition hover:bg-gray-200/70 hover:text-primary-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent disabled:hover:text-gray-300 dark:disabled:text-dark-600 dark:disabled:hover:text-dark-600 group-hover/priority:opacity-100 group-focus-within/priority:opacity-100 dark:text-gray-400 dark:hover:bg-dark-600 dark:hover:text-primary-400 [@media(hover:none)]:opacity-100"
+      class="flex h-full w-6 items-center justify-center rounded-r-lg text-gray-500 opacity-0 transition hover:bg-gray-200/70 hover:text-primary-700 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent disabled:hover:text-gray-300 dark:disabled:text-dark-600 dark:disabled:hover:text-dark-600 group-hover/priority:opacity-100 group-focus-within/priority:opacity-100 dark:text-gray-400 dark:hover:bg-dark-600 dark:hover:text-primary-400 [@media(hover:none)]:opacity-100"
       :class="{ '!opacity-100': editing || dirty }"
       :disabled="saving || draft >= MAX_PRIORITY"
       :title="t('admin.accounts.priorityQuick.lower')"

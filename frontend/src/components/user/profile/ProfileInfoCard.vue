@@ -63,7 +63,7 @@
                 data-testid="profile-overview-metric-balance"
                 class="rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800"
               >
-                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
+                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
                   {{ t('profile.accountBalance') }}
                 </p>
                 <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
@@ -74,7 +74,7 @@
                 data-testid="profile-overview-metric-concurrency"
                 class="rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800"
               >
-                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
+                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
                   {{ t('profile.concurrencyLimit') }}
                 </p>
                 <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
@@ -85,7 +85,7 @@
                 data-testid="profile-overview-metric-member-since"
                 class="rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800"
               >
-                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
+                <p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
                   {{ t('profile.memberSince') }}
                 </p>
                 <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
@@ -169,7 +169,7 @@
               :key="hint.key"
               class="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-dark-700 dark:bg-dark-800/60 dark:text-gray-300"
             >
-              <Icon name="link" size="sm" class="mt-0.5 text-gray-400 dark:text-gray-500" />
+              <Icon name="link" size="sm" class="mt-0.5 text-gray-500 dark:text-gray-400" />
               <span>{{ hint.text }}</span>
             </div>
           </div>

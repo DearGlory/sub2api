@@ -45,7 +45,7 @@
               {{ t('admin.scheduledTests.cronExpression') }}
               <HelpTooltip>
                 <template #trigger>
-                  <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-400 transition-colors hover:border-primary-500 hover:text-primary-600 dark:border-gray-500 dark:text-gray-500 dark:hover:border-primary-400 dark:hover:text-primary-400">
+                  <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-500 transition-colors hover:border-primary-500 hover:text-primary-700 dark:border-gray-500 dark:text-gray-400 dark:hover:border-primary-400 dark:hover:text-primary-400">
                     ?
                   </span>
                 </template>
@@ -71,7 +71,7 @@
               {{ t('admin.scheduledTests.maxResults') }}
               <HelpTooltip>
                 <template #trigger>
-                  <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-400 transition-colors hover:border-primary-500 hover:text-primary-600 dark:border-gray-500 dark:text-gray-500 dark:hover:border-primary-400 dark:hover:text-primary-400">
+                  <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-500 transition-colors hover:border-primary-500 hover:text-primary-700 dark:border-gray-500 dark:text-gray-400 dark:hover:border-primary-400 dark:hover:text-primary-400">
                     ?
                   </span>
                 </template>
@@ -102,7 +102,7 @@
                 <Toggle v-model="newPlan.auto_recover" />
                 {{ t('admin.scheduledTests.autoRecover') }}
               </label>
-              <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                 {{ t('admin.scheduledTests.autoRecoverHelp') }}
               </p>
             </div>
@@ -118,7 +118,7 @@
           <button
             @click="handleCreate"
             :disabled="!newPlan.model_id || !newPlan.cron_expression || creating"
-            class="flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex items-center gap-1.5 rounded-lg bg-primary-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon v-if="creating" name="refresh" size="sm" class="animate-spin" :stroke-width="2" />
             {{ t('common.save') }}
@@ -128,7 +128,7 @@
 
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-8">
-        <Icon name="refresh" size="md" class="animate-spin text-gray-400" :stroke-width="2" />
+        <Icon name="refresh" size="md" class="animate-spin text-gray-500" :stroke-width="2" />
         <span class="ml-2 text-sm text-gray-500">{{ t('common.loading') }}...</span>
       </div>
 
@@ -137,7 +137,7 @@
         v-else-if="plans.length === 0"
         class="rounded-xl border border-dashed border-gray-300 py-10 text-center dark:border-dark-600"
       >
-        <Icon name="calendar" size="lg" class="mx-auto mb-2 text-gray-400" :stroke-width="1.5" />
+        <Icon name="calendar" size="lg" class="mx-auto mb-2 text-gray-500" :stroke-width="1.5" />
         <p class="text-sm text-gray-500 dark:text-gray-400">
           {{ t('admin.scheduledTests.noPlans') }}
         </p>
@@ -203,14 +203,14 @@
               <div class="flex items-center gap-1" @click.stop>
                 <button
                   @click="startEdit(plan)"
-                  class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/20"
+                  class="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/20"
                   :title="t('admin.scheduledTests.editPlan')"
                 >
                   <Icon name="edit" size="sm" :stroke-width="2" />
                 </button>
                 <button
                   @click="confirmDeletePlan(plan)"
-                  class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+                  class="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
                   :title="t('admin.scheduledTests.deletePlan')"
                 >
                   <Icon name="trash" size="sm" :stroke-width="2" />
@@ -222,7 +222,7 @@
                 name="chevronDown"
                 size="sm"
                 :class="[
-                  'text-gray-400 transition-transform duration-200',
+                  'text-gray-500 transition-transform duration-200',
                   expandedPlanId === plan.id ? 'rotate-180' : ''
                 ]"
               />
@@ -255,7 +255,7 @@
                   {{ t('admin.scheduledTests.cronExpression') }}
                   <HelpTooltip>
                     <template #trigger>
-                      <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-400 transition-colors hover:border-primary-500 hover:text-primary-600 dark:border-gray-500 dark:text-gray-500 dark:hover:border-primary-400 dark:hover:text-primary-400">
+                      <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-500 transition-colors hover:border-primary-500 hover:text-primary-700 dark:border-gray-500 dark:text-gray-400 dark:hover:border-primary-400 dark:hover:text-primary-400">
                         ?
                       </span>
                     </template>
@@ -281,7 +281,7 @@
                   {{ t('admin.scheduledTests.maxResults') }}
                   <HelpTooltip>
                     <template #trigger>
-                      <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-400 transition-colors hover:border-primary-500 hover:text-primary-600 dark:border-gray-500 dark:text-gray-500 dark:hover:border-primary-400 dark:hover:text-primary-400">
+                      <span class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400/70 text-[10px] font-semibold text-gray-500 transition-colors hover:border-primary-500 hover:text-primary-700 dark:border-gray-500 dark:text-gray-400 dark:hover:border-primary-400 dark:hover:text-primary-400">
                         ?
                       </span>
                     </template>
@@ -312,7 +312,7 @@
                     <Toggle v-model="editForm.auto_recover" />
                     {{ t('admin.scheduledTests.autoRecover') }}
                   </label>
-                  <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                     {{ t('admin.scheduledTests.autoRecoverHelp') }}
                   </p>
                 </div>
@@ -328,7 +328,7 @@
               <button
                 @click="handleEdit"
                 :disabled="!editForm.model_id || !editForm.cron_expression || updating"
-                class="flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex items-center gap-1.5 rounded-lg bg-primary-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon v-if="updating" name="refresh" size="sm" class="animate-spin" :stroke-width="2" />
                 {{ t('common.save') }}
@@ -347,7 +347,7 @@
 
             <!-- Results Loading -->
             <div v-if="loadingResults" class="flex items-center justify-center py-4">
-              <Icon name="refresh" size="sm" class="animate-spin text-gray-400" :stroke-width="2" />
+              <Icon name="refresh" size="sm" class="animate-spin text-gray-500" :stroke-width="2" />
               <span class="ml-2 text-xs text-gray-500">{{ t('common.loading') }}...</span>
             </div>
 
@@ -395,7 +395,7 @@
                   </div>
 
                   <!-- Started At -->
-                  <span class="text-xs text-gray-400">
+                  <span class="text-xs text-gray-500">
                     {{ formatDateTime(result.started_at) }}
                   </span>
                 </div>

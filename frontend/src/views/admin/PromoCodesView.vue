@@ -57,7 +57,7 @@
                   'flex items-center transition-colors',
                   copiedCode === value
                     ? 'text-green-500'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                    : 'text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
                 ]"
                 :title="copiedCode === value ? t('admin.promo.copied') : t('keys.copyToClipboard')"
               >
@@ -167,7 +167,7 @@
         <div>
           <label class="input-label">
             {{ t('admin.promo.code') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('admin.promo.autoGenerate') }})</span>
+            <span class="ml-1 text-xs font-normal text-gray-500">({{ t('admin.promo.autoGenerate') }})</span>
           </label>
           <input
             v-model="createForm.code"
@@ -190,7 +190,7 @@
         <div>
           <label class="input-label">
             {{ t('admin.promo.maxUses') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('admin.promo.zeroUnlimited') }})</span>
+            <span class="ml-1 text-xs font-normal text-gray-500">({{ t('admin.promo.zeroUnlimited') }})</span>
           </label>
           <input
             v-model.number="createForm.max_uses"
@@ -202,7 +202,7 @@
         <div>
           <label class="input-label">
             {{ t('admin.promo.expiresAt') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+            <span class="ml-1 text-xs font-normal text-gray-500">({{ t('common.optional') }})</span>
           </label>
           <input
             v-model="createForm.expires_at_str"
@@ -213,7 +213,7 @@
         <div>
           <label class="input-label">
             {{ t('admin.promo.notes') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+            <span class="ml-1 text-xs font-normal text-gray-500">({{ t('common.optional') }})</span>
           </label>
           <textarea
             v-model="createForm.notes"
@@ -265,7 +265,7 @@
         <div>
           <label class="input-label">
             {{ t('admin.promo.maxUses') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('admin.promo.zeroUnlimited') }})</span>
+            <span class="ml-1 text-xs font-normal text-gray-500">({{ t('admin.promo.zeroUnlimited') }})</span>
           </label>
           <input
             v-model.number="editForm.max_uses"
@@ -281,7 +281,7 @@
         <div>
           <label class="input-label">
             {{ t('admin.promo.expiresAt') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+            <span class="ml-1 text-xs font-normal text-gray-500">({{ t('common.optional') }})</span>
           </label>
           <input
             v-model="editForm.expires_at_str"
@@ -292,7 +292,7 @@
         <div>
           <label class="input-label">
             {{ t('admin.promo.notes') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+            <span class="ml-1 text-xs font-normal text-gray-500">({{ t('common.optional') }})</span>
           </label>
           <textarea
             v-model="editForm.notes"
@@ -321,7 +321,7 @@
       @close="showUsagesDialog = false"
     >
       <div v-if="usagesLoading" class="flex items-center justify-center py-8">
-        <Icon name="refresh" size="lg" class="animate-spin text-gray-400" />
+        <Icon name="refresh" size="lg" class="animate-spin text-gray-500" />
       </div>
       <div v-else-if="usages.length === 0" class="py-8 text-center text-gray-500 dark:text-gray-400">
         {{ t('admin.promo.noUsages') }}

@@ -45,7 +45,7 @@
             </span>
             <button
               @click="showPopover = false"
-              class="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+              class="rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
             >
               <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -74,7 +74,7 @@
       @click="showPopover = false"
     />
   </div>
-  <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+  <span v-else class="text-sm text-gray-500 dark:text-dark-400">-</span>
 </template>
 
 <script setup lang="ts">

@@ -23,7 +23,7 @@
       >
         {{ t('channelMonitorV2.filters.labelValue', { label, value: selectionLabel }) }}
       </span>
-      <span class="select-icon shrink-0 text-gray-400 transition-transform" :class="isOpen ? 'rotate-180' : ''">
+      <span class="select-icon shrink-0 text-gray-500 transition-transform" :class="isOpen ? 'rotate-180' : ''">
         <Icon name="chevronDown" size="sm" />
       </span>
     </button>
@@ -69,9 +69,9 @@
               </span>
               <span class="min-w-0 flex-1 truncate">{{ option.label }}</span>
             </span>
-            <small v-if="option.count != null" class="text-xs text-gray-400">{{ formatCount(option.count) }}</small>
+            <small v-if="option.count != null" class="text-xs text-gray-500">{{ formatCount(option.count) }}</small>
           </button>
-          <p v-if="options.length === 0" class="px-4 py-3 text-center text-xs text-gray-400">{{ t('channelMonitorV2.filters.empty') }}</p>
+          <p v-if="options.length === 0" class="px-4 py-3 text-center text-xs text-gray-500">{{ t('channelMonitorV2.filters.empty') }}</p>
         </div>
       </Transition>
     </Teleport>

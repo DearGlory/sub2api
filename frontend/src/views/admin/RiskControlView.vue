@@ -252,7 +252,7 @@
 
             <div class="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900/30 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex min-w-0 items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                <Icon name="filter" size="sm" class="flex-shrink-0 text-gray-400" />
+                <Icon name="filter" size="sm" class="flex-shrink-0 text-gray-500" />
                 <span class="font-medium">{{ t('admin.riskControl.modelFilter') }}</span>
                 <span class="truncate text-gray-500 dark:text-gray-400">{{ modelFilterSummary }}</span>
               </div>
@@ -309,12 +309,12 @@
                     <td class="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{{ row.group_name || '-' }}</td>
                     <td class="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
                       <div>{{ row.user_email || '-' }}</div>
-                      <div v-if="row.user_id" class="text-xs text-gray-400">UID {{ row.user_id }}</div>
+                      <div v-if="row.user_id" class="text-xs text-gray-500">UID {{ row.user_id }}</div>
                     </td>
                     <td class="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{{ row.api_key_name || '-' }}</td>
                     <td class="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
                       <div>{{ row.endpoint || '-' }}</div>
-                      <div class="text-xs text-gray-400">{{ row.provider || '-' }} / {{ row.model || '-' }}</div>
+                      <div class="text-xs text-gray-500">{{ row.provider || '-' }} / {{ row.model || '-' }}</div>
                     </td>
                     <td class="whitespace-nowrap px-5 py-4">
                       <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="resultBadgeClass(row)">
@@ -323,14 +323,14 @@
                     </td>
                     <td class="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
                       <div>{{ row.highest_category || '-' }}</div>
-                      <div class="text-xs text-gray-400">{{ percent(row.highest_score) }}</div>
+                      <div class="text-xs text-gray-500">{{ percent(row.highest_score) }}</div>
                       <div v-if="row.matched_keyword" class="mt-0.5 text-xs font-medium text-red-600 dark:text-red-300" :title="t('admin.riskControl.matchedKeyword') + ': ' + row.matched_keyword">
                         {{ t('admin.riskControl.matchedKeyword') }}: {{ row.matched_keyword }}
                       </div>
                     </td>
                     <td class="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
                       <div>{{ violationCountText(row) }}</div>
-                      <div class="text-xs text-gray-400">
+                      <div class="text-xs text-gray-500">
                         {{ row.email_sent ? t('admin.riskControl.emailSent') : t('admin.riskControl.emailNotSent') }}
                         <span v-if="row.auto_banned"> / {{ t('admin.riskControl.autoBanned') }}</span>
                       </div>
@@ -347,7 +347,7 @@
                     </td>
                     <td class="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
                       <div>{{ latencyText(row.upstream_latency_ms) }}</div>
-                      <div v-if="row.queue_delay_ms !== null && row.queue_delay_ms !== undefined" class="text-xs text-gray-400">
+                      <div v-if="row.queue_delay_ms !== null && row.queue_delay_ms !== undefined" class="text-xs text-gray-500">
                         {{ t('admin.riskControl.queueDelay', { ms: row.queue_delay_ms }) }}
                       </div>
                     </td>
@@ -359,7 +359,7 @@
                         @click="openInputDetail(row)"
                       >
                         <span class="min-w-0 flex-1 truncate">{{ inputSummaryText(row) }}</span>
-                        <Icon name="eye" size="xs" class="flex-shrink-0 text-gray-300 transition-colors group-hover:text-primary-500 dark:text-gray-500" />
+                        <Icon name="eye" size="xs" class="flex-shrink-0 text-gray-300 transition-colors group-hover:text-primary-500 dark:text-gray-400" />
                       </button>
                     </td>
                   </tr>
@@ -435,7 +435,7 @@
                 <label class="input-label">{{ t('admin.riskControl.sampleRate') }}</label>
                 <div class="relative">
                   <input v-model.number="configForm.sample_rate" type="number" min="0" max="100" step="1" class="input pr-8" />
-                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
                 </div>
               </div>
               <div>
@@ -448,7 +448,7 @@
             <div class="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
               <div class="flex flex-col gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4 dark:border-dark-700 dark:bg-dark-800/60 lg:flex-row lg:items-center lg:justify-between">
                 <div class="flex items-start gap-3">
-                  <span class="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300">
+                  <span class="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
                     <Icon name="key" size="md" />
                   </span>
                   <div>
@@ -500,7 +500,7 @@
                       <button
                         type="button"
                         class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                        :class="configForm.api_keys_mode === 'append' ? 'bg-primary-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
+                        :class="configForm.api_keys_mode === 'append' ? 'bg-primary-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
                         :disabled="configForm.clear_api_key"
                         @click="setAPIKeysMode('append')"
                       >
@@ -570,7 +570,7 @@
                     >
                       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div class="flex items-start gap-2">
-                          <Icon name="upload" size="md" class="mt-0.5 text-gray-400" />
+                          <Icon name="upload" size="md" class="mt-0.5 text-gray-500" />
                           <div>
                             <p class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ t('admin.riskControl.auditTestImages') }}</p>
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.auditTestImagesHint') }}</p>
@@ -614,7 +614,7 @@
                   </div>
 
                   <div v-if="apiKeyRows.length === 0" class="flex min-h-32 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white px-4 py-6 text-center dark:border-dark-700 dark:bg-dark-800">
-                    <Icon name="infoCircle" size="lg" class="text-gray-300 dark:text-dark-500" />
+                    <Icon name="infoCircle" size="lg" class="text-gray-300 dark:text-dark-400" />
                     <p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">{{ t('admin.riskControl.apiKeyHealthEmpty') }}</p>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.apiKeyHealthEmptyHint') }}</p>
                   </div>
@@ -647,7 +647,7 @@
                             <button
                               v-if="row.configured && !configForm.clear_api_key"
                               type="button"
-                              class="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-700 dark:hover:text-gray-200"
+                              class="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-700 dark:hover:text-gray-200"
                               :title="isStoredApiKeyPendingDelete(row) ? t('admin.riskControl.undoDeleteApiKey') : t('admin.riskControl.deleteApiKey')"
                               @click="toggleDeleteStoredApiKey(row)"
                             >
@@ -667,7 +667,7 @@
                       </span>
                       <button
                         type="button"
-                        class="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-primary-600 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:text-primary-300 dark:hover:bg-primary-900/20"
+                        class="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-primary-700 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:text-primary-300 dark:hover:bg-primary-900/20"
                         @click="apiKeyRowsExpanded = !apiKeyRowsExpanded"
                       >
                         <Icon :name="apiKeyRowsExpanded ? 'chevronUp' : 'chevronDown'" size="xs" />
@@ -746,7 +746,7 @@
 
             <div v-if="!configForm.all_groups" class="space-y-4">
               <div class="relative">
-                <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input v-model.trim="groupSearch" type="search" class="input pl-9" :placeholder="t('admin.riskControl.searchGroups')" />
               </div>
               <div class="grid max-h-[420px] grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-3">
@@ -977,7 +977,7 @@
                       step="0.1"
                       class="input pr-8 font-mono"
                     />
-                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
                   </div>
                 </div>
               </div>
@@ -1059,7 +1059,7 @@
             </div>
             <div class="rounded-lg border border-gray-100 p-4 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400 lg:col-span-2">
               <div class="flex flex-wrap items-center gap-3">
-                <Icon name="database" size="md" class="text-gray-400" />
+                <Icon name="database" size="md" class="text-gray-500" />
                 <span>{{ t('admin.riskControl.cleanupStats', { hit: status?.last_cleanup_deleted_hit ?? 0, nonHit: status?.last_cleanup_deleted_non_hit ?? 0 }) }}</span>
               </div>
             </div>
@@ -2252,7 +2252,7 @@ function workerSlotClass(state: WorkerSlotState): string {
   if (state === 'idle') {
     return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-900/20 dark:text-emerald-300'
   }
-  return 'border-gray-100 bg-white text-gray-400 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-500'
+  return 'border-gray-100 bg-white text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400'
 }
 
 function workerDotClass(state: WorkerSlotState): string {

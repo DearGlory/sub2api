@@ -109,7 +109,7 @@
                 <td class="py-1.5 text-right text-green-600 dark:text-green-400">
                   ${{ formatCost(item.actual_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="py-1.5 text-right text-gray-500 dark:text-gray-400">
                   ${{ formatCost(item.cost) }}
                 </td>
               </tr>

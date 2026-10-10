@@ -101,10 +101,10 @@
             <div v-for="log in orderAuditLogs" :key="log.id" class="rounded-lg border border-gray-100 bg-gray-50 p-2.5 dark:border-dark-600 dark:bg-dark-800">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ log.action }}</span>
-                <span class="text-xs text-gray-400">{{ formatDateTime(log.created_at) }}</span>
+                <span class="text-xs text-gray-500">{{ formatDateTime(log.created_at) }}</span>
               </div>
               <div v-if="log.detail" class="mt-1 break-all text-xs text-gray-500 dark:text-gray-400">{{ log.detail }}</div>
-              <div v-if="log.operator" class="mt-1 text-xs text-gray-400">{{ t('payment.admin.operator') }}: {{ log.operator }}</div>
+              <div v-if="log.operator" class="mt-1 text-xs text-gray-500">{{ t('payment.admin.operator') }}: {{ log.operator }}</div>
             </div>
           </div>
         </div>

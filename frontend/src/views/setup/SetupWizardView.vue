@@ -23,9 +23,9 @@
                 :class="[
                   'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-colors',
                   currentStep > index
-                    ? 'bg-primary-600 text-white dark:bg-primary-500'
+                    ? 'bg-primary-700 text-white dark:bg-primary-700'
                     : currentStep === index
-                      ? 'bg-primary-600 text-white ring-2 ring-primary-500/25 dark:bg-primary-500 dark:ring-primary-500/30'
+                      ? 'bg-primary-700 text-white ring-2 ring-primary-500/25 dark:bg-primary-700 dark:ring-primary-500/30'
                       : 'bg-gray-200 text-gray-500 dark:bg-dark-700 dark:text-dark-400'
                 ]"
               >
@@ -42,7 +42,7 @@
                 :class="
                   currentStep >= index
                     ? 'text-gray-900 dark:text-white'
-                    : 'text-gray-400 dark:text-dark-500'
+                    : 'text-gray-500 dark:text-dark-400'
                 "
               >
                 {{ step.title }}

@@ -85,7 +85,7 @@
           <template #header-select>
             <input
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
               :checked="allVisibleSelected"
               :indeterminate="someVisibleSelected"
               @change="toggleAllVisible(($event.target as HTMLInputElement).checked)"
@@ -95,7 +95,7 @@
           <template #cell-select="{ row }">
             <input
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
               :checked="selectedJobIds.has(row.id)"
               @change="toggleJobSelection(row.id, ($event.target as HTMLInputElement).checked)"
               @click.stop
@@ -157,9 +157,9 @@
           <template #cell-counts="{ row }">
             <div class="flex items-center justify-center gap-2 text-sm tabular-nums">
               <span class="text-emerald-600 dark:text-emerald-300">{{ displayJob(row).success_count }}</span>
-              <span class="text-gray-300 dark:text-dark-500">/</span>
-              <span :class="displayJob(row).fail_count > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-400 dark:text-gray-500'">{{ displayJob(row).fail_count }}</span>
-              <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('batchImage.list.totalCount', { n: displayJob(row).item_count }) }}</span>
+              <span class="text-gray-300 dark:text-dark-400">/</span>
+              <span :class="displayJob(row).fail_count > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400'">{{ displayJob(row).fail_count }}</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('batchImage.list.totalCount', { n: displayJob(row).item_count }) }}</span>
             </div>
           </template>
 
@@ -179,7 +179,7 @@
 	            <div class="flex items-center justify-center gap-1">
               <button
                 type="button"
-                class="batch-row-action flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="batch-row-action flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:hover:bg-dark-700 dark:hover:text-primary-400"
                 :title="t('batchImage.actions.viewDetail')"
                 @click="selectJob(row.id)"
               >
@@ -189,7 +189,7 @@
               <button
                 type="button"
                 class="batch-row-action flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30"
-                :class="canDownload(row) ? 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400' : 'text-gray-300 dark:text-dark-500'"
+                :class="canDownload(row) ? 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400' : 'text-gray-300 dark:text-dark-400'"
                 :disabled="!canDownload(row) || downloading"
                 :title="t('batchImage.actions.downloadZip')"
                 @click="downloadJob(row)"
@@ -218,7 +218,7 @@
 
           <template #empty>
             <div class="flex min-h-[260px] flex-col items-center justify-center py-6 md:min-h-[300px]">
-              <Icon name="sparkles" size="xl" class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500" />
+              <Icon name="sparkles" size="xl" class="mb-4 h-12 w-12 text-gray-500 dark:text-dark-400" />
               <p class="text-lg font-medium text-gray-900 dark:text-gray-100">{{ t('batchImage.list.empty') }}</p>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {{ t('batchImage.list.emptyHint') }}
@@ -324,7 +324,7 @@
           <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('batchImage.promptPopover.title') }}</span>
           <button
             type="button"
-            class="rounded-md px-2 py-1 text-xs font-medium text-primary-600 transition-colors hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:text-primary-300 dark:hover:bg-primary-900/20"
+            class="rounded-md px-2 py-1 text-xs font-medium text-primary-700 transition-colors hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 dark:text-primary-300 dark:hover:bg-primary-900/20"
             @click="copyPromptPopover"
           >
             {{ t('common.copy') }}
@@ -352,8 +352,8 @@
               <p class="text-xs text-gray-500 dark:text-gray-400">{{ hasChildJobs(currentJob.id) ? t('batchImage.detail.aggregatedResult') : t('batchImage.detail.result') }}</p>
               <p class="mt-1 flex items-center justify-center gap-2 font-medium tabular-nums">
               <span class="text-emerald-600 dark:text-emerald-300">{{ (currentDisplayJob || currentJob).success_count }}</span>
-              <span class="text-gray-300 dark:text-dark-500">/</span>
-              <span :class="(currentDisplayJob || currentJob).fail_count > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-400 dark:text-gray-500'">{{ (currentDisplayJob || currentJob).fail_count }}</span>
+              <span class="text-gray-300 dark:text-dark-400">/</span>
+              <span :class="(currentDisplayJob || currentJob).fail_count > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400'">{{ (currentDisplayJob || currentJob).fail_count }}</span>
             </p>
             </div>
             <div class="min-w-0 text-center">
@@ -405,13 +405,13 @@
                 <td class="px-3 py-2.5 text-center">
                   <span
                     class="block min-w-0 truncate font-mono text-sm"
-                    :class="isRecoveredOriginalFailure(item) ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'"
+                    :class="isRecoveredOriginalFailure(item) ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'"
                     :title="item.custom_id"
                   >
                     {{ item.custom_id }}
                   </span>
                 </td>
-                <td class="px-3 py-2.5 text-left" :class="isRecoveredOriginalFailure(item) ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'">
+                <td class="px-3 py-2.5 text-left" :class="isRecoveredOriginalFailure(item) ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'">
                   <div
                     class="batch-prompt-trigger cursor-default truncate rounded px-1 text-sm leading-6 focus:outline-none"
                     tabindex="0"
@@ -451,14 +451,14 @@
                     <button
                       v-else-if="canLoadItemPreview(item)"
                       type="button"
-                      class="flex h-full w-full items-center justify-center text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 disabled:cursor-wait disabled:opacity-70 dark:text-gray-400 dark:hover:bg-dark-700"
+                      class="flex h-full w-full items-center justify-center text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-700 disabled:cursor-wait disabled:opacity-70 dark:text-gray-400 dark:hover:bg-dark-700"
                       :disabled="previewLoadingIds.has(itemPreviewKey(item))"
                       :title="previewErrorIds.has(itemPreviewKey(item)) ? t('batchImage.detail.previewReload') : t('batchImage.detail.previewLoad')"
                       @click="loadItemPreview(item)"
                     >
                       <Icon :name="previewLoadingIds.has(itemPreviewKey(item)) ? 'refresh' : 'eye'" size="sm" :class="previewLoadingIds.has(itemPreviewKey(item)) ? 'animate-spin' : ''" />
                     </button>
-                    <div v-else class="flex h-full w-full items-center justify-center text-gray-400" :title="item.image_count > 0 ? t('batchImage.detail.previewUnavailable') : t('batchImage.detail.noImage')">
+                    <div v-else class="flex h-full w-full items-center justify-center text-gray-500" :title="item.image_count > 0 ? t('batchImage.detail.previewUnavailable') : t('batchImage.detail.noImage')">
                       <Icon name="document" size="sm" />
                     </div>
                   </div>
@@ -477,7 +477,7 @@
           </table>
         </div>
         <div v-else class="rounded-lg border border-dashed border-gray-200 py-10 text-center dark:border-dark-700">
-          <Icon name="refresh" size="lg" class="mx-auto mb-3 text-gray-400" :class="loadingItems ? 'animate-spin' : ''" />
+          <Icon name="refresh" size="lg" class="mx-auto mb-3 text-gray-500" :class="loadingItems ? 'animate-spin' : ''" />
           <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
             {{ loadingItems ? t('batchImage.detail.loadingItems') : t('batchImage.detail.noItems') }}
           </p>
@@ -663,7 +663,7 @@
                 class="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-200"
               >
                 <span class="max-w-[180px] truncate">{{ ref.name }}</span>
-                <button type="button" class="text-gray-400 hover:text-red-600" :title="t('batchImage.create.removeReferenceImage')" @click="removeReferenceImageDraft(refIndex)">
+                <button type="button" class="text-gray-500 hover:text-red-600" :title="t('batchImage.create.removeReferenceImage')" @click="removeReferenceImageDraft(refIndex)">
                   <Icon name="x" size="xs" />
                 </button>
               </span>
@@ -1989,7 +1989,7 @@ function isRecoveredOriginalFailure(item: BatchImageDetailItem) {
 
 function detailItemRowClass(item: BatchImageDetailItem) {
   if (isRecoveredOriginalFailure(item)) {
-    return 'bg-gray-50/80 text-gray-400 hover:bg-gray-100/80 dark:bg-dark-900/60 dark:text-gray-500 dark:hover:bg-dark-800/70'
+    return 'bg-gray-50/80 text-gray-500 hover:bg-gray-100/80 dark:bg-dark-900/60 dark:text-gray-400 dark:hover:bg-dark-800/70'
   }
   return 'hover:bg-gray-50/70 dark:hover:bg-dark-800/60'
 }

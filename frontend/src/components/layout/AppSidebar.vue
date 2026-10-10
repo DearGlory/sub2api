@@ -19,7 +19,7 @@
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
         <router-link
           :to="homePath"
-          class="sidebar-brand-title text-base font-semibold text-gray-900 transition-colors duration-150 hover:text-primary-600 dark:text-white dark:hover:text-primary-400"
+          class="sidebar-brand-title text-base font-semibold text-gray-900 transition-colors duration-150 hover:text-primary-700 dark:text-white dark:hover:text-primary-400"
           @click="handleMenuItemClick(homePath)"
         >
           {{ siteName }}

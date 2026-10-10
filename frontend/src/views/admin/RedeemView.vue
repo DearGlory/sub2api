@@ -69,7 +69,7 @@
             <input
               data-test="select-all-codes"
               type="checkbox"
-              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-700 focus:ring-primary-500"
               :checked="allVisibleSelected"
               @click.stop
               @change="toggleSelectAllVisible($event)"
@@ -80,7 +80,7 @@
             <input
               data-test="select-code"
               type="checkbox"
-              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-700 focus:ring-primary-500"
               :checked="selectedCodeIds.has(row.id)"
               @click.stop
               @change="toggleSelectRow(row.id, $event)"
@@ -96,7 +96,7 @@
                   'flex items-center transition-colors',
                   copiedCode === value
                     ? 'text-green-500'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                    : 'text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
                 ]"
                 :title="copiedCode === value ? t('admin.redeem.copied') : t('keys.copyToClipboard')"
               >
@@ -198,7 +198,7 @@
                 </svg>
                 <span class="text-xs">{{ t('common.delete') }}</span>
               </button>
-              <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+              <span v-else class="text-gray-500 dark:text-dark-400">-</span>
             </div>
           </template>
         </DataTable>
@@ -328,7 +328,7 @@
                       :subscription-type="(option as unknown as GroupOption).subscriptionType"
                       :rate-multiplier="(option as unknown as GroupOption).rate"
                     />
-                    <span v-else class="text-gray-400">{{
+                    <span v-else class="text-gray-500">{{
                       t('admin.redeem.selectGroupPlaceholder')
                     }}</span>
                   </template>
@@ -433,7 +433,7 @@
                   data-test="batch-field-status"
                   v-model="batchUpdateForm.update_status"
                   type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 {{ t('admin.redeem.batchFields.status') }}
               </label>
@@ -450,7 +450,7 @@
                 <input
                   v-model="batchUpdateForm.update_expires_at"
                   type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 {{ t('admin.redeem.batchFields.expiresAt') }}
               </label>
@@ -474,7 +474,7 @@
                   data-test="batch-field-notes"
                   v-model="batchUpdateForm.update_notes"
                   type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 {{ t('admin.redeem.batchFields.notes') }}
               </label>
@@ -493,7 +493,7 @@
                 <input
                   v-model="batchUpdateForm.update_group_id"
                   type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500"
                 />
                 {{ t('admin.redeem.batchFields.group') }}
               </label>
@@ -561,7 +561,7 @@
             </div>
             <button
               @click="closeResultDialog"
-              class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+              class="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
             >
               <Icon name="x" size="md" :stroke-width="2" />
             </button>

@@ -49,7 +49,7 @@
       <div class="max-w-xl mx-auto mb-14">
         <div class="flex gap-3">
           <div class="flex-1 relative">
-            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500">
+            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-dark-400">
               <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
@@ -58,12 +58,12 @@
               v-model="apiKey"
               :type="keyVisible ? 'text' : 'password'"
               :placeholder="t('keyUsage.placeholder')"
-              class="input-ring w-full h-12 pl-12 pr-12 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-400 transition-colors duration-150 dark:border-dark-800 dark:bg-dark-900 dark:text-white dark:placeholder:text-dark-500"
+              class="input-ring w-full h-12 pl-12 pr-12 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-500 transition-colors duration-150 dark:border-dark-800 dark:bg-dark-900 dark:text-white dark:placeholder:text-dark-500"
               @keydown.enter="queryKey"
             />
             <button
               @click="keyVisible = !keyVisible"
-              class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:text-dark-500 dark:hover:text-white transition-colors"
+              class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-dark-400 dark:hover:text-white transition-colors"
             >
               <svg v-if="!keyVisible" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
@@ -77,7 +77,7 @@
           <button
             @click="queryKey"
             :disabled="isQuerying"
-            class="h-12 px-7 rounded-lg bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400 text-white font-medium text-sm transition-colors duration-150 flex items-center gap-2 whitespace-nowrap disabled:opacity-60"
+            class="h-12 px-7 rounded-lg bg-primary-700 hover:bg-primary-800 dark:bg-primary-700 dark:hover:bg-primary-600 text-white font-medium text-sm transition-colors duration-150 flex items-center gap-2 whitespace-nowrap disabled:opacity-60"
           >
             <svg v-if="isQuerying" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
@@ -89,7 +89,7 @@
             {{ isQuerying ? t('keyUsage.querying') : t('keyUsage.query') }}
           </button>
         </div>
-        <p class="text-xs text-gray-400 dark:text-dark-500 mt-3 text-center">
+        <p class="text-xs text-gray-500 dark:text-dark-400 mt-3 text-center">
           {{ t('keyUsage.privacyNote') }}
         </p>
 
@@ -103,7 +103,7 @@
               @click="setDateRange(range.key)"
               class="text-xs px-3 py-1.5 rounded-lg border transition-colors duration-150"
               :class="currentRange === range.key
-                ? 'bg-primary-600 dark:bg-primary-500 text-white border-primary-600 dark:border-primary-500'
+                ? 'bg-primary-700 dark:bg-primary-700 text-white border-primary-600 dark:border-primary-500'
                 : 'border-gray-200 bg-white text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200 hover:border-gray-300 dark:hover:border-dark-700'"
             >{{ range.label }}</button>
             <div v-if="currentRange === 'custom'" class="flex items-center gap-2 ml-1">
@@ -112,7 +112,7 @@
                 type="date"
                 class="input-ring text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-900 dark:border-dark-800 dark:bg-dark-900 dark:text-white"
               />
-              <span class="text-xs text-gray-400">-</span>
+              <span class="text-xs text-gray-500">-</span>
               <input
                 v-model="customEndDate"
                 type="date"
@@ -120,7 +120,7 @@
               />
               <button
                 @click="queryKey"
-                class="text-xs px-3 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600"
+                class="text-xs px-3 py-1.5 rounded-lg bg-primary-700 text-white hover:bg-primary-800"
               >{{ t('keyUsage.apply') }}</button>
             </div>
           </div>
@@ -162,7 +162,7 @@
                 :class="statusInfo.isActive ? 'bg-emerald-500' : 'bg-rose-500'"
               ></span>
               <span class="text-sm font-medium text-gray-900 dark:text-white">{{ statusInfo.label }}</span>
-              <span class="text-xs text-gray-400 dark:text-dark-500">|</span>
+              <span class="text-xs text-gray-500 dark:text-dark-400">|</span>
               <span class="text-xs text-gray-500 dark:text-dark-400">{{ statusInfo.statusText }}</span>
             </div>
           </div>
@@ -180,15 +180,15 @@
                   {{ ring.title }}
                 </h3>
                 <!-- Clock icon -->
-                <svg v-if="ring.iconType === 'clock'" class="w-5 h-5 text-gray-400 dark:text-dark-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-if="ring.iconType === 'clock'" class="w-5 h-5 text-gray-500 dark:text-dark-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                 </svg>
                 <!-- Calendar icon -->
-                <svg v-else-if="ring.iconType === 'calendar'" class="w-5 h-5 text-gray-400 dark:text-dark-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-else-if="ring.iconType === 'calendar'" class="w-5 h-5 text-gray-500 dark:text-dark-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                 </svg>
                 <!-- Dollar icon -->
-                <svg v-else class="w-5 h-5 text-gray-400 dark:text-dark-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-else class="w-5 h-5 text-gray-500 dark:text-dark-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                 </svg>
               </div>
@@ -226,7 +226,7 @@
                         class="text-sm font-semibold mt-1 tabular-nums"
                         :style="{ color: RING_GRADIENTS[i % 4].from }"
                       >{{ ring.amount }}</span>
-                      <p v-if="ring.resetAt && formatResetTime(ring.resetAt)" class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 tabular-nums">
+                      <p v-if="ring.resetAt && formatResetTime(ring.resetAt)" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 tabular-nums">
                         ⟳ {{ formatResetTime(ring.resetAt) }}
                       </p>
                     </template>

@@ -2,18 +2,18 @@
   <div>
     <label class="input-label">
       {{ t('admin.users.groups') }}
-      <span class="font-normal text-gray-400">{{ t('common.selectedCount', { count: modelValue.length }) }}</span>
+      <span class="font-normal text-gray-500">{{ t('common.selectedCount', { count: modelValue.length }) }}</span>
     </label>
     <div
       v-if="isSearchable"
       class="flex items-center gap-2 rounded-t-lg border border-b-0 border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-600 dark:bg-dark-800"
     >
-      <Icon name="search" size="sm" class="shrink-0 text-gray-400" />
+      <Icon name="search" size="sm" class="shrink-0 text-gray-500" />
       <input
         v-model="searchText"
         type="text"
         :placeholder="t('common.searchPlaceholder')"
-        class="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
+        class="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none dark:text-gray-100 dark:placeholder:text-dark-400"
       />
     </div>
     <div
@@ -44,7 +44,7 @@
           :rate-multiplier="group.rate_multiplier == null ? undefined : group.rate_multiplier"
           class="min-w-0 flex-1"
         />
-        <span class="shrink-0 text-xs text-gray-400">{{ group.account_count || 0 }}</span>
+        <span class="shrink-0 text-xs text-gray-500">{{ group.account_count || 0 }}</span>
       </label>
       <div
         v-if="filteredGroups.length === 0"

@@ -15,21 +15,21 @@
       <!-- Summary -->
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.requestId') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.requestId') }}</div>
           <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
             {{ requestId || '—' }}
           </div>
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.time') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.time') }}</div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
             {{ formatDateTime(detail.created_at) }}
           </div>
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">
             {{ isUpstreamError(detail) ? t('admin.ops.errorDetail.account') : t('admin.ops.errorDetail.user') }}
           </div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
@@ -43,26 +43,26 @@
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.platform') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.platform') }}</div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
             {{ detail.platform || '—' }}
           </div>
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.group') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.group') }}</div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
             {{ detail.group_name || (detail.group_id != null ? String(detail.group_id) : '—') }}
           </div>
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.model') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.model') }}</div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
             <template v-if="hasModelMapping(detail)">
               <span class="font-mono">{{ detail.requested_model }}</span>
-              <span class="mx-1 text-gray-400">→</span>
-              <span class="font-mono text-primary-600 dark:text-primary-400">{{ detail.upstream_model }}</span>
+              <span class="mx-1 text-gray-500">→</span>
+              <span class="font-mono text-primary-700 dark:text-primary-400">{{ detail.upstream_model }}</span>
             </template>
             <template v-else>
               {{ displayModel(detail) || '—' }}
@@ -71,21 +71,21 @@
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.inboundEndpoint') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.inboundEndpoint') }}</div>
           <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
             {{ detail.inbound_endpoint || '—' }}
           </div>
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.upstreamEndpoint') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.upstreamEndpoint') }}</div>
           <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
             {{ detail.upstream_endpoint || '—' }}
           </div>
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.status') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.status') }}</div>
           <div class="mt-1">
             <span :class="['inline-flex items-center rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset', statusClass]">
               {{ detail.status_code }}
@@ -94,7 +94,7 @@
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.upstreamStatus') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.upstreamStatus') }}</div>
           <div class="mt-1">
             <span :class="['inline-flex items-center rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-inset', upstreamStatusClass]">
               {{ detail.upstream_status_code ?? '—' }}
@@ -103,21 +103,21 @@
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.requestType') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.requestType') }}</div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
             {{ formatRequestTypeLabel(detail.request_type) }}
           </div>
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.message') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.message') }}</div>
           <div class="mt-1 break-words text-sm font-medium text-gray-900 dark:text-white" :title="rootCauseMessage">
             {{ rootCauseMessage || '—' }}
           </div>
         </div>
 
         <div v-if="detail.api_key_prefix" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.apiKeyPrefix') }}</div>
+          <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.errorDetail.apiKeyPrefix') }}</div>
           <div class="mt-1 font-mono text-sm font-medium text-gray-900 dark:text-white">
             {{ detail.api_key_prefix }}
           </div>
@@ -192,11 +192,11 @@
 
             <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-2">
               <div>
-                <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.status') }}:</span>
+                <span class="text-gray-500">{{ t('admin.ops.errorDetail.upstreamEvent.status') }}:</span>
                 <span class="ml-1 font-mono">{{ ev.status_code ?? '—' }}</span>
               </div>
               <div>
-                <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.requestId') }}:</span>
+                <span class="text-gray-500">{{ t('admin.ops.errorDetail.upstreamEvent.requestId') }}:</span>
                 <span class="ml-1 font-mono">{{ ev.request_id || ev.client_request_id || '—' }}</span>
               </div>
             </div>

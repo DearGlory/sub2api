@@ -2,7 +2,7 @@
   <div class="space-y-3">
     <!-- 一级:平台 -->
     <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
         {{ t('modelPlaza.filters.platformLabel') }}
       </span>
       <div class="flex flex-wrap items-center gap-2">
@@ -24,7 +24,7 @@
 
     <!-- 二级:分组(按所属平台着色,当前组合下无结果的置灰) -->
     <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
         {{ t('modelPlaza.filters.groupLabel') }}
       </span>
       <div class="flex flex-wrap items-center gap-2">
@@ -53,7 +53,7 @@
 
     <!-- 三级:倍率(当前组合下不存在的置灰) -->
     <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
         {{ t('modelPlaza.filters.rateLabel') }}
       </span>
       <div class="flex flex-wrap items-center gap-2">
@@ -81,14 +81,14 @@
 
     <!-- 四级:模型名搜索(纯前端过滤) -->
     <div class="flex flex-wrap items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
+      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
         {{ t('modelPlaza.filters.modelLabel') }}
       </span>
       <div class="relative w-full sm:w-72">
         <Icon
           name="search"
           size="sm"
-          class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500"
+          class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-dark-400"
         />
         <input
           :value="search"
@@ -100,7 +100,7 @@
         <button
           v-if="search"
           type="button"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600 dark:text-dark-500 dark:hover:text-gray-300"
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-gray-600 dark:text-dark-400 dark:hover:text-gray-300"
           @click="$emit('update:search', '')"
         >
           <Icon name="x" size="xs" class="h-3.5 w-3.5" />
@@ -171,7 +171,7 @@ function rateEnabled(r: number): boolean {
 
 function chipClass(active: boolean): string {
   return active
-    ? 'bg-primary-600 text-white dark:bg-primary-500'
+    ? 'bg-primary-700 text-white dark:bg-primary-700'
     : 'bg-white text-gray-600 ring-1 ring-inset ring-gray-200 enabled:hover:bg-gray-50 enabled:hover:text-gray-900 enabled:hover:ring-gray-300 dark:bg-dark-800/60 dark:text-dark-300 dark:ring-dark-700 dark:enabled:hover:bg-dark-800 dark:enabled:hover:text-white'
 }
 </script>

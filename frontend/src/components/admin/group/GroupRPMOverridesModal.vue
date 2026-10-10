@@ -7,9 +7,9 @@
           <PlatformIcon :platform="group.platform" size="sm" />
           {{ t('admin.groups.platforms.' + group.platform, platformLabel(group.platform)) }}
         </span>
-        <span class="text-gray-400">|</span>
+        <span class="text-gray-500">|</span>
         <span class="font-medium text-gray-900 dark:text-white">{{ group.name }}</span>
-        <span class="text-gray-400">|</span>
+        <span class="text-gray-500">|</span>
         <span class="text-gray-600 dark:text-gray-400">
           {{ t('admin.groups.groupRpmDefault') }}: {{ group.rpm_limit || 0 }}
         </span>
@@ -42,9 +42,9 @@
                 class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-dark-600"
                 @click="selectUser(user)"
               >
-                <span class="text-gray-400">#{{ user.id }}</span>
+                <span class="text-gray-500">#{{ user.id }}</span>
                 <span class="text-gray-900 dark:text-white">{{ user.username || user.email }}</span>
-                <span v-if="user.username" class="text-xs text-gray-400">{{ user.email }}</span>
+                <span v-if="user.username" class="text-xs text-gray-500">{{ user.email }}</span>
               </button>
             </div>
           </div>
@@ -96,7 +96,7 @@
           {{ t('admin.groups.rpmOverrides') }} ({{ localEntries.length }})
         </h4>
 
-        <div v-if="localEntries.length === 0" class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+        <div v-if="localEntries.length === 0" class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
           {{ t('admin.groups.noRpmOverrides') }}
         </div>
 
@@ -122,7 +122,7 @@
                     class="hover:bg-gray-50 dark:hover:bg-dark-700/50"
                   >
                     <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ entry.user_email }}</td>
-                    <td class="whitespace-nowrap px-3 py-2 text-gray-400 dark:text-gray-500">{{ entry.user_id }}</td>
+                    <td class="whitespace-nowrap px-3 py-2 text-gray-500 dark:text-gray-400">{{ entry.user_id }}</td>
                     <td class="whitespace-nowrap px-3 py-2 text-gray-900 dark:text-white">{{ entry.user_name || '-' }}</td>
                     <td class="max-w-[160px] truncate px-3 py-2 text-gray-500 dark:text-gray-400" :title="entry.user_notes">{{ entry.user_notes || '-' }}</td>
                     <td class="whitespace-nowrap px-3 py-2">
@@ -151,7 +151,7 @@
                     <td class="px-2 py-2">
                       <button
                         type="button"
-                        class="rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        class="rounded p-1 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                         @click="removeLocal(entry.user_id)"
                       >
                         <Icon name="trash" size="sm" />
@@ -179,7 +179,7 @@
           <span class="text-xs text-amber-600 dark:text-amber-400">{{ t('admin.groups.unsavedChanges') }}</span>
           <button
             type="button"
-            class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+            class="text-xs font-medium text-primary-700 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
             @click="handleCancel"
           >
             {{ t('admin.groups.revertChanges') }}

@@ -40,7 +40,7 @@
             v-if="showSecondLine"
             :class="[
               'mt-0.5 block text-[11px] font-normal leading-tight',
-              quoteFor(amt).percent > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-400 dark:text-gray-500',
+              quoteFor(amt).percent > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400',
             ]"
             data-testid="quick-amount-credited"
           >{{ secondLine(amt) }}</span>
@@ -54,7 +54,7 @@
         {{ t('payment.customAmount') }}
       </label>
       <div class="relative">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-dark-400">
           $
         </span>
         <input

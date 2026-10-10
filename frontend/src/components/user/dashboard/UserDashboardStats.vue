@@ -49,18 +49,18 @@
     <div class="card p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-gray-100 p-2 dark:bg-dark-800">
-          <Icon name="dollar" size="md" class="text-primary-600 dark:text-primary-400" :stroke-width="2" />
+          <Icon name="dollar" size="md" class="text-primary-700 dark:text-primary-400" :stroke-width="2" />
         </div>
         <div>
           <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayCost') }}</p>
           <p class="text-xl font-semibold text-gray-900 dark:text-white">
-            <span class="text-primary-600 dark:text-primary-400" :title="t('dashboard.actual')">${{ formatCost(stats?.today_actual_cost || 0) }}</span>
-            <span class="text-sm font-normal text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.today_cost || 0) }}</span>
+            <span class="text-primary-700 dark:text-primary-400" :title="t('dashboard.actual')">${{ formatCost(stats?.today_actual_cost || 0) }}</span>
+            <span class="text-sm font-normal text-gray-500 dark:text-gray-400" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.today_cost || 0) }}</span>
           </p>
           <p class="text-xs">
             <span class="text-gray-500 dark:text-gray-400">{{ t('common.total') }}: </span>
-            <span class="text-primary-600 dark:text-primary-400" :title="t('dashboard.actual')">${{ formatCost(stats?.total_actual_cost || 0) }}</span>
-            <span class="text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.total_cost || 0) }}</span>
+            <span class="text-primary-700 dark:text-primary-400" :title="t('dashboard.actual')">${{ formatCost(stats?.total_actual_cost || 0) }}</span>
+            <span class="text-gray-500 dark:text-gray-400" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.total_cost || 0) }}</span>
           </p>
         </div>
       </div>
@@ -157,7 +157,7 @@
           <span class="text-sm font-semibold text-gray-900 dark:text-white">
             {{ item.isOther ? t('dashboard.platformOther') : platformLabel(item.platform) }}
           </span>
-          <span class="font-mono text-sm text-primary-600 dark:text-primary-400" :title="t('dashboard.actual')">
+          <span class="font-mono text-sm text-primary-700 dark:text-primary-400" :title="t('dashboard.actual')">
             ${{ formatCost(item.total_actual_cost) }}
           </span>
         </div>
@@ -182,7 +182,7 @@
 
         <!-- Quota 区：仅当 quota 配置存在、非 __other__ 且至少有一个窗口配了 limit 时显示 -->
         <div v-if="hasAnyLimit(item.quota) && !item.isOther" class="mt-3 space-y-1.5 border-t border-gray-200 pt-2 dark:border-dark-700">
-          <p class="text-[10px] uppercase tracking-wide text-gray-400">
+          <p class="text-[10px] uppercase tracking-wide text-gray-500">
             {{ t('dashboard.platformQuota.title') }}
           </p>
           <template v-for="w in (['daily', 'weekly', 'monthly'] as const)" :key="w">
@@ -212,7 +212,7 @@
                     :style="{ width: calcPercent((quotaVal(item.quota, `${w}_usage_usd`) as number) ?? 0, quotaVal(item.quota, `${w}_limit_usd`) as number) + '%' }"
                   />
                 </div>
-                <p v-if="quotaVal(item.quota, `${w}_window_resets_at`)" class="text-[10px] text-gray-400">
+                <p v-if="quotaVal(item.quota, `${w}_window_resets_at`)" class="text-[10px] text-gray-500">
                   {{ t('dashboard.platformQuota.resetsAt', { time: formatResetTime(quotaVal(item.quota, `${w}_window_resets_at`) as string) }) }}
                 </p>
               </template>

@@ -70,7 +70,7 @@
         >
           <p
             v-if="searchResults.length === 0"
-            class="px-3 py-2 text-sm text-gray-400"
+            class="px-3 py-2 text-sm text-gray-500"
             data-testid="codex-manifest-search-empty"
           >
             {{ t("admin.groups.codexModelsManifest.searchEmpty") }}
@@ -87,7 +87,7 @@
             @click="selectAccount(account)"
           >
             <span>{{ account.name }}</span>
-            <span class="ml-2 text-xs text-gray-400">#{{ account.id }}</span>
+            <span class="ml-2 text-xs text-gray-500">#{{ account.id }}</span>
           </button>
         </div>
       </div>

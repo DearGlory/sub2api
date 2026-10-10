@@ -54,7 +54,7 @@
       </span>
 
       <!-- Reset time -->
-      <span v-if="shouldShowResetTime" class="shrink-0 text-[10px] text-gray-400">
+      <span v-if="shouldShowResetTime" class="shrink-0 text-[10px] text-gray-500">
         {{ formatResetTime }}
       </span>
     </div>

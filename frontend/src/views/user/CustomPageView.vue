@@ -16,7 +16,7 @@
             <div
               class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
             >
-              <Icon name="link" size="lg" class="text-gray-400" />
+              <Icon name="link" size="lg" class="text-gray-500" />
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('customPage.notFoundTitle') }}
@@ -82,7 +82,7 @@
             <div
               class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
             >
-              <Icon name="link" size="lg" class="text-gray-400" />
+              <Icon name="link" size="lg" class="text-gray-500" />
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('customPage.notConfiguredTitle') }}
@@ -488,7 +488,7 @@ onUnmounted(() => {
 }
 
 .toc-close-btn {
-  @apply p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-dark-200 hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors;
+  @apply p-1 rounded text-gray-500 hover:text-gray-600 dark:hover:text-dark-200 hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors;
 }
 
 .toc-nav {
@@ -501,7 +501,7 @@ onUnmounted(() => {
 }
 
 .toc-item.toc-active {
-  @apply text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 font-medium;
+  @apply text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 font-medium;
 }
 
 .toc-level-1 { padding-left: 8px; }
@@ -553,7 +553,7 @@ onUnmounted(() => {
 .markdown-page-content ul { @apply list-disc pl-6 mb-4; }
 .markdown-page-content ol { @apply list-decimal pl-6 mb-4; }
 .markdown-page-content li { @apply mb-1; }
-.markdown-page-content a { @apply text-primary-500 hover:text-primary-600 underline; }
+.markdown-page-content a { @apply text-primary-500 hover:text-primary-700 underline; }
 .markdown-page-content blockquote { @apply border-l-2 border-gray-300 dark:border-dark-500 pl-4 italic text-gray-600 dark:text-dark-300 my-4; }
 .markdown-page-content img { @apply max-w-full h-auto rounded-lg my-4; }
 .markdown-page-content table { @apply w-full border-collapse my-4; }

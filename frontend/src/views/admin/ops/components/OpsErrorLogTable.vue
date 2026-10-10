@@ -50,7 +50,7 @@
             <div class="break-all text-gray-500 dark:text-gray-400"><span class="mr-0.5">↳</span>{{ row.upstream_model }}</div>
           </div>
           <span v-else-if="displayModel(row)" class="text-sm font-medium text-gray-900 dark:text-white">{{ displayModel(row) }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-group="{ row }">
@@ -61,14 +61,14 @@
           >
             {{ row.group_name || '#' + row.group_id }}
           </span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-user="{ row }">
           <div v-if="row.user_id" class="text-sm">
             <button
               v-if="userClickable && row.user_email"
-              class="font-medium text-primary-600 underline decoration-dashed underline-offset-2 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              class="font-medium text-primary-700 underline decoration-dashed underline-offset-2 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
               :title="t('admin.usage.clickToViewBalance')"
               @click.stop="emit('userClick', row.user_id, row.user_email)"
             >
@@ -77,7 +77,7 @@
             <span v-else class="font-medium text-gray-900 dark:text-white">{{ row.user_email || '-' }}</span>
             <span class="ml-1 text-gray-500 dark:text-gray-400">#{{ row.user_id }}</span>
           </div>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-api_key="{ row }">
@@ -88,7 +88,7 @@
               class="ml-1 inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30"
             >{{ t('admin.ops.errorLog.keyDeletedBadge') }}</span>
           </div>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-account="{ row }">
@@ -97,7 +97,7 @@
             class="text-sm text-gray-900 dark:text-white"
             :title="t('admin.ops.errorLog.accountId') + ' ' + row.account_id"
           >{{ row.account_name || '#' + row.account_id }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-category="{ row }">
@@ -128,7 +128,7 @@
             class="block max-w-[280px] truncate text-sm text-gray-600 dark:text-gray-400"
             :title="row.message"
           >{{ formatSmartMessage(row.message) || '-' }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-user_agent="{ row }">
@@ -137,7 +137,7 @@
             class="block max-w-[320px] truncate text-sm text-gray-600 dark:text-gray-400"
             :title="row.user_agent"
           >{{ row.user_agent }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-client_ip="{ row }">
@@ -146,14 +146,14 @@
               <span class="text-sm font-mono text-gray-600 dark:text-gray-400">{{ row.client_ip }}</span>
               <IpGeoCell :ip="row.client_ip" />
             </div>
-            <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+            <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
           </div>
         </template>
 
         <template #cell-actions="{ row }">
           <button
             type="button"
-            class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-600 dark:hover:text-primary-400"
+            class="rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-700 dark:hover:bg-dark-600 dark:hover:text-primary-400"
             :title="t('admin.ops.errorLog.details')"
             @click.stop="emit('openErrorDetail', row.id)"
           >

@@ -1,6 +1,6 @@
 <template>
-  <span v-if="props.quotas === undefined" class="text-xs text-gray-400 dark:text-gray-500">…</span>
-  <span v-else-if="configured.length === 0" class="text-xs text-gray-400 dark:text-gray-500">
+  <span v-if="props.quotas === undefined" class="text-xs text-gray-500 dark:text-gray-400">…</span>
+  <span v-else-if="configured.length === 0" class="text-xs text-gray-500 dark:text-gray-400">
     {{ t('admin.users.platformQuota.cellNotConfigured') }}
   </span>
   <div v-else class="space-y-0.5 text-xs">

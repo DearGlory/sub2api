@@ -18,7 +18,7 @@
         </RouterLink>
         <RouterLink
           to="/login"
-          class="inline-flex flex-shrink-0 items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400"
+          class="inline-flex flex-shrink-0 items-center justify-center rounded-lg bg-primary-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-800 dark:bg-primary-700 dark:hover:bg-primary-600"
         >
           {{ t('home.login') }}
         </RouterLink>
@@ -210,7 +210,7 @@ onMounted(async () => {
 }
 
 .legal-document-content :deep(a) {
-  @apply text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200;
+  @apply text-primary-700 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200;
 }
 
 .legal-document-content :deep(ul) {

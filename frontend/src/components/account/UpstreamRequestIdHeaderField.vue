@@ -61,7 +61,7 @@ const examples = computed<HeaderExample[]>(() => {
                 <span class="text-gray-300">{{ item.label }}</span>
                 <code class="select-all rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-white">{{ item.header }}</code>
               </div>
-              <p v-if="item.note" class="mt-0.5 text-gray-400">{{ item.note }}</p>
+              <p v-if="item.note" class="mt-0.5 text-gray-500">{{ item.note }}</p>
             </li>
           </ul>
         </template>

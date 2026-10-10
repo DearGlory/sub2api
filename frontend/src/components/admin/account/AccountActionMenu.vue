@@ -16,7 +16,7 @@
               {{ t('admin.accounts.testConnection') }}
             </button>
             <button @click="$emit('stats', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
-              <Icon name="chart" size="sm" class="text-gray-400 dark:text-gray-500" />
+              <Icon name="chart" size="sm" class="text-gray-500 dark:text-gray-400" />
               {{ t('admin.accounts.viewStats') }}
             </button>
             <button @click="$emit('schedule', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">

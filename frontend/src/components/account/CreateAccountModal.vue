@@ -256,7 +256,7 @@
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
               form.platform === spec.id
-                ? 'bg-white text-primary-600 dark:bg-dark-600 dark:text-primary-400'
+                ? 'bg-white text-primary-700 dark:bg-dark-600 dark:text-primary-400'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
             ]"
           >
@@ -1332,7 +1332,7 @@
                   ]"
                   :placeholder="t('admin.accounts.requestModel')"
                 />
-                <svg class="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="h-4 w-4 flex-shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
                 <input
@@ -1403,7 +1403,7 @@
               v-model="addMethod"
               type="radio"
               value="oauth"
-              class="mr-2 text-primary-600 focus:ring-primary-500"
+              class="mr-2 text-primary-700 focus:ring-primary-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.types.oauth') }}</span>
           </label>
@@ -1412,7 +1412,7 @@
               v-model="addMethod"
               type="radio"
               value="setup-token"
-              class="mr-2 text-primary-600 focus:ring-primary-500"
+              class="mr-2 text-primary-700 focus:ring-primary-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">{{
               t('admin.accounts.setupTokenLongLived')
@@ -1631,7 +1631,7 @@
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
+                  class="h-4 w-4 flex-shrink-0 text-gray-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1858,7 +1858,7 @@
                   <Icon name="x" size="sm" :stroke-width="2" />
                 </button>
               </span>
-              <span v-if="selectedErrorCodes.length === 0" class="text-xs text-gray-400">
+              <span v-if="selectedErrorCodes.length === 0" class="text-xs text-gray-500">
                 {{ t('admin.accounts.noneSelectedUsesDefault') }}
               </span>
             </div>
@@ -1922,7 +1922,7 @@
                 v-model="bedrockAuthMode"
                 type="radio"
                 value="sigv4"
-                class="mr-2 text-primary-600 focus:ring-primary-500"
+                class="mr-2 text-primary-700 focus:ring-primary-500"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.bedrockAuthModeSigv4') }}</span>
             </label>
@@ -1931,7 +1931,7 @@
                 v-model="bedrockAuthMode"
                 type="radio"
                 value="apikey"
-                class="mr-2 text-primary-600 focus:ring-primary-500"
+                class="mr-2 text-primary-700 focus:ring-primary-500"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.bedrockAuthModeApikey') }}</span>
             </label>
@@ -2028,7 +2028,7 @@
             <input
               v-model="bedrockForceGlobal"
               type="checkbox"
-              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
+              class="rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.bedrockForceGlobal') }}</span>
           </label>
@@ -2086,7 +2086,7 @@
           <div v-else class="space-y-3">
             <div v-for="(mapping, index) in modelMappings" :key="index" class="flex items-center gap-2">
               <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
-              <span class="text-gray-400">→</span>
+              <span class="text-gray-500">→</span>
               <input v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
               <button type="button" @click="modelMappings.splice(index, 1)" class="text-red-500 hover:text-red-700">
                 <Icon name="trash" size="sm" />
@@ -2447,7 +2447,7 @@
                   :placeholder="t('admin.accounts.requestModel')"
                 />
                 <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
+                  class="h-4 w-4 flex-shrink-0 text-gray-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -2567,7 +2567,7 @@
                     type="button"
                     :disabled="index === 0"
                     @click="moveTempUnschedRule(index, -1)"
-                    class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
+                    class="rounded p-1 text-gray-500 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
                   >
                     <Icon name="chevronUp" size="sm" :stroke-width="2" />
                   </button>
@@ -2575,7 +2575,7 @@
                     type="button"
                     :disabled="index === tempUnschedRules.length - 1"
                     @click="moveTempUnschedRule(index, 1)"
-                    class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
+                    class="rounded p-1 text-gray-500 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
                   >
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -2919,7 +2919,7 @@
                 :class="[
                   'px-3 py-1.5 text-sm rounded-md border transition-colors',
                   userMsgQueueMode === opt.value
-                    ? 'bg-primary-600 text-white border-primary-600'
+                    ? 'bg-primary-700 text-white border-primary-600'
                     : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-dark-500 hover:bg-gray-50 dark:hover:bg-dark-600'
                 ]">
                 {{ opt.label }}
@@ -3410,7 +3410,7 @@
               class="flex items-center gap-2"
             >
               <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
-              <span class="text-gray-400">→</span>
+              <span class="text-gray-500">→</span>
               <input v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
               <button type="button" @click="removeOpenAICompactModelMapping(index)" class="text-red-500 hover:text-red-700">
                 <Icon name="trash" size="sm" />
@@ -3461,7 +3461,7 @@
             >
               <input
                 type="checkbox"
-                class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
+                class="rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-500"
                 :data-testid="`openai-endpoint-capability-${option.value}`"
                 :checked="openAIEndpointCapabilities.includes(option.value)"
                 @change="toggleOpenAIEndpointCapability(option.value, $event)"
@@ -3763,7 +3763,7 @@
               >
                 {{ t('admin.accounts.gemini.setupGuide.links.countryCheck') }}
               </a>
-              <span class="text-gray-400">·</span>
+              <span class="text-gray-500">·</span>
               <a
                 href="https://policies.google.com/country-association-form"
                 target="_blank"
@@ -3772,7 +3772,7 @@
               >
                 {{ t('admin.accounts.gemini.setupGuide.links.countryChange') }}
               </a>
-              <span class="text-gray-400">·</span>
+              <span class="text-gray-500">·</span>
               <a
                 href="https://gemini.google.com/gems/create?hl=en-US&pli=1"
                 target="_blank"
@@ -3781,7 +3781,7 @@
               >
                 {{ t('admin.accounts.gemini.setupGuide.links.geminiWebActivation') }}
               </a>
-              <span class="text-gray-400">·</span>
+              <span class="text-gray-500">·</span>
               <a
                 href="https://console.cloud.google.com"
                 target="_blank"

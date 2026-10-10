@@ -45,7 +45,7 @@
               :class="[
                 'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
                 form.payment_mode === mode.value
-                  ? 'border-primary-500 bg-primary-500 text-white shadow-sm'
+                  ? 'border-primary-500 bg-primary-700 text-white shadow-sm'
                   : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:border-dark-500',
               ]"
             >{{ mode.label }}</button>
@@ -62,7 +62,7 @@
               :class="[
                 'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
                 isTypeSelected(pt.value)
-                  ? 'border-primary-500 bg-primary-500 text-white shadow-sm'
+                  ? 'border-primary-500 bg-primary-700 text-white shadow-sm'
                   : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:border-dark-500',
               ]"
             >{{ pt.label }}</button>
@@ -124,7 +124,7 @@
             <template #trigger>
               <button
                 type="button"
-                class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-[11px] font-semibold text-gray-400 transition-colors hover:border-primary-500 hover:text-primary-600 dark:border-dark-500 dark:text-gray-500 dark:hover:border-primary-400 dark:hover:text-primary-400"
+                class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-[11px] font-semibold text-gray-500 transition-colors hover:border-primary-500 hover:text-primary-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-primary-400 dark:hover:text-primary-400"
                 :aria-label="t('admin.settings.payment.paymentGuideTrigger')"
                 :title="t('admin.settings.payment.paymentGuideTrigger')"
               >
@@ -156,7 +156,7 @@
           <div v-for="field in resolvedFields" :key="field.key">
             <label class="input-label">
               {{ field.label }}
-              <span v-if="field.optional" class="text-xs text-gray-400">({{ t('common.optional') }})</span>
+              <span v-if="field.optional" class="text-xs text-gray-500">({{ t('common.optional') }})</span>
               <span v-else class="text-red-500"> *</span>
             </label>
             <textarea
@@ -186,7 +186,7 @@
               <button
                 type="button"
                 @click="visibleFields[field.key] = !visibleFields[field.key]"
-                class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <svg v-if="visibleFields[field.key]" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
                 <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -249,7 +249,7 @@
           <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
             {{ t('admin.settings.payment.limitsTitle') }}
           </h4>
-          <svg :class="['h-4 w-4 text-gray-400 transition-transform', limitsExpanded && 'rotate-180']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+          <svg :class="['h-4 w-4 text-gray-500 transition-transform', limitsExpanded && 'rotate-180']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
         </button>
         <div v-show="limitsExpanded" class="mt-3 space-y-3">
           <div
@@ -288,7 +288,7 @@
               </div>
             </div>
           </div>
-          <p class="text-xs text-gray-400 dark:text-gray-500">{{ t('admin.settings.payment.limitsHint') }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.limitsHint') }}</p>
         </div>
       </div>
     </form>

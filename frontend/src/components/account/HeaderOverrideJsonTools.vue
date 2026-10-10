@@ -26,7 +26,7 @@
     <div class="flex gap-2">
       <button
         type="button"
-        class="rounded-lg bg-primary-600 px-3 py-1 text-xs text-white transition-colors hover:bg-primary-700"
+        class="rounded-lg bg-primary-700 px-3 py-1 text-xs text-white transition-colors hover:bg-primary-800"
         @click="applyImport"
       >
         {{ t('admin.accounts.headerOverride.importJsonApply') }}

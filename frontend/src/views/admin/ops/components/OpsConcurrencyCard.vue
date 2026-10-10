@@ -345,7 +345,7 @@ watch(
     <!-- 头部 -->
     <div class="mb-4 flex shrink-0 items-center justify-between gap-3">
       <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-        <svg class="h-4 w-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
         {{ t('admin.ops.concurrency.title') }}
@@ -417,7 +417,7 @@ watch(
               <span class="truncate text-[11px] font-semibold text-gray-900 dark:text-white" :title="row.username || row.user_email">
                 {{ row.username || row.user_email }}
               </span>
-              <span v-if="row.username" class="shrink-0 truncate text-[10px] text-gray-400 dark:text-gray-500" :title="row.user_email">
+              <span v-if="row.username" class="shrink-0 truncate text-[10px] text-gray-500 dark:text-gray-400" :title="row.user_email">
                 {{ row.user_email }}
               </span>
             </div>
@@ -450,7 +450,7 @@ watch(
               <div class="truncate text-[11px] font-semibold text-gray-900 dark:text-white" :title="row.name">
                 {{ row.name }}
               </div>
-              <span v-if="displayDimension === 'group' && row.platform" class="text-[10px] text-gray-400 dark:text-gray-500">
+              <span v-if="displayDimension === 'group' && row.platform" class="text-[10px] text-gray-500 dark:text-gray-400">
                 {{ row.platform.toUpperCase() }}
               </span>
             </div>
@@ -473,7 +473,7 @@ watch(
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
             <!-- 账号统计 -->
             <div class="flex items-center gap-1">
-              <svg class="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="h-3 w-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -485,7 +485,7 @@ watch(
                 <span class="font-semibold text-green-600 dark:text-green-400">{{ row.available_accounts }}</span
                 >/{{ row.total_accounts }}
               </span>
-              <span class="text-gray-400 dark:text-gray-500">{{ row.availability_percentage }}%</span>
+              <span class="text-gray-500 dark:text-gray-400">{{ row.availability_percentage }}%</span>
             </div>
 
             <!-- 限流账号 -->
@@ -524,7 +524,7 @@ watch(
               <div class="truncate text-[11px] font-semibold text-gray-900 dark:text-white" :title="row.name">
                 {{ row.name }}
               </div>
-              <div class="mt-0.5 text-[9px] text-gray-400 dark:text-gray-500">
+              <div class="mt-0.5 text-[9px] text-gray-500 dark:text-gray-400">
                 {{ row.group_name }}
               </div>
             </div>

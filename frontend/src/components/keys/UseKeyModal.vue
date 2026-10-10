@@ -39,7 +39,7 @@
               :class="[
                 'whitespace-nowrap py-2.5 px-1 border-b-2 font-medium text-sm transition-colors',
                 activeClientTab === tab.id
-                  ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                  ? 'border-primary-500 text-primary-700 dark:text-primary-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
               ]"
             >
@@ -121,7 +121,7 @@
               :class="[
                 'whitespace-nowrap py-2.5 px-1 border-b-2 font-medium text-sm transition-colors',
                 activeTab === tab.id
-                  ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                  ? 'border-primary-500 text-primary-700 dark:text-primary-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
               ]"
             >
@@ -148,7 +148,7 @@
             <div class="bg-gray-900 dark:bg-dark-900 rounded-xl overflow-hidden">
               <!-- Code Header -->
               <div class="flex items-center justify-between px-4 py-2 bg-gray-800 dark:bg-dark-800 border-b border-gray-700 dark:border-dark-700">
-                <span class="min-w-0 truncate text-xs text-gray-400 font-mono">{{ file.path }}</span>
+                <span class="min-w-0 truncate text-xs text-gray-500 font-mono">{{ file.path }}</span>
                 <button
                   type="button"
                   @click="copyContent(file.content, index)"

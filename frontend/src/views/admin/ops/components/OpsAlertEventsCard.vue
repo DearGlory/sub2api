@@ -442,12 +442,12 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
                   v-else
                   name="ban"
                   size="xs"
-                  class="text-gray-400 dark:text-gray-500"
+                  class="text-gray-500 dark:text-gray-400"
                 />
                 {{ row.email_sent ? t('admin.ops.alertEvents.table.emailSent') : t('admin.ops.alertEvents.table.emailIgnored') }}
               </span>
             </div>
-            <div class="text-[11px] text-gray-400 dark:text-gray-500">{{ formatDimensionsSummary(row) }}</div>
+            <div class="text-[11px] text-gray-500 dark:text-gray-400">{{ formatDimensionsSummary(row) }}</div>
           </div>
         </div>
         <table v-else class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
@@ -533,7 +533,7 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
                     v-else
                     name="ban"
                     size="sm"
-                    class="text-gray-400 dark:text-gray-500"
+                    class="text-gray-500 dark:text-gray-400"
                   />
                   <span class="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
                     {{ row.email_sent ? t('admin.ops.alertEvents.table.emailSent') : t('admin.ops.alertEvents.table.emailIgnored') }}
@@ -550,7 +550,7 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
           </svg>
           {{ t('admin.ops.alertEvents.loading') }}
         </div>
-        <div v-else-if="!hasMore && events.length > 0" class="py-3 text-center text-xs text-gray-400">
+        <div v-else-if="!hasMore && events.length > 0" class="py-3 text-center text-xs text-gray-500">
           -
         </div>
       </div>
@@ -616,15 +616,15 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
 
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.firedAt') }}</div>
+              <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.alertEvents.detail.firedAt') }}</div>
               <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ formatDateTime(selected.fired_at || selected.created_at) }}</div>
             </div>
             <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.resolvedAt') }}</div>
+              <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.alertEvents.detail.resolvedAt') }}</div>
               <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ selected.resolved_at ? formatDateTime(selected.resolved_at) : '-' }}</div>
             </div>
             <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.ruleId') }}</div>
+              <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.alertEvents.detail.ruleId') }}</div>
               <div class="mt-1 flex flex-wrap items-center gap-2">
                 <div class="font-mono text-sm font-semibold text-gray-900 dark:text-white">#{{ selected.rule_id }}</div>
                 <a
@@ -644,7 +644,7 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
               </div>
             </div>
             <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-              <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('admin.ops.alertEvents.detail.dimensions') }}</div>
+              <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ t('admin.ops.alertEvents.detail.dimensions') }}</div>
               <div class="mt-1 text-sm text-gray-900 dark:text-white">
                 <div v-if="getDimensionString(selected, 'platform')">platform={{ getDimensionString(selected, 'platform') }}</div>
                 <div v-if="selected.dimensions?.group_id">group_id={{ selected.dimensions.group_id }}</div>

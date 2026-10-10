@@ -13,7 +13,7 @@
                   <Icon
                     name="search"
                     size="md"
-                    class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
                   />
                   <input
                     v-model.trim="filters.q"
@@ -94,7 +94,7 @@
               <div class="truncate font-medium text-gray-900 dark:text-white" :title="row.actor_email">
                 {{ row.actor_email || '—' }}
               </div>
-              <div class="mt-0.5 truncate text-xs text-gray-400">
+              <div class="mt-0.5 truncate text-xs text-gray-500">
                 {{ row.actor_role }}<span v-if="row.auth_method"> · {{ authMethodLabel(row.auth_method) }}</span>
               </div>
             </div>
@@ -105,7 +105,7 @@
               <div class="truncate font-mono text-sm text-gray-800 dark:text-gray-200" :title="row.action">
                 {{ row.action }}
               </div>
-              <div class="mt-0.5 truncate font-mono text-xs text-gray-400" :title="`${row.method} ${row.path}`">
+              <div class="mt-0.5 truncate font-mono text-xs text-gray-500" :title="`${row.method} ${row.path}`">
                 {{ row.method }} {{ row.path }}
               </div>
             </div>
@@ -129,7 +129,7 @@
           <template #cell-actions="{ row }">
             <button
               type="button"
-              class="inline-flex items-center gap-1 font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              class="inline-flex items-center gap-1 font-medium text-primary-700 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
               @click="openDetail(row.id)"
             >
               <Icon name="eye" size="sm" />
@@ -210,29 +210,29 @@
         <!-- Actor / auth / source -->
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-            <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {{ t('admin.audit.columns.actor') }}
             </div>
             <div class="mt-1 break-all text-sm font-medium text-gray-900 dark:text-white">
               {{ detail.actor_email || '—' }}
             </div>
-            <div class="mt-0.5 text-xs text-gray-400">{{ detail.actor_role }}</div>
+            <div class="mt-0.5 text-xs text-gray-500">{{ detail.actor_role }}</div>
           </div>
 
           <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-            <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {{ t('admin.audit.filters.authMethod') }}
             </div>
             <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
               {{ authMethodLabel(detail.auth_method) || '—' }}
             </div>
-            <div v-if="detail.credential_masked" class="mt-0.5 break-all font-mono text-xs text-gray-400">
+            <div v-if="detail.credential_masked" class="mt-0.5 break-all font-mono text-xs text-gray-500">
               {{ detail.credential_masked }}
             </div>
           </div>
 
           <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-            <div class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+            <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {{ t('admin.audit.columns.clientIp') }}
             </div>
             <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
@@ -243,7 +243,7 @@
 
         <!-- User-Agent -->
         <section>
-          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
             {{ t('admin.audit.detail.userAgent') }}
           </h4>
           <div class="break-all rounded-xl bg-gray-50 p-3 font-mono text-xs leading-relaxed text-gray-600 dark:bg-dark-900 dark:text-gray-400">
@@ -253,7 +253,7 @@
 
         <!-- Request body (redacted) -->
         <section v-if="detail.request_body">
-          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
             {{ t('admin.audit.detail.requestBody') }}
           </h4>
           <pre class="max-h-72 overflow-auto rounded-xl bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-600 dark:bg-dark-900 dark:text-gray-400">{{ prettyBody(detail.request_body) }}</pre>
@@ -261,7 +261,7 @@
 
         <!-- Extra -->
         <section v-if="detail.extra && Object.keys(detail.extra).length">
-          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
             {{ t('admin.audit.detail.extra') }}
           </h4>
           <pre class="max-h-48 overflow-auto rounded-xl bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-600 dark:bg-dark-900 dark:text-gray-400">{{ JSON.stringify(detail.extra, null, 2) }}</pre>

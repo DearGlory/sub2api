@@ -41,7 +41,7 @@
 
     <div
       v-if="loading"
-      class="card flex min-h-[200px] items-center justify-center !rounded-3xl !border-0 text-sm text-gray-400 shadow-sm ring-1 ring-gray-900/5 dark:ring-dark-700"
+      class="card flex min-h-[200px] items-center justify-center !rounded-3xl !border-0 text-sm text-gray-500 shadow-sm ring-1 ring-gray-900/5 dark:ring-dark-700"
     >
       <span>{{ t('channelMonitorV2.settings.loading') }}</span>
     </div>
@@ -145,15 +145,15 @@
             >
               <input
                 type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500/40"
+                class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500/40"
                 :checked="draft.group_ids.includes(group.id)"
                 @change="toggleGroup(group.id)"
               />
               <span class="min-w-0 flex-1 truncate font-medium text-gray-800 dark:text-gray-100">{{ group.name }}</span>
-              <small class="shrink-0 text-xs text-gray-400">{{ platformLabel(group.platform) }} · #{{ group.id }}</small>
+              <small class="shrink-0 text-xs text-gray-500">{{ platformLabel(group.platform) }} · #{{ group.id }}</small>
             </label>
           </div>
-          <p v-if="groups.length === 0" class="empty-state py-8 text-sm text-gray-400">{{ t('channelMonitorV2.settings.groupsEmpty') }}</p>
+          <p v-if="groups.length === 0" class="empty-state py-8 text-sm text-gray-500">{{ t('channelMonitorV2.settings.groupsEmpty') }}</p>
         </div>
       </div>
 
@@ -173,14 +173,14 @@
             >
               <input
                 type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500/40"
+                class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500/40"
                 :checked="isCategoryIgnored(category)"
                 @change="toggleIgnoredCategory(category)"
               />
               <span class="min-w-0 flex-1 truncate font-medium text-gray-800 dark:text-gray-100">
                 {{ categoryLabel(category) }}
               </span>
-              <small class="shrink-0 font-mono text-[10px] text-gray-400">{{ category }}</small>
+              <small class="shrink-0 font-mono text-[10px] text-gray-500">{{ category }}</small>
             </label>
           </div>
         </div>

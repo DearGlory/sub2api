@@ -74,7 +74,7 @@
             data-testid="usage-detail-tab"
             class="-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium transition-colors sm:px-4"
             :class="activeTab === tab.key
-              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              ? 'border-primary-500 text-primary-700 dark:text-primary-400'
               : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-dark-500 dark:hover:text-gray-200'"
             @click="switchTab(tab.key)"
           >

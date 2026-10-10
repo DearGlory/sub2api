@@ -18,14 +18,14 @@
       <tbody v-if="loading">
         <tr>
           <td colspan="5" class="py-10 text-center">
-            <Icon name="refresh" size="lg" class="inline-block animate-spin text-gray-400" />
+            <Icon name="refresh" size="lg" class="inline-block animate-spin text-gray-500" />
           </td>
         </tr>
       </tbody>
       <tbody v-else-if="rows.length === 0">
         <tr>
           <td colspan="5" class="py-12 text-center">
-            <Icon name="inbox" size="xl" class="mx-auto mb-3 h-12 w-12 text-gray-400" />
+            <Icon name="inbox" size="xl" class="mx-auto mb-3 h-12 w-12 text-gray-500" />
             <p class="text-sm text-gray-500 dark:text-gray-400">{{ emptyLabel }}</p>
           </td>
         </tr>
@@ -60,7 +60,7 @@
             class="px-4 py-3 align-middle text-xs text-gray-500 dark:text-gray-400"
           >
             <template v-if="channel.description">{{ channel.description }}</template>
-            <span v-else class="text-gray-400">-</span>
+            <span v-else class="text-gray-500">-</span>
           </td>
 
           <!-- 平台徽章 -->
@@ -147,7 +147,7 @@
                   </span>
                 </div>
               </div>
-              <span v-if="section.groups.length === 0" class="text-xs text-gray-400">-</span>
+              <span v-if="section.groups.length === 0" class="text-xs text-gray-500">-</span>
             </div>
           </td>
 
@@ -163,7 +163,7 @@
                 :show-platform="false"
                 :platform-hint="section.platform"
               />
-              <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
+              <span v-if="section.supported_models.length === 0" class="text-xs text-gray-500">
                 {{ noModelsLabel }}
               </span>
             </div>
@@ -174,10 +174,10 @@
 
     <div data-testid="mobile-channels" class="w-full min-w-0 overflow-x-hidden lg:hidden">
       <div v-if="loading" data-testid="mobile-loading" class="py-10 text-center">
-        <Icon name="refresh" size="lg" class="inline-block animate-spin text-gray-400" />
+        <Icon name="refresh" size="lg" class="inline-block animate-spin text-gray-500" />
       </div>
       <div v-else-if="rows.length === 0" data-testid="mobile-empty" class="py-12 text-center">
-        <Icon name="inbox" size="xl" class="mx-auto mb-3 h-12 w-12 text-gray-400" />
+        <Icon name="inbox" size="xl" class="mx-auto mb-3 h-12 w-12 text-gray-500" />
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ emptyLabel }}</p>
       </div>
       <section
@@ -287,7 +287,7 @@
                       </span>
                     </div>
                   </div>
-                  <span v-if="section.groups.length === 0" class="text-xs text-gray-400">-</span>
+                  <span v-if="section.groups.length === 0" class="text-xs text-gray-500">-</span>
                 </dd>
               </div>
 
@@ -306,7 +306,7 @@
                     :show-platform="false"
                     :platform-hint="section.platform"
                   />
-                  <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
+                  <span v-if="section.supported_models.length === 0" class="text-xs text-gray-500">
                     {{ noModelsLabel }}
                   </span>
                 </dd>

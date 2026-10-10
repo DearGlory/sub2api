@@ -155,7 +155,7 @@ const TEXT: Record<Platform, string> = {
   cline: 'text-violet-600 dark:text-violet-400',
   composite: 'text-cyan-700 dark:text-cyan-300',
 }
-const TEXT_DEFAULT = 'text-primary-600 dark:text-primary-400'
+const TEXT_DEFAULT = 'text-primary-700 dark:text-primary-400'
 
 // ── Icon (check mark etc.) ──────────────────────────────────────────
 const ICON: Record<Platform, string> = {

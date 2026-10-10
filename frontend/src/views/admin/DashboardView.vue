@@ -116,15 +116,15 @@
                     :title="t('admin.dashboard.actual')"
                     >${{ formatCost(stats.today_actual_cost) }}</span
                   >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
+                  <span class="text-gray-500 dark:text-gray-400"> / </span>
                   <span
                     class="text-orange-500 dark:text-orange-400"
                     :title="t('admin.dashboard.accountCost')"
                     >${{ formatCost(stats.today_account_cost) }}</span
                   >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
+                  <span class="text-gray-500 dark:text-gray-400"> / </span>
                   <span
-                    class="text-gray-400 dark:text-gray-500"
+                    class="text-gray-500 dark:text-gray-400"
                     :title="t('admin.dashboard.standard')"
                     >${{ formatCost(stats.today_cost) }}</span
                   >
@@ -152,15 +152,15 @@
                     :title="t('admin.dashboard.actual')"
                     >${{ formatCost(stats.total_actual_cost) }}</span
                   >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
+                  <span class="text-gray-500 dark:text-gray-400"> / </span>
                   <span
                     class="text-orange-500 dark:text-orange-400"
                     :title="t('admin.dashboard.accountCost')"
                     >${{ formatCost(stats.total_account_cost) }}</span
                   >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
+                  <span class="text-gray-500 dark:text-gray-400"> / </span>
                   <span
-                    class="text-gray-400 dark:text-gray-500"
+                    class="text-gray-500 dark:text-gray-400"
                     :title="t('admin.dashboard.standard')"
                     >${{ formatCost(stats.total_cost) }}</span
                   >
@@ -241,7 +241,7 @@
                   {{ t('admin.dashboard.batchImageDesc') }}
                 </span>
               </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-dark-200" />
+              <Icon name="chevronRight" size="sm" class="text-gray-500 group-hover:text-gray-600 dark:group-hover:text-dark-200" />
             </button>
             <button
               type="button"
@@ -259,7 +259,7 @@
                   {{ t('admin.dashboard.groupPricingDesc') }}
                 </span>
               </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-dark-200" />
+              <Icon name="chevronRight" size="sm" class="text-gray-500 group-hover:text-gray-600 dark:group-hover:text-dark-200" />
             </button>
           </div>
         </div>
@@ -322,7 +322,7 @@
               <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.dashboard.recentUsage') }} (Top 12)</h3>
               <div class="flex gap-1" role="group" :aria-label="t('admin.dashboard.recentUsage')">
                 <button v-for="metric in (['tokens', 'actual_cost'] as const)" :key="metric" type="button"
-                  class="rounded px-2 py-1 text-xs" :class="userTrendMetric === metric ? 'bg-primary-600 text-white dark:bg-primary-500' : 'text-gray-600 dark:text-gray-300'"
+                  class="rounded px-2 py-1 text-xs" :class="userTrendMetric === metric ? 'bg-primary-700 text-white dark:bg-primary-700' : 'text-gray-600 dark:text-gray-300'"
                   :aria-pressed="userTrendMetric === metric" @click="setUserTrendMetric(metric)">
                   {{ t(metric === 'tokens' ? 'admin.dashboard.tokens' : 'admin.dashboard.actualSpending') }}
                 </button>

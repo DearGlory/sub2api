@@ -49,7 +49,7 @@
                     v-if="unreadCount > 0"
                     @click="markAllAsRead"
                     :disabled="loading"
-                    class="rounded-lg bg-primary-600 px-4 py-2 text-xs font-medium text-white transition-colors duration-150 hover:bg-primary-700 disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-400"
+                    class="rounded-lg bg-primary-700 px-4 py-2 text-xs font-medium text-white transition-colors duration-150 hover:bg-primary-800 disabled:opacity-50 dark:bg-primary-700 dark:hover:bg-primary-600"
                   >
                     {{ t('announcements.markAllRead') }}
                   </button>
@@ -93,7 +93,7 @@
                     </div>
                     <div
                       v-else
-                      class="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-400 dark:bg-dark-700 dark:text-gray-600"
+                      class="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-gray-600"
                     >
                       <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -124,7 +124,7 @@
                     <!-- Arrow -->
                     <div class="flex-shrink-0">
                       <svg
-                        class="h-5 w-5 text-gray-400 transition-transform group-hover:translate-x-1 dark:text-gray-600"
+                        class="h-5 w-5 text-gray-500 transition-transform group-hover:translate-x-1 dark:text-gray-600"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -147,7 +147,7 @@
               <div v-else class="flex flex-col items-center justify-center py-16">
                 <div class="relative mb-4">
                   <div class="flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-800">
-                    <Icon name="inbox" size="xl" class="text-gray-400 dark:text-gray-500" />
+                    <Icon name="inbox" size="xl" class="text-gray-500 dark:text-gray-400" />
                   </div>
                   <div class="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-white">
                     <svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -271,7 +271,7 @@
                   <button
                     v-if="!selectedAnnouncement.read_at"
                     @click="markAsReadAndClose(selectedAnnouncement.id)"
-                    class="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-400"
+                    class="rounded-lg bg-primary-700 px-5 py-2.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary-800 dark:bg-primary-700 dark:hover:bg-primary-600"
                   >
                     <span class="flex items-center gap-2">
                       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

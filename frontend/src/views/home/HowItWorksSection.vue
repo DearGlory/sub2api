@@ -59,7 +59,7 @@ const steps: Step[] = [
             <p
               class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-300"
             >
-              <Icon name="login" size="sm" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="login" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.sections.howItWorks.eyebrow') }}
             </p>
             <h2 class="mt-5 text-3xl font-semibold tracking-[-0.02em] text-gray-900 md:text-4xl dark:text-white">
@@ -83,12 +83,12 @@ const steps: Step[] = [
               >
                 <Icon :name="step.icon" size="lg" />
               </span>
-              <span class="font-mono text-sm text-gray-400 tabular-nums dark:text-dark-500">
+              <span class="font-mono text-sm text-gray-500 tabular-nums dark:text-dark-400">
                 {{ step.num }}
               </span>
             </div>
 
-            <p class="mb-2 text-xs font-medium tracking-[0.12em] text-gray-500 uppercase dark:text-dark-500">
+            <p class="mb-2 text-xs font-medium tracking-[0.12em] text-gray-500 uppercase dark:text-dark-400">
               {{ t(step.eyebrowKey) }}
             </p>
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">
@@ -103,7 +103,7 @@ const steps: Step[] = [
               <Icon
                 name="arrowRight"
                 size="sm"
-                class="text-gray-400 transition-colors duration-200 group-hover:text-gray-600 dark:text-dark-500 dark:group-hover:text-dark-300"
+                class="text-gray-500 transition-colors duration-200 group-hover:text-gray-600 dark:text-dark-400 dark:group-hover:text-dark-300"
               />
             </div>
           </div>

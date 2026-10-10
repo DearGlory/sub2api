@@ -18,12 +18,12 @@
               </span>
               <span
                 v-if="user.username"
-                class="flex-shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-600 dark:bg-primary-900/20 dark:text-primary-400"
+                class="flex-shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-700 dark:bg-primary-900/20 dark:text-primary-400"
               >
                 {{ user.username }}
               </span>
             </div>
-            <p class="text-xs text-gray-400 dark:text-dark-500">
+            <p class="text-xs text-gray-500 dark:text-dark-400">
               {{ t('admin.users.createdAt') }}: {{ formatDateTime(user.created_at) }}
             </p>
           </div>
@@ -120,7 +120,7 @@
                 >
                   {{ item.notes.length > 60 ? item.notes.substring(0, 55) + '...' : item.notes }}
                 </p>
-                <p class="mt-0.5 text-xs text-gray-400 dark:text-dark-500">
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
                   {{ formatDateTime(item.used_at || item.created_at) }}
                 </p>
               </div>
@@ -132,13 +132,13 @@
               </p>
               <p
                 v-if="isAdminType(item.type)"
-                class="text-xs text-gray-400 dark:text-dark-500"
+                class="text-xs text-gray-500 dark:text-dark-400"
               >
                 {{ t('redeem.adminAdjustment') }}
               </p>
               <p
                 v-else
-                class="font-mono text-xs text-gray-400 dark:text-dark-500"
+                class="font-mono text-xs text-gray-500 dark:text-dark-400"
               >
                 {{ item.code.slice(0, 8) }}...
               </p>

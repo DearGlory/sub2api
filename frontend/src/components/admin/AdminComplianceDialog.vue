@@ -38,7 +38,7 @@
             :href="documentUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
+            class="inline-flex items-center gap-2 text-primary-700 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
           >
             <Icon name="externalLink" size="sm" />
             {{ t('adminCompliance.openDocument') }}

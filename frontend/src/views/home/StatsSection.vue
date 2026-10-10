@@ -55,7 +55,7 @@ function bindCounter(counter: Counter, el: Element | ComponentPublicInstance | n
             <span class="mt-2 block text-sm font-medium text-gray-700 dark:text-dark-200">
               {{ t(`home.sections.stats.items.${counter.key}.label`) }}
             </span>
-            <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-dark-500">
+            <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-dark-400">
               {{ t(`home.sections.stats.items.${counter.key}.hint`) }}
             </span>
           </div>

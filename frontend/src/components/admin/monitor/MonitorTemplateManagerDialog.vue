@@ -38,13 +38,13 @@
         </button>
       </div>
 
-      <div v-if="loading" class="py-8 text-center text-sm text-gray-400">
+      <div v-if="loading" class="py-8 text-center text-sm text-gray-500">
         {{ t('common.loading') }}
       </div>
 
       <div
         v-else-if="templatesForActiveProvider.length === 0"
-        class="py-8 text-center text-sm text-gray-400"
+        class="py-8 text-center text-sm text-gray-500"
       >
         {{ t('admin.channelMonitor.template.emptyState') }}
       </div>
@@ -82,7 +82,7 @@
             <p v-if="tpl.description" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
               {{ tpl.description }}
             </p>
-            <p class="mt-1 text-xs text-gray-400">
+            <p class="mt-1 text-xs text-gray-500">
               {{ t('admin.channelMonitor.template.headersSummary', {
                 n: Object.keys(tpl.extra_headers || {}).length,
               }) }}
@@ -479,7 +479,7 @@ async function doDelete() {
 // --- misc ---
 function tabClass(value: Provider): string {
   return activeProvider.value === value
-    ? 'border-b-2 border-primary-500 text-primary-600 dark:text-primary-400'
+    ? 'border-b-2 border-primary-500 text-primary-700 dark:text-primary-400'
     : 'border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
 }
 

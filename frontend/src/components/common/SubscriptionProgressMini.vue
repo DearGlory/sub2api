@@ -6,7 +6,7 @@
       class="flex cursor-pointer items-center gap-2 rounded-xl bg-gray-100 px-3 py-1.5 transition-colors hover:bg-gray-200 dark:bg-dark-800 dark:hover:bg-dark-700"
       :title="t('subscriptionProgress.viewDetails')"
     >
-      <Icon name="creditCard" size="sm" class="text-primary-600 dark:text-primary-400" />
+      <Icon name="creditCard" size="sm" class="text-primary-700 dark:text-primary-400" />
       <div class="flex items-center gap-1.5">
         <!-- Combined progress indicator -->
         <div class="flex items-center gap-0.5">
@@ -167,7 +167,7 @@
           <router-link
             to="/subscriptions"
             @click="closeTooltip"
-            class="block w-full py-1 text-center text-xs text-primary-600 hover:underline dark:text-primary-400"
+            class="block w-full py-1 text-center text-xs text-primary-700 hover:underline dark:text-primary-400"
           >
             {{ t('subscriptionProgress.viewAll') }}
           </router-link>

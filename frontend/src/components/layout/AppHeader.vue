@@ -62,7 +62,7 @@
           class="group relative hidden items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 dark:border-dark-800 dark:bg-dark-900 sm:flex"
         >
           <svg
-            class="h-4 w-4 text-gray-400 dark:text-dark-400"
+            class="h-4 w-4 text-gray-500 dark:text-dark-400"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -74,7 +74,7 @@
               d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"
             />
           </svg>
-          <span class="text-sm font-semibold text-primary-600 dark:text-primary-400">
+          <span class="text-sm font-semibold text-primary-700 dark:text-primary-400">
             {{ formatHeaderMoney(availableBalance) }}
           </span>
           <span
@@ -127,7 +127,7 @@
                 {{ t('admin.users.roles.' + user.role) }}
               </div>
             </div>
-            <Icon name="chevronDown" size="sm" class="hidden text-gray-400 md:block" />
+            <Icon name="chevronDown" size="sm" class="hidden text-gray-500 md:block" />
           </button>
 
           <!-- Dropdown Menu -->
@@ -146,7 +146,7 @@
                 <div class="text-xs text-gray-500 dark:text-dark-400">
                   {{ t('common.balance') }}
                 </div>
-                <div class="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                <div class="text-sm font-semibold text-primary-700 dark:text-primary-400">
                   {{ formatHeaderMoney(availableBalance) }}
                 </div>
                 <div v-if="frozenBalance > 0" class="mt-1 text-xs text-amber-600 dark:text-amber-300">

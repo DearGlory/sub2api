@@ -438,7 +438,7 @@ function cancelDelete() {
             </div>
             <div class="text-xs text-gray-700 dark:text-gray-200">
               <span class="font-mono">{{ row.metric_type }}</span>
-              <span class="mx-1 text-gray-400">{{ row.operator }}</span>
+              <span class="mx-1 text-gray-500">{{ row.operator }}</span>
               <span class="font-mono">{{ row.threshold }}</span>
             </div>
             <div class="flex items-center justify-between gap-2">
@@ -450,7 +450,7 @@ function cancelDelete() {
                 <button class="btn btn-sm btn-danger" @click="requestDelete(row)">{{ t('common.delete') }}</button>
               </div>
             </div>
-            <div v-if="row.updated_at" class="text-[10px] text-gray-400">
+            <div v-if="row.updated_at" class="text-[10px] text-gray-500">
               {{ formatDateTime(row.updated_at) }}
             </div>
           </div>
@@ -482,13 +482,13 @@ function cancelDelete() {
                 <div v-if="row.description" class="mt-0.5 line-clamp-2 text-[11px] text-gray-500 dark:text-gray-400">
                   {{ row.description }}
                 </div>
-                <div v-if="row.updated_at" class="mt-1 text-[10px] text-gray-400">
+                <div v-if="row.updated_at" class="mt-1 text-[10px] text-gray-500">
                   {{ formatDateTime(row.updated_at) }}
                 </div>
               </td>
               <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-700 dark:text-gray-200">
                 <span class="font-mono">{{ row.metric_type }}</span>
-                <span class="mx-1 text-gray-400">{{ row.operator }}</span>
+                <span class="mx-1 text-gray-500">{{ row.operator }}</span>
                 <span class="font-mono">{{ row.threshold }}</span>
               </td>
               <td class="whitespace-nowrap px-4 py-3 text-xs font-semibold text-gray-700 dark:text-gray-200">
@@ -598,12 +598,12 @@ function cancelDelete() {
 
           <div class="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-800/50 md:col-span-2">
             <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ t('admin.ops.alertRules.form.enabled') }}</span>
-            <input v-model="draft!.enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+            <input v-model="draft!.enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500" />
           </div>
 
           <div class="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-800/50 md:col-span-2">
             <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ t('admin.ops.alertRules.form.notifyEmail') }}</span>
-            <input v-model="draft!.notify_email" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+            <input v-model="draft!.notify_email" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500" />
           </div>
         </div>
       </div>

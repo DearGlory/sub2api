@@ -14,7 +14,7 @@
               class="flex h-24 w-24 items-center justify-center rounded-xl border border-gray-200 bg-white dark:border-dark-800 dark:bg-dark-900"
             >
               <svg
-                class="h-12 w-12 text-gray-400 dark:text-dark-400"
+                class="h-12 w-12 text-gray-500 dark:text-dark-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -54,11 +54,11 @@
       </div>
 
       <!-- Help Link -->
-      <p class="mt-8 text-sm text-gray-400 dark:text-dark-500">
+      <p class="mt-8 text-sm text-gray-500 dark:text-dark-400">
         Need help?
         <a
           href="#"
-          class="text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="text-primary-700 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           Contact support
         </a>

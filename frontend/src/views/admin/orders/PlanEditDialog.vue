@@ -38,7 +38,7 @@
         <div>
           <label class="input-label">{{ t('payment.admin.price') }} <span class="text-red-500">*</span></label>
           <input v-model.number="planForm.price" type="number" step="0.01" min="0.01" class="input" required />
-          <p v-if="subscriptionCnyPreview" class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400">
+          <p v-if="subscriptionCnyPreview" class="mt-1 text-xs font-medium text-primary-700 dark:text-primary-400">
             {{ t('payment.admin.subscriptionCnyPayPreview', { amount: subscriptionCnyPreview.amount }) }}
             <span v-if="subscriptionCnyPreview.feeRate > 0">
               {{ t('payment.admin.subscriptionCnyPayPreviewWithFee', { feeRate: subscriptionCnyPreview.feeRate, total: subscriptionCnyPreview.total }) }}

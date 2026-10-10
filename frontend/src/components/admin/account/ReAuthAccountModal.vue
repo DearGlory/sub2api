@@ -57,7 +57,7 @@
               v-model="addMethod"
               type="radio"
               value="oauth"
-              class="mr-2 text-primary-600 focus:ring-primary-500"
+              class="mr-2 text-primary-700 focus:ring-primary-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">{{
               t('admin.accounts.types.oauth')
@@ -68,7 +68,7 @@
               v-model="addMethod"
               type="radio"
               value="setup-token"
-              class="mr-2 text-primary-600 focus:ring-primary-500"
+              class="mr-2 text-primary-700 focus:ring-primary-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">{{
               t('admin.accounts.setupTokenLongLived')

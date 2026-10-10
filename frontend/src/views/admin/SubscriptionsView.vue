@@ -14,7 +14,7 @@
               <Icon
                 name="search"
                 size="md"
-                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
               />
               <input
                 v-model="filterUserKeyword"
@@ -28,7 +28,7 @@
                 v-if="selectedFilterUser"
                 @click="clearFilterUser"
                 type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 :title="t('common.clear')"
               >
                 <Icon name="x" size="sm" :stroke-width="2" />
@@ -223,7 +223,7 @@
               </div>
               <RouterLink
                 :to="{ path: '/admin/usage', query: { user_id: row.user_id } }"
-                class="rounded font-medium text-gray-900 hover:text-primary-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:text-white dark:hover:text-primary-400 dark:focus-visible:ring-offset-dark-800"
+                class="rounded font-medium text-gray-900 hover:text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:text-white dark:hover:text-primary-400 dark:focus-visible:ring-offset-dark-800"
               >
                 {{ userColumnMode === 'email'
                   ? (row.user?.email || t('admin.redeem.userPrefix', { id: row.user_id }))
@@ -242,7 +242,7 @@
               :rate-multiplier="row.group.rate_multiplier"
               :show-rate="false"
             />
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-else class="text-sm text-gray-500 dark:text-dark-400">-</span>
           </template>
 
           <template #cell-usage="{ row }">
@@ -262,7 +262,7 @@
                   </div>
                   <span class="usage-amount">
                     ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
-                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-500">/</span>
                     ${{ row.group?.daily_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
@@ -299,7 +299,7 @@
                   </div>
                   <span class="usage-amount">
                     ${{ row.weekly_usage_usd?.toFixed(2) || '0.00' }}
-                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-500">/</span>
                     ${{ row.group?.weekly_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
@@ -336,7 +336,7 @@
                   </div>
                   <span class="usage-amount">
                     ${{ row.monthly_usage_usd?.toFixed(2) || '0.00' }}
-                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-500">/</span>
                     ${{ row.group?.monthly_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
@@ -522,7 +522,7 @@
               v-if="selectedUser"
               @click="clearUserSelection"
               type="button"
-              class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
             >
               <Icon name="x" size="sm" :stroke-width="2" />
             </button>
@@ -591,7 +591,7 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
               />
-              <span v-else class="text-gray-400">{{ t('admin.subscriptions.selectGroup') }}</span>
+              <span v-else class="text-gray-500">{{ t('admin.subscriptions.selectGroup') }}</span>
             </template>
             <template #option="{ option, selected }">
               <GroupOptionItem
@@ -763,7 +763,7 @@
         <div v-if="showGuideModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" @mousedown.self="showGuideModal = false">
           <div class="fixed inset-0 bg-black/50" @click="showGuideModal = false"></div>
           <div class="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-pop dark:border-dark-800 dark:bg-dark-900">
-            <button type="button" class="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" @click="showGuideModal = false">
+            <button type="button" class="absolute right-4 top-4 text-gray-500 hover:text-gray-600 dark:hover:text-gray-200" @click="showGuideModal = false">
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
 
@@ -785,7 +785,7 @@
                 <router-link
                   to="/admin/groups"
                   @click="showGuideModal = false"
-                  class="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                  class="inline-flex items-center gap-1 text-sm font-medium text-primary-700 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                 >
                   {{ t('admin.subscriptions.guide.step1.link') }}
                   <Icon name="arrowRight" size="xs" />

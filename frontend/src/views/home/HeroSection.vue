@@ -65,19 +65,19 @@ withDefaults(
             <li
               class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
             >
-              <Icon name="swap" size="sm" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="swap" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.subscriptionToApi') }}
             </li>
             <li
               class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
             >
-              <Icon name="shield" size="sm" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="shield" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.stickySession') }}
             </li>
             <li
               class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
             >
-              <Icon name="chartBar" size="sm" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="chartBar" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.realtimeBilling') }}
             </li>
           </ul>
@@ -102,7 +102,7 @@ withDefaults(
             </a>
           </div>
 
-          <p v-if="siteSubtitle" class="mt-6 text-xs text-gray-500 dark:text-dark-500">
+          <p v-if="siteSubtitle" class="mt-6 text-xs text-gray-500 dark:text-dark-400">
             {{ siteSubtitle }}
           </p>
         </div>
@@ -191,7 +191,10 @@ withDefaults(
   text-align: center;
   font-family: theme('fontFamily.mono');
   font-size: 12px;
-  color: #71717a;
+  /* Measured on the card's own #0f1113: #71717a lands at 3.78:1, below the 4.5 AA
+     floor for 12px text. #9ca3af is the same hue at 7.45:1 — still clearly the
+     quietest thing in the card, but actually readable at this size. */
+  color: #9ca3af;
   margin-right: 46px;
 }
 
@@ -249,7 +252,10 @@ withDefaults(
   color: #d4d4d8;
 }
 .code-comment {
-  color: #71717a;
+  /* #71717a measured 3.91:1 on the card's #0f1113 — a comment is meant to recede,
+     but not below readability at 13px. #94a3b8 keeps the "quiet annotation" role at
+     7.38:1 and reads as a comment, not as dim grey text. */
+  color: #94a3b8;
 }
 .code-success {
   color: #6ee7b7;

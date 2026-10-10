@@ -152,7 +152,7 @@ const CopyLine = defineComponent({
       h('span', { class: 'w-16 flex-none text-gray-500 dark:text-dark-400' }, componentProps.label),
       h('span', { class: 'min-w-0 flex-1 truncate text-gray-800 dark:text-dark-100' }, componentProps.value || '—'),
       componentProps.value ? h('button', {
-        type: 'button', class: 'text-primary-600 hover:underline', 'aria-label': `${t('common.copy')} ${componentProps.label}`,
+        type: 'button', class: 'text-primary-700 hover:underline', 'aria-label': `${t('common.copy')} ${componentProps.label}`,
         onClick: () => navigator.clipboard?.writeText(componentProps.value),
       }, t('common.copy')) : null,
     ])

@@ -62,7 +62,7 @@
         >
           <!-- Search input -->
           <div v-if="isSearchable" class="select-search">
-            <Icon name="search" size="sm" class="text-gray-400" />
+            <Icon name="search" size="sm" class="text-gray-500" />
             <input
               ref="searchInputRef"
               v-model="searchQuery"
@@ -97,7 +97,7 @@
                   v-if="option._creatable"
                   name="search"
                   size="sm"
-                  class="flex-shrink-0 text-gray-400"
+                  class="flex-shrink-0 text-gray-500"
                 />
                 <span class="select-option-label" :class="option._creatable && 'italic text-gray-500 dark:text-dark-300'">{{ getOptionLabel(option) }}</span>
                 <Icon
@@ -546,12 +546,12 @@ onUnmounted(() => {
 }
 
 .select-icon {
-  @apply flex-shrink-0 text-gray-400 dark:text-dark-400;
+  @apply flex-shrink-0 text-gray-500 dark:text-dark-400;
 }
 
 .select-clear {
   @apply flex flex-shrink-0 cursor-pointer items-center justify-center;
-  @apply rounded text-gray-400 transition-colors;
+  @apply rounded text-gray-500 transition-colors;
   @apply hover:text-gray-600 dark:hover:text-gray-200;
 }
 </style>
@@ -575,7 +575,7 @@ onUnmounted(() => {
 .select-dropdown-portal .select-search-input {
   @apply flex-1 bg-transparent text-sm;
   @apply text-gray-900 dark:text-gray-100;
-  @apply placeholder:text-gray-400 dark:placeholder:text-dark-400;
+  @apply placeholder:text-gray-500 dark:placeholder:text-dark-400;
   @apply focus:outline-none;
 }
 
