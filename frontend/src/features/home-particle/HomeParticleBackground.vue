@@ -33,6 +33,19 @@ const emit = defineEmits<{
 const host = ref<HTMLDivElement | null>(null)
 /** WebGL unavailable or the context blew up: fall back to a static backdrop. */
 const failed = ref(false)
+/**
+ * Whether the photograph should be showing.
+ *
+ * Driven from script rather than from a `:global(.dark) .home-space-sky` rule because
+ * that rule does NOT survive Vue's scoped-CSS compiler — it compiles to a bare `.dark`,
+ * silently dropping the descendant, so the sky stays `display:none` forever. That was a
+ * live bug in this file's fallback styles before the photograph existed, invisible
+ * because a dark-theme-only rule that never applies looks exactly like one that does.
+ *
+ * Bound to the same observer that feeds the engine, so the sky and the palette can never
+ * disagree about which theme is active.
+ */
+const skyVisible = ref(false)
 
 let engine: ParticleEngine | null = null
 let themeObserver: MutationObserver | null = null
@@ -65,6 +78,11 @@ onMounted(() => {
   const container = host.value
   if (!container) return
 
+  // Set before the engine is built: if the engine throws on a missing WebGL context the
+  // photograph is still the right backdrop, and this is the only place the theme is read
+  // at mount time.
+  skyVisible.value = isDarkTheme()
+
   try {
     engine = new ParticleEngine({
       container,
@@ -90,7 +108,9 @@ onMounted(() => {
 
   // The app toggles `.dark` on <html>, so the class attribute is the theme signal.
   themeObserver = new MutationObserver(() => {
-    engine?.setTheme(!isDarkTheme())
+    const dark = isDarkTheme()
+    skyVisible.value = dark
+    engine?.setTheme(!dark)
   })
   themeObserver.observe(document.documentElement, {
     attributes: true,
@@ -161,15 +181,12 @@ defineExpose({
       the photograph survives a lost GL context, so a visitor whose driver refused a
       context still gets a real sky instead of a flat colour.
 
-      Dark theme only. The photograph is a deep-space exposure; on the pale page it
-      would invert the whole design's contrast story, which is why `display:none` is
-      the base rule and `.dark` turns it on.
+      `no-repeat` is load-bearing: the master is a 360-degree equirectangular strip,
+      so tiling on x restarts the galactic band at a hard cut mid-screen.
 
-      `background-repeat: no-repeat` is load-bearing: the master is a 360-degree
-      equirectangular strip, so tiling on x restarts the galactic band at a hard cut
-      in the middle of the screen.
+      Visibility is a BOUND CLASS, not a `:global(.dark) …` rule — see `skyVisible`.
     -->
-    <div class="home-space-sky absolute inset-0" />
+    <div v-show="skyVisible" class="home-space-sky absolute inset-0" />
 
     <!--
       Non-WebGL degradation. The starfield is a CSS dot grid here because there is
@@ -177,19 +194,30 @@ defineExpose({
       either way. This is the only gradient in the feature and it exists solely to
       stand in for a failed canvas, not as decoration.
     -->
-    <div v-if="failed" class="home-particle-fallback absolute inset-0 bg-gray-50 dark:bg-dark-950" />
+    <div
+      v-if="failed"
+      class="home-particle-fallback absolute inset-0 bg-gray-50"
+      :class="skyVisible ? 'home-particle-fallback--on-sky' : 'dark:bg-dark-950'"
+    />
   </div>
 </template>
 
 <style scoped>
 .home-space-sky {
-  /* Base is off: the light theme keeps its pale page. */
-  display: none;
-}
-
-:global(.dark) .home-space-sky {
-  display: block;
-  background-image: url('../assets/space/stars-milkyway.webp');
+  /*
+   * Referenced through the `@/` alias, not as `../assets/...`.
+   *
+   * A relative url() in a Vue SFC's style block is resolved by the BROWSER against the
+   * stylesheet's own URL — `/src/features/home-particle/HomeParticleBackground.vue?...` —
+   * so `../assets/space/x.webp` turns into `/assets/space/x.webp`, which is not a file the
+   * dev server has. Vite answers it with the SPA fallback: HTTP 200, `text/html`, 3 KB of
+   * index.html. The network panel shows a clean 200 and the picture simply never appears,
+   * which is the single nastiest way for this to fail.
+   *
+   * The `@/` alias goes through Vite's own resolver instead, so it works in dev and is
+   * rewritten to a hashed, cache-busted asset URL in the build.
+   */
+  background-image: url('@/features/home-particle/assets/space/stars-milkyway.webp');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -198,12 +226,12 @@ defineExpose({
 /*
  * Hand the small file to viewports that cannot tell the difference: a phone at
  * 2-3x DPR and a low-DPI laptop both resolve far below the 4096px master, so the
- * 148 KB lite pass buys the same picture for a twelfth of the bytes. Vite emits
+ * 234 KB lite pass buys the same picture for a twelfth of the bytes. Vite emits
  * only the file a given visitor matches.
  */
 @media (max-width: 900px), (max-resolution: 1.5dppx) {
-  :global(.dark) .home-space-sky {
-    background-image: url('../assets/space/stars-milkyway-lite.webp');
+  .home-space-sky {
+    background-image: url('@/features/home-particle/assets/space/stars-milkyway-lite.webp');
   }
 }
 
@@ -217,19 +245,15 @@ defineExpose({
 }
 
 /*
- * On a failed context the sky is still there, so the fallback's dot grid has to sit
- * over it rather than beside it — two star fields at different scales read as noise.
+ * A failed context over the photograph: the sky is already a real star field, so the
+ * fallback's dot grid would be a second star field at a different scale — noise, not
+ * decoration. Drop the grid and let the photograph stand in.
  */
-:global(.dark) .home-particle-fallback::after {
-  display: none;
-}
-
-:global(.dark) .home-particle-fallback {
+.home-particle-fallback--on-sky {
   background-color: transparent;
 }
 
-:global(:not(.dark)) .home-particle-fallback::after {
-  background-image: radial-gradient(circle, rgb(226 232 240 / 0.6) 1px, transparent 1px);
-  opacity: 0.55;
+.home-particle-fallback--on-sky::after {
+  display: none;
 }
 </style>
