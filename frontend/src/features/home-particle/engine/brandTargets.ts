@@ -40,6 +40,8 @@ import {
   buildVoxSpaceIconTargets,
   createVoxSpaceNoiseIconTargets,
 } from '../vendor/voxspace-icon-targets'
+import { GLYPH_WORLD_HEIGHT } from './glyphSize'
+import { ICON_CENTER_X } from '../vendor/voxspace-math'
 import type { BrandTargetSource, BrandTargets } from './types'
 
 /**
@@ -296,6 +298,64 @@ function normaliseCanvasSize(canvasSize: number | undefined): number {
   return Math.min(MAX_CANVAS_SIZE, Math.max(MIN_CANVAS_SIZE, Math.floor(requested)))
 }
 
+/** Bounding-box height of an anchor buffer, in world units. */
+function anchorHeight(targets: Float32Array): number {
+  let min = Infinity
+  let max = -Infinity
+  for (let i = 1; i < targets.length; i += 3) {
+    const y = targets[i]
+    if (y < min) min = y
+    if (y > max) max = y
+  }
+  return max - min
+}
+
+/**
+ * LANE LC — [user] 散开组成的图案太小了，高度最少要网页的三分之二.
+ *
+ * The vendor's sampler normalises every glyph onto the SAME world square (12.6
+ * units) but each logo only uses the part of its 24x24 viewBox its artwork
+ * actually reaches. Measured over the shipped roster at the frozen 760 px canvas,
+ * the resulting anchor bbox heights run 6.06 units (xiaomimimo) to 9.96
+ * (hunyuan) — a 1.64x spread. That spread is what makes V6 unsatisfiable with a
+ * fixed camera distance:
+ *
+ *   - a distance that puts the SHORTEST mark at 2/3 of the viewport height leaves
+ *     the tallest at 1.10 of it, i.e. clipped top and bottom;
+ *   - a distance that puts the TALLEST at 2/3 leaves the shortest at 0.41, i.e.
+ *     under two thirds of the way to the floor the user asked for.
+ *
+ * So the glyphs are levelled: every mark is scaled about the glyph centre until
+ * its bbox height IS `GLYPH_WORLD_HEIGHT`, and `strokeDepth` is scaled by the same
+ * factor because it is a world-unit distance rather than an index. After this the
+ * roster's on-screen height share is one number for all 28 brands, which is what
+ * lets a single `fitDistance` hold the floor for every one of them.
+ *
+ * Uniform, not anisotropic: the same factor goes to x, y and z about the glyph
+ * centre (`ICON_CENTER_X`, 0, 0), so the mark is scaled rather than stretched and
+ * its silhouette is untouched. The side effect is that a short, wide mark stays
+ * short and wide — levelling sets the HEIGHT, not the width — which is why
+ * `glyphSize.ts` carries the roster's narrowest bbox aspect as its own constant.
+ */
+function levelToGlyphHeight(targets: Float32Array, strokeDepth: Float32Array): void {
+  const height = anchorHeight(targets)
+  // A degenerate mask (a single anchor, or a horizontal hairline) has no height to
+  // scale against. Dividing by it would put Infinity into every anchor, which the
+  // flow would then read as a NaN position and blank the frame; leaving it alone
+  // keeps a bad glyph merely small instead of fatal.
+  if (!Number.isFinite(height) || height <= 0) return
+
+  const scale = GLYPH_WORLD_HEIGHT / height
+  if (!Number.isFinite(scale) || scale <= 0) return
+
+  for (let i = 0; i < targets.length; i += 3) {
+    targets[i] = ICON_CENTER_X + (targets[i] - ICON_CENTER_X) * scale
+    targets[i + 1] *= scale
+    targets[i + 2] *= scale
+  }
+  for (let i = 0; i < strokeDepth.length; i++) strokeDepth[i] *= scale
+}
+
 /** The whole glyph pipeline, or `null` when this environment or asset cannot serve it. */
 function buildTargets(
   svgText: string,
@@ -315,6 +375,11 @@ function buildTargets(
   const sampled = buildVoxSpaceIconTargets(mask, canvasSize, count)
   if (!sampled) return null
 
+  // Level the mark to the design height before it leaves this function, so every
+  // consumer downstream (the engine's spring, the orbit field, the sizing maths)
+  // sees one glyph size for the whole roster. See `levelToGlyphHeight`.
+  levelToGlyphHeight(sampled.targets, sampled.strokeDepth)
+
   return {
     targets: sampled.targets,
     strokeDepth: sampled.strokeDepth,
@@ -322,7 +387,16 @@ function buildTargets(
   }
 }
 
-/** Last resort when there is no glyph to read: the vendor's own noise field. */
+/**
+ * Last resort when there is no glyph to read: the vendor's own noise field.
+ *
+ * Deliberately NOT levelled. Noise is not a logo — it is a blob standing in for one
+ * the page could not read — so there is no silhouette to keep and no design height
+ * to hit, and forcing it onto the glyph grid would claim a fidelity this path does
+ * not have. It also has to stay centred on the origin: the engine's noise fallback
+ * test asserts exactly that, and by the time it reached the camera the difference
+ * would be a blob the size of a logo rather than a logo-shaped one.
+ */
 function noiseTargets(count: number): BrandTargets {
   const noise = createVoxSpaceNoiseIconTargets(count)
   return {

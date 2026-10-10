@@ -144,7 +144,11 @@ export const VENDOR_ICON_CANVAS_SIZE = 760
 export const BRANDS: BrandDescriptor[] = [
   // asked for by name
   { slug: 'openai', label: 'OpenAI' },
-  { slug: 'anthropic', label: 'Anthropic' },
+  // [user] Claude's own mark, not Anthropic's "A" wordmark. The vendor behind the
+  // model is Anthropic, but the logo the user asked to see is Claude's, so the
+  // asset is `claude.svg` and the label reads "Claude" — the same distinction
+  // GloryCode's own front end draws.
+  { slug: 'claude', label: 'Claude' },
   { slug: 'gemini', label: 'Gemini' },
   { slug: 'grok', label: 'Grok' },
   { slug: 'deepseek', label: 'DeepSeek' },

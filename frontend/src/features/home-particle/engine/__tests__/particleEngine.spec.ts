@@ -522,7 +522,12 @@ describe('the brand roster', () => {
     const slugs = new Set(BRANDS.map((b) => b.slug))
     for (const required of [
       'openai',
-      'anthropic',
+      // [user] Claude's own mark, not Anthropic's "A". The vendor the user named
+      // here was the Claude line of models, and the logo they asked to see is
+      // Claude's star mark, so the roster entry is `claude`. `anthropic` is not in
+      // the list on purpose — see `constants.ts` and the asset directory, where
+      // `anthropic.svg` was removed rather than left unused.
+      'claude',
       'gemini',
       'grok',
       'deepseek',
@@ -536,6 +541,10 @@ describe('the brand roster', () => {
     ]) {
       expect(slugs.has(required), `missing ${required}`).toBe(true)
     }
+    // The superseded entry must not come back by accident: a stray `anthropic`
+    // would resolve to a missing asset and fall back to the noise field, i.e. the
+    // glyph would silently become a blob.
+    expect(slugs.has('anthropic')).toBe(false)
   })
 
   it('gives every brand a label to show and a slug that maps to an asset', () => {
