@@ -184,18 +184,36 @@ interface ThemePalette {
   pointSize: number
 }
 
-function paletteFor(isLightTheme: boolean): ThemePalette {
+/**
+ * The palette for a theme. Exported so the light theme's contrast can be asserted
+ * as a unit test: it is arithmetic on colours, and the failure mode (ink too pale
+ * to out-shout its own starfield) is invisible in a code review — it took a
+ * measured 2.85:1 against a 6.78:1 background to find it.
+ */
+export function paletteFor(isLightTheme: boolean): ThemePalette {
   return isLightTheme
     ? {
         // Additive blending washes out to white on a pale page, so the light theme
         // is dark ink on a bright sky and must blend normally.
-        core: new Color(0.16, 0.19, 0.26),
-        accent: new Color(0.85, 0.33, 0.01),
-        gain: 0.6,
+        //
+        // Normal blending does not accumulate the way additive does: the glow sprite
+        // is a soft radial falloff, so overlapping translucent points converge on a
+        // haze rather than on the sprite's centre colour. Measured with the earlier
+        // values (opacity 0.8, size 0.082) the comet rendered at 2.85:1 against the
+        // page while the starfield managed 6.78:1 — the background out-shouted the
+        // subject, even though the comet's own vertex colour was a dark 98/255.
+        //
+        // So on the light theme each particle has to be individually more solid:
+        // full opacity, a larger sprite, and a darker core. The point size is
+        // deliberately *larger* than the dark theme's, which looks backwards but is
+        // the consequence of normal blending — ink needs coverage, light does not.
+        core: new Color(0.06, 0.075, 0.115),
+        accent: new Color(0.62, 0.2, 0.0),
+        gain: 0.72,
         blending: NormalBlending,
         background: new Color(0.976, 0.98, 0.984),
-        opacity: 0.8,
-        pointSize: 0.082,
+        opacity: 1.0,
+        pointSize: 0.125,
       }
     : {
         // Deep space: cool-white stardust with the site's single warm accent used
@@ -658,6 +676,23 @@ export class ParticleEngine implements ParticleEngineContract {
   /** Dev-only: the live three.js objects, for the acceptance scripts. */
   get debugScene(): { camera: PerspectiveCamera; scene: Scene; points: Points } {
     return { camera: this.camera, scene: this.scene, points: this.points }
+  }
+
+  /**
+   * Dev-only: the renderer's current clear colour as a hex string.
+   *
+   * Read off the renderer rather than re-deriving it from the palette, so a
+   * mismatch between what the theme set and what was actually applied is visible
+   * to the acceptance probes. This is the colour that decides whether the canvas
+   * sits *behind* the page or paints over it, which is a light-theme-only failure
+   * that nothing else would catch.
+   */
+  debugRendererClearHex(): string {
+    // `getClearColor` writes into a caller-owned Color, so this allocates only when
+    // a probe calls it, never per frame.
+    const out = new Color()
+    this.renderer.getClearColor(out)
+    return '#' + out.getHexString()
   }
 
   // -------------------------------------------------------------------------

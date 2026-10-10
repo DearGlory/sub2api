@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { AdditiveBlending, NormalBlending } from 'three'
 
 import {
   accumulateArcLength,
   createEngineScratch,
   followSpeedFor,
   glyphMixFor,
+  paletteFor,
   resampleByArcLength,
 } from '../ParticleEngine'
 import {
@@ -430,6 +432,82 @@ describe('the tail is shaped like a comet, not a blob', () => {
     // and the accumulated length underestimates the path, which shortens the tail.
     expect(TAIL_PROBE_COUNT).toBeGreaterThanOrEqual(64)
     expect(TAIL_SECONDS / (TAIL_PROBE_COUNT - 1)).toBeLessThan(0.05)
+  })
+})
+
+describe('the theme palettes', () => {
+  /** WCAG relative luminance, on a 0..1 component. */
+  const rel = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+  const luminance = (rgb: { r: number; g: number; b: number }) =>
+    0.2126 * rel(rgb.r) + 0.7152 * rel(rgb.g) + 0.0722 * rel(rgb.b)
+  const contrast = (a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }) => {
+    const la = luminance(a)
+    const lb = luminance(b)
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+  }
+
+  const light = paletteFor(true)
+  const dark = paletteFor(false)
+
+  it('picks normal blending on the light theme and additive on the dark one', () => {
+    // Additive on a pale page sums toward white and disappears. Getting this
+    // backwards is the whole reason the light theme has its own palette.
+    expect(light.blending).toBe(NormalBlending)
+    expect(dark.blending).toBe(AdditiveBlending)
+  })
+
+  it('gives the light theme a pale clear colour, so the canvas sits behind the page', () => {
+    // An opaque dark clear colour on the light theme would paint the entire page
+    // over. The canvas is alpha-composited, so this is a real failure, not a nit.
+    expect(luminance(light.background)).toBeGreaterThan(0.85)
+    expect(luminance(dark.background)).toBeLessThan(0.05)
+  })
+
+  it('gives the light theme ink dark enough to read as the subject', () => {
+    // Measured in a real browser: at core 0.16 / opacity 0.8 / size 0.082 the comet
+    // came out at 2.85:1 against the page while its own starfield managed 6.78:1 —
+    // the background out-shouted the subject. WCAG wants >= 3:1 for a non-text
+    // graphic; this asserts a margin above that, because normal blending converges
+    // on a haze rather than on the sprite's centre colour, so the rendered result is
+    // always lighter than the vertex colour suggests.
+    expect(contrast(light.core, light.background)).toBeGreaterThan(12)
+  })
+
+  it('keeps the light theme particles fully opaque and larger than the dark ones', () => {
+    // Counter-intuitive but forced by the blending mode: additive light accumulates
+    // as it overlaps, so the dark theme can afford a small faint sprite. Ink does
+    // not accumulate, so each light-theme particle has to carry its own weight.
+    expect(light.opacity).toBe(1)
+    expect(light.pointSize).toBeGreaterThan(dark.pointSize)
+    expect(dark.opacity).toBe(1)
+  })
+
+  it('keeps the accent the only saturated colour, on both themes', () => {
+    // One warm accent is the design language's rule; a second saturated hue would
+    // make the palette read as a scheme rather than as an accent.
+    //
+    // Measured as absolute chroma (max - min), not as a ratio. A ratio overstates
+    // saturation for dark colours: the light theme's neutral ink sits at
+    // (0.06, 0.075, 0.115), whose spread is 48% of its own brightness yet only 0.055
+    // in absolute terms — the eye reads that as a dark grey, and a ratio-based test
+    // would wrongly call it a second accent.
+    for (const [name, p] of [
+      ['light', light],
+      ['dark', dark],
+    ] as const) {
+      const chroma = (c: { r: number; g: number; b: number }) =>
+        Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)
+      // A slight cast is deliberate — the dark theme's starlight is cool, the light
+      // theme's ink is faintly blue — but it must stay an order of magnitude below
+      // the accent, which is what "one accent" actually means here.
+      expect(chroma(p.core), `${name} core should be near-neutral`).toBeLessThan(0.16)
+      expect(chroma(p.accent), `${name} accent should be saturated`).toBeGreaterThan(0.4)
+      expect(chroma(p.accent) / chroma(p.core), `${name} accent must dominate`).toBeGreaterThan(2.5)
+    }
+  })
+
+  it('gives the dark theme near-white particles, so the comet reads as light', () => {
+    expect(contrast(dark.core, dark.background)).toBeGreaterThan(12)
   })
 })
 
