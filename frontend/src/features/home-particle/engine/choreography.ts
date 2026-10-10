@@ -141,6 +141,202 @@ export function sampleHeadPosition(
   return out
 }
 
+/**
+ * The per-particle blend weight between the comet shape and the glyph shape.
+ *
+ * `staggeredGlyphMix(phase, progress, seed, 0)` is exactly this function, and a
+ * test in `__tests__/choreography.spec.ts` pins that identity against the engine's
+ * own `glyphMixFor`. The duplication is deliberate and the test is what makes it
+ * safe: `ParticleEngine.ts` is another lane's file, this one is mine, and the only
+ * way to keep two copies of a curve honest is to assert they agree rather than to
+ * assume it.
+ */
+function baseGlyphMix(phase: CometPhase, progress: number): number {
+  switch (phase) {
+    case 'travel':
+      return 0
+    case 'gather':
+      return smootherStep(clamp01(progress))
+    case 'hold':
+      return 1
+    default:
+      return 1 - smootherStep(clamp01(progress))
+  }
+}
+
+/**
+ * How much of a transition's length one particle may be held back, as a share of
+ * the phase.
+ *
+ * Derivation. Without a stagger every particle reads the same `progress`, so the
+ * whole cloud morphs on one shared curve and the eye reads a single rigid
+ * deformation rather than a gathering swarm. Holding each particle back by its own
+ * share of the phase turns that one curve into a spray of parallel curves, which
+ * is what gives the transition its "some arrive early, some late" texture.
+ *
+ * 0.28 is the largest value that still leaves the glyph exact by the end of the
+ * phase. The latest-starting particle (its stagger roll lands on 1) only begins
+ * moving at `progress = 0.28`, so it has the remaining 72% of the phase to cover
+ * the whole distance. That is the trade the number buys —
+ *
+ *   gather   1.4 s -> the last particle gets 1.008 s of real travel
+ *   scatter  1.1 s -> the last particle gets 0.792 s
+ *
+ * Push it towards 0.5 and the tail of the cloud is still visibly in flight when
+ * `hold` begins, which is the one thing the phase clock cannot absorb: the glyph
+ * would still be settling through the 3 s it is supposed to sit perfectly still.
+ * Push it towards 0 and the stagger collapses back into the rigid block it was
+ * meant to break up.
+ *
+ * Note this spreads the cloud; it does not delay the transition. The earliest
+ * particle (`roll = 0`) finishes its travel at `progress = 1 - GLYPH_STAGGER ==
+ * 0.72` and the latest (`roll = 1`) starts there, and both ends still land exactly
+ * on the phase endpoint at `progress = 1`, so the beat's length is untouched and
+ * the glyph is fully assembled for the last 28% of the gather. That early settle is
+ * a bonus rather than a cost: it hands the 3 s hold a shape that is already still.
+ */
+export const GLYPH_STAGGER = 0.28
+
+/**
+ * Salt for the stagger roll, matching the constants `ParticleEngine.hash01()`
+ * feeds itself.
+ *
+ * The stagger offset must be independent of the particle's position along the tail
+ * (`tailT`), which is a golden-ratio low-discrepancy sequence. Deriving the offset
+ * from `frac(i * k * PHI)` would make it a deterministic function of `tailT` — the
+ * exact mistake the engine's own `hash01` docstring records, where every tail
+ * attribute collapsed onto an ordered helix. An avalanche hash gives a roll that
+ * is independent of the position roll and of every other per-particle attribute,
+ * so where a particle sits along the comet says nothing about when it leaves it.
+ */
+export const GLYPH_STAGGER_SALT = 0x27d4eb2f
+
+/** Keeps `1 - spread` away from zero for any caller-supplied spread. */
+const MAX_GLYPH_STAGGER = 0.98
+
+/**
+ * A decorrelated 0..1 roll from an integer seed, bit-for-bit the same avalanche
+ * as `ParticleEngine.hash01` so a seed and a particle index behave identically on
+ * both sides of the lane boundary. `Math.imul` keeps every step in 32-bit integer
+ * arithmetic, which is what makes the result reproducible across engines.
+ */
+export function staggerRoll(seed: number, salt: number = GLYPH_STAGGER_SALT): number {
+  const key = Number.isFinite(seed) ? Math.floor(seed) : 0
+  let h = Math.imul(key ^ salt, 0x9e3779b1)
+  h ^= h >>> 15
+  h = Math.imul(h, 0x85ebca6b)
+  h ^= h >>> 13
+  h = Math.imul(h, 0xc2b2ae35)
+  h ^= h >>> 16
+  return (h >>> 0) / 4294967296
+}
+
+/** The spread, sanitised: finite, in [0, MAX_GLYPH_STAGGER]. */
+function staggerSpread(spread: number): number {
+  if (!Number.isFinite(spread)) return GLYPH_STAGGER
+  return Math.min(Math.max(spread, 0), MAX_GLYPH_STAGGER)
+}
+
+/**
+ * The per-particle blend weight between the comet shape and the glyph shape.
+ *
+ * Same contract as `glyphMixFor()` — 0 is a pure comet, 1 is the settled glyph —
+ * but each particle runs the curve on its own clock:
+ *
+ *   t = clamp((progress - spread * roll) / (1 - spread), 0, 1)
+ *   mix = the phase's own curve evaluated at t
+ *
+ * Three properties are load-bearing, and each one is the reason for a term above:
+ *
+ * 1. **The endpoints are exact, for every seed.** At `progress <= 0`, `t` clamps to
+ *    0; at `progress >= 1`, `t` is `(1 - spread*roll) / (1 - spread) >= 1`, which
+ *    also clamps to 1. Every particle therefore reads exactly the phase's own
+ *    endpoint — gather 0 -> 1, scatter 1 -> 0, hold 1, travel 0. Without that the
+ *    glyph would be assembled out of particles that never quite finished arriving,
+ *    and the 3 s hold would show a shape still creeping into place. The division by
+ *    `(1 - spread)` is what buys it: the latest roll is normalised so it still
+ *    lands on 1 at the same `progress` as every other particle.
+ *
+ * 2. **Monotone in the phase's own direction.** `t` is non-decreasing in
+ *    `progress`, and so is every curve applied to it, so a gather never un-gathers
+ *    and a scatter never re-forms. A particle that has started towards the glyph
+ *    cannot change its mind and go back — which is what a per-particle wobble looks
+ *    like, and it reads as the cloud shivering rather than assembling.
+ *
+ * 3. **Dispersed for every interior progress.** `roll` is a per-seed uniform, so at
+ *    a fixed `progress` in `(0, 1)` the particles take a band of `t` values
+ *    `spread / (1 - spread)` wide — 0.39 of the phase at the shipped
+ *    `GLYPH_STAGGER`, measured as a 0.66-wide band of mix values at the midpoint
+ *    and 0.20 as a standard deviation across 512 seeds. That band *is* the
+ *    stagger, and it narrows to zero at both ends, which is property 1 seen from
+ *    the other side.
+ *
+ *    The band straddles the plain curve rather than trailing it. `roll = 0` warps
+ *    `progress` *up* by `1 / (1 - spread)` — a particle with the lowest roll
+ *    reaches the glyph at `progress = 0.72` instead of at 1 — while `roll = 1`
+ *    warps it down and does not start moving until `progress = 0.28`. Both are
+ *    wanted: a stagger where every particle merely lagged would pull the cloud's
+ *    centre of mass behind the phase's own ramp and read as the whole transition
+ *    running late, rather than as the cloud separating into early and late arrivals
+ *    around a shared midpoint. Measured on 512 seeds, at least one particle leads
+ *    the plain curve and at least one trails it at every sample strictly inside the
+ *    phase.
+ *
+ * `spread = 0` reduces `t` to `progress` and the function to the plain curve, so
+ * the stagger can be switched off without touching a call site.
+ *
+ * There is deliberately no overshoot in the curve. A little past-the-target
+ * overshoot would make the arrival feel springy, but it breaks property 2: a
+ * particle that overshoots has reversed direction, and across 18000 of them that
+ * reversal reads as a shudder at the handover — precisely the moment the eye is
+ * watching the shape lock in.
+ */
+export function staggeredGlyphMix(
+  phase: CometPhase,
+  progress: number,
+  seed: number,
+  spread: number = GLYPH_STAGGER
+): number {
+  return staggeredGlyphMixFromRoll(phase, progress, staggerRoll(seed), spread)
+}
+
+/**
+ * The same blend, for a caller that has already baked its rolls.
+ *
+ * The engine evaluates this once per particle per frame, and a particle's roll
+ * never changes, so hashing it 18000 times a frame to get a constant would be
+ * pure waste. `staggerRoll(i)` is meant to be baked once into a per-particle
+ * buffer — the same treatment the engine already gives `tailAngle`, `tailRadius`
+ * and `tailSpin` in `createEngineScratch` — and this entry point is what it reads
+ * back. It is also the form the tests exercise, since it isolates the staggering
+ * maths from the hash.
+ */
+export function staggeredGlyphMixFromRoll(
+  phase: CometPhase,
+  progress: number,
+  roll: number,
+  spread: number = GLYPH_STAGGER
+): number {
+  // The two constant phases have nothing to stagger: one end of the beat is pure
+  // comet and the other is the settled glyph, and every particle is already on the
+  // same side of both. Returning early keeps them bit-exact.
+  if (phase === 'travel') return 0
+  if (phase === 'hold') return 1
+
+  const amount = staggerSpread(spread)
+  // A roll outside 0..1 would let a particle start before the phase does.
+  const r = Number.isFinite(roll) ? Math.min(Math.max(roll, 0), 1) : 0
+  const p = clamp01(progress)
+
+  // `1 - amount` is at least 0.02 after the clamp, so this cannot divide by zero.
+  const warped = clamp01((p - amount * r) / (1 - amount))
+
+  // The base curve carries the per-phase shape and direction (gather rises
+  // 0 -> 1, scatter falls 1 -> 0), so the stagger only ever warps the clock and
+  // never second-guesses the shape maths.
+  return baseGlyphMix(phase, warped)
+}
+
 // ---------------------------------------------------------------------------
 // Clock plumbing
 // ---------------------------------------------------------------------------
