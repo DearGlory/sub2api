@@ -496,13 +496,19 @@ const RESTORE = `(() => {
  * meaningless. The fingerprint is a large candidate-count asymmetry between the two
  * frames — the LF run showed frame A with 246 candidates against frame B with 2441.
  *
- * The margin is derived rather than fixed: `maxAnchorDist` is how far a particle orbits
- * outside its anchor, in world units, and a world distance `d` at the camera-to-content
- * gap subtends `d / (2 tan(fov/2) gap)` of the viewport height. Adding a few pixels for
- * the glow sprite's own radius gives a mask that actually contains the cloud, instead of
- * a 12 px guess that does not.
+ * The box itself needs NO cloud-spread allowance, which is the trap this helper used to
+ * fall into: `live` is the projection of the `position` attribute, i.e. every particle's
+ * ACTUAL world position, so it already bounds the whole visible cloud in that frame. An
+ * earlier version padded it by `maxAnchorDist`, which is the distance from a particle to
+ * its glyph anchor — a quantity that is naturally enormous during `scatter`, when the
+ * particles are dispersed by design and nowhere near their anchors. That inflated the
+ * mask to 100% of the frame and left nothing to measure: the run measured 0 candidate
+ * stars in all three phases, with every one of 3225 unmasked candidates inside the box.
+ *
+ * The margin therefore covers only what `live` genuinely does not: the glow sprite's
+ * radius, which extends half a sprite past each particle's centre, in raster pixels.
  */
-function buildFlowMask(frames, geoms, { padPx = 6 } = {}) {
+function buildFlowMask(frames, geoms, { padPx = 4 } = {}) {
   const boxes = []
   const parts = []
   for (let i = 0; i < frames.length; i++) {
@@ -511,24 +517,31 @@ function buildFlowMask(frames, geoms, { padPx = 6 } = {}) {
     if (!live || !Number.isFinite(live.x0)) { parts.push({ i, reason: 'no live projection' }); continue }
     const sx = live.W ? frame.img.w / live.W : 1
     const sy = live.H ? frame.img.h / live.H : 1
-    const spread = geom.cloudSpread || {}
+    // The sprite's world radius as a share of the viewport height, converted to the
+    // frame's own raster pixels. `visH` is the frustum's world height at the content
+    // plane, so `spriteWorld / visH` is the share and `* frameH` is the pixels.
     const visH = geom.visH
-    const cloudPx = Number.isFinite(spread.maxAnchorDist) && Number.isFinite(visH) && visH > 0
-      ? (spread.maxAnchorDist / visH) * frame.img.h
-      : 0
-    const margin = Math.ceil(cloudPx + padPx)
+    const spritePx = Number.isFinite(visH) && visH > 0 ? (SPRITE_WORLD_RADIUS / visH) * frame.img.h : 0
+    const margin = Math.max(1, Math.ceil(spritePx + padPx))
     boxes.push({
       x0: (live.x0 - margin) * sx, x1: (live.x1 + margin) * sx,
       y0: (live.y0 - margin) * sy, y1: (live.y1 + margin) * sy,
     })
-    parts.push({ i, marginPx: margin, cloudPx: round(cloudPx, 1), scale: [round(sx, 3), round(sy, 3)] })
+    parts.push({ i, marginPx: margin, spritePx: round(spritePx, 1), scale: [round(sx, 3), round(sy, 3)] })
   }
   if (!boxes.length) return { exclude: null, boxes: null, count: 0, frameFrac: 0, parts, reason: 'no frame had a usable projection' }
   const frame = frames[0]
   const { mask, count } = exclusionMask(boxes, frame.img.w, frame.img.h)
+  const frac = count / (frame.img.w * frame.img.h)
+  // A mask that swallows most of the frame has nothing left to measure, and that must be
+  // said rather than reported as "no stars found". The trigger is stated as a share so
+  // the caller can render it as a fact about the layout.
+  const tooLarge = frac > 0.9
   return {
-    exclude: mask, boxes, count, frameFrac: round(count / (frame.img.w * frame.img.h), 4),
+    exclude: mask, boxes, count, frameFrac: round(frac, 4), tooLarge,
     parts, marginPx: Math.max(...parts.map((p) => p.marginPx || 0)),
+    reason: tooLarge ? `the comet's projected footprint covers ${(frac * 100).toFixed(1)}% of the frame — ` +
+      `there is no sky left to measure the star flow in` : undefined,
   }
 }
 
@@ -1865,6 +1878,22 @@ async function criterionV3(cdp, opts) {
     { sampledDollyPoints: points, camRange, distanceRatio, sweepSeconds: windowSeconds })
 }
 
+/**
+ * The fewest matched stars a median radial drift can be computed from.
+ *
+ * This is a floor on the ESTIMATOR's validity rather than a signal threshold, which is
+ * why it is a small number and why it does not scale with the noise. A median is an order
+ * statistic: with a handful of samples it stops being robust and becomes "whichever pair
+ * happened to match", and a single mis-matched pair contributes its full displacement.
+ * Eight is the conventional minimum for a sample median to be worth quoting at all.
+ *
+ * The signal-side requirement is separate and IS derived from the data each run — see
+ * the floor computed from the zero-displacement noise and 2 * se(median) in criterionV5.
+ * Conflating the two, as an earlier version did, lets a small sample masquerade as a weak
+ * signal and reject a median sitting well clear of the noise.
+ */
+const MIN_MATCHED_STARS = 8
+
 /** The dolly spans 15..34 world units, so more than a 1.5x change is a real sweep. */
 function destinationSpanOk(ratio) {
   return Number.isFinite(ratio) && ratio >= 1.5
@@ -2051,25 +2080,36 @@ async function criterionV5(cdp, opts) {
     })
     const dz = round(bState.camZ - aState.camZ)
     const med = run.medianRadial
-    // How many matched stars are needed before the median means anything, derived from
-    // the noise rather than fixed. The standard error of a median falls as 1/sqrt(n), so
-    // requiring the expected signal to exceed the measured floor by a factor gives
-    //   n >= (1.253 * sigma / (floor * ratio))^2
-    // With the observed sub-pixel signal this puts the bar around a dozen stars: below
-    // that the median of a handful of contaminated blobs is not a measurement, and the
-    // criterion has to say so rather than vote.
+    // When is the median a measurement rather than a coin flip? Two things are needed,
+    // and neither is a made-up constant:
+    //
+    //  1. ENOUGH STARS FOR A MEDIAN TO MEAN ANYTHING. `MIN_MATCHED_STARS` is justified by
+    //     the statistic, not by taste: a median of a handful of blobs is not robust, and
+    //     below about eight the order statistic is dominated by whichever single pair
+    //     happened to match. This is a floor on the estimator's validity, not a signal
+    //     threshold.
+    //  2. A SIGNAL BIGGER THAN ITS OWN UNCERTAINTY. The floor is `max(measured noise,
+    //     2 * se(median))`, where the noise comes from the zero-displacement capture pair
+    //     and `se = 1.253 * sigmaRobust / sqrt(n)`. So the median has to clear both what
+    //     a frozen camera produces and twice its own standard error.
+    //
+    // An earlier version additionally required `n >= (1.253*sigma/(0.5*floor))^2`, which
+    // on this data demanded 24 stars for a median sitting 3.8x above the floor — it was
+    // rejecting a resolvable signal as "too few stars", conflating a weak signal with a
+    // small sample. The stars needed for a 2x margin are still computed and reported as
+    // `starsForTwoSigmaMargin`, so the information is on the record without being a gate.
     const sigma = Number.isFinite(run.sigmaRobust) ? run.sigmaRobust : NaN
-    const requiredN = Number.isFinite(sigma) && Number.isFinite(noiseFloor) && noiseFloor > 0
-      ? Math.max(8, Math.ceil(Math.pow((1.253 * sigma) / (noiseFloor * 0.5), 2)))
-      : 8
+    const starsForTwoSigmaMargin = Number.isFinite(sigma) && Number.isFinite(noiseFloor) && noiseFloor > 0
+      ? Math.ceil(Math.pow((1.253 * sigma) / (noiseFloor * 0.5), 2))
+      : null
     const floor = Math.max(
       Number.isFinite(noiseFloor) ? noiseFloor : 0,
       Number.isFinite(run.seMedian) ? 2 * run.seMedian : 0,
     )
-    const enoughStars = run.matched >= requiredN
+    const enoughStars = run.matched >= MIN_MATCHED_STARS
     const resolved = enoughStars && dz > 0.2 && Number.isFinite(med) && Math.abs(med) > floor
     const direction = !resolved
-      ? (!enoughStars ? `too few stars (${run.matched} < ${requiredN} required) — inconclusive`
+      ? (!enoughStars ? `too few stars (${run.matched} matched, median of fewer than ${MIN_MATCHED_STARS} is not robust) — inconclusive`
         : dz <= 0.2 ? 'camera did not move' : 'within the noise floor — inconclusive')
       : med < 0 ? 'inward (toward vanishing point)' : 'outward'
     flowRuns.push({
@@ -2078,7 +2118,8 @@ async function criterionV5(cdp, opts) {
       maskPixels: mask.count, maskFrameFrac: mask.frameFrac, maskMarginPx: mask.marginPx,
       maskBoxes: mask.boxes, maskParts: mask.parts,
       noiseFloorPx: round(floor), rawNoiseFloorPx: round(noiseFloor),
-      requiredStars: requiredN,
+      requiredStars: MIN_MATCHED_STARS,
+      starsForTwoSigmaMargin,
       decisionThresholdPx: round(floor),
       resolved, direction,
       // Kept for the record: what the old mean-based statistic says on the same data.
@@ -2086,7 +2127,7 @@ async function criterionV5(cdp, opts) {
     })
     console.log(`  flow ${phase}: dz=${dz} cand ${run.candidatesA}->${run.candidatesB} ` +
       `(mask ${(mask.frameFrac * 100).toFixed(1)}% of frame; ${run.candidatesInPatternBoxA}/${run.candidatesUnmaskedA} unmasked candidates were comet fragments) ` +
-      `matched=${run.matched}/${requiredN} median=${run.medianRadial} mean=${round(run.meanRadial, 3)} ` +
+      `matched=${run.matched} median=${run.medianRadial} mean=${round(run.meanRadial, 3)} ` +
       `floor=${round(floor, 3)} -> ${flowRuns[flowRuns.length - 1].direction}`)
   }
   measurements.v5.flowRuns = flowRuns
@@ -2207,7 +2248,7 @@ async function criterionV5(cdp, opts) {
  * its threshold from, so the caller never has to hardcode what "enough" means.
  */
 function radialFlow(a, b, { thr = 60, minSize = 2, maxSize = 200, matchRadius = 7,
-  minRadiusFrac = 0.35, exclude = null } = {}) {
+  minRadiusFrac = 0.35, exclude = null, boxes = null } = {}) {
   const c = (s) => ({ x: s.img.w / 2, y: s.img.h / 2 })
   const ca = c(a), cb = c(b)
   const detA = detectStars(a.lum, a.img, thr, maxSize, { minSize, exclude })
@@ -2753,17 +2794,28 @@ async function main() {
     await discriminationTest(cdp)
   }
 
-  await criterionV5(cdp)
+  // `--only=v5,v3` runs a subset, for iterating on one criterion without paying for the
+  // V6 roster walk (whose brand bring-up dominates the run). It exists for development;
+  // a subset run is NOT an acceptance run, and the JSON records which criteria ran so a
+  // partial result cannot be mistaken for a full one.
+  const only = args.only ? String(args.only).split(',').map((s) => s.trim().toLowerCase()) : null
+  const wants = (name) => !only || only.includes(name)
+  if (only) console.log(`\n!! PARTIAL RUN — only: ${only.join(', ')} (not an acceptance run)`)
+
+  if (wants('v5')) await criterionV5(cdp)
   // V3 samples the dolly by waiting for one hold per beat; V6 walks the roster to
   // reach the two binding brands. Ordering V6 last keeps the long brand walk away
   // from the V3 timing window.
-  const viewports = VIEWPORT_FILTER
-    ? VIEWPORTS.filter((v) => VIEWPORT_FILTER.includes(v.name))
-    : VIEWPORTS
-  for (const vp of viewports) {
-    await criterionV6(cdp, vp)
+  if (wants('v6')) {
+    const viewports = VIEWPORT_FILTER
+      ? VIEWPORTS.filter((v) => VIEWPORT_FILTER.includes(v.name))
+      : VIEWPORTS
+    for (const vp of viewports) {
+      await criterionV6(cdp, vp)
+    }
   }
-  await criterionV3(cdp)
+  if (wants('v3')) await criterionV3(cdp)
+  measurements.partialRun = only ? { criteria: only } : null
 
   // The asset half runs last and its verdicts are merged in, so a single exit code
   // covers both halves.
