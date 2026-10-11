@@ -129,24 +129,18 @@ import type {
 /** Where the vendor's glyph sampler centres a glyph, in its own units. */
 const GLYPH_CENTER_X = 5.8
 /**
- * Breathing room on the HEIGHT axis only, so the glyph never lands exactly on the
- * user's 2/3 floor.
+ * Headroom on the HEIGHT floor, so the glyph never lands exactly on the 2/3 line.
  *
- * The floor is a floor: `fitDistanceForRoster` puts the ideal height share exactly
- * on 2/3 whenever the height is what binds, which leaves zero room for the
- * measured cloud — particles orbit and settle slightly wider than the anchor box,
- * so the real share reads a percent or two UNDER the ideal and misses a floor it
- * nominally equals. Portrait viewports are exactly this case, and the probe
- * measured them at 0.6497..0.6570 against a 0.6667 floor.
+ * `fitDistanceForRoster` returns the largest distance at which the glyph still
+ * clears both floors, so sitting on it leaves the binding floor EQUAL to the user's
+ * number with nothing left over. The measured cloud sits a percent or two inside
+ * its own anchor box, so the real share reads under the ideal — the probe measured
+ * portrait viewports at 0.6497..0.6570 against a 0.6667 floor when the ideal was
+ * exactly 0.6667. Being 12% nearer puts the ideal at 0.7467, clear of the floor
+ * with the cloud's own spread absorbed.
  *
- * 12% of headroom puts the ideal share at 2/3 * 1.12 = 0.7467, which is clear of
- * the floor even after the cloud's own spread.
- *
- * This margin is deliberately NOT applied to the width axis, and that is a result
- * of the numbers rather than taste — see `updateCameraFit` for the arithmetic. The
- * same 12% across the width would force the widest brand down to a 63.5% height
- * share and fail the very floor this constant exists to protect.
- */
+ * Applied only when the height floor is the binding one — see `updateCameraFit`.
+ * It is not a width allowance. */
 const FRAME_MARGIN = 1.12
 // The other framing constant that used to live here, `GLYPH_HALF_EXTENT = 6.3`, is
 // gone rather than merely unused, and deliberately not replaced by an equivalent.
