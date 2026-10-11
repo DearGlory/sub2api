@@ -113,7 +113,7 @@ import {
   TAIL_SPREAD,
 } from './constants'
 import { createQualityProfile, probeQualityProfile } from './quality'
-import { fitDistanceForRoster } from './glyphSize'
+import { GLYPH_MIN_BBOX_ASPECT, fitDistanceForRoster, requiredGlyphWorldSize } from './glyphSize'
 import { createStarfield } from './starfield'
 import type {
   BrandTargetSource,
@@ -1205,24 +1205,32 @@ export class ParticleEngine implements ParticleEngineContract {
    */
   private updateCameraFit(): void {
     const aspect = Math.max(0.2, this.width / this.height)
-    // Come `FRAME_MARGIN` nearer than the roster's largest usable distance, so the
-    // glyph lands 12% ABOVE both floors rather than exactly on one of them.
+    // Start from the roster fit, which is the largest distance at which the glyph
+    // still clears both floors, then give the HEIGHT floor its 12% of headroom.
     //
-    // Direction matters here and is worth stating: `fitDistanceForRoster` is the
-    // largest distance at which the glyph still clears the floors, so sitting on it
-    // leaves the ideal share exactly EQUAL to a floor. Both floors are minima, and a
-    // nearer camera only ever enlarges the projection, so dividing the distance
-    // moves the ideal share to 2/3 * 1.12 = 0.7467 and 1/3 * 1.12 = 0.3733 — over
-    // both, with room for the cloud's own spread (particles orbit wider than the
-    // anchor box, which is why portrait viewports measured 0.65 against a 0.6667
-    // floor when the ideal was exactly 0.6667).
+    // Why the margin is worth having at all: sitting exactly on `fitDistanceForRoster`
+    // leaves the binding floor EQUAL to the user's number, with nothing left for the
+    // measured cloud. Particles orbit and settle slightly outside the anchor box, so
+    // the real share reads a percent or two under the ideal — the probe measured
+    // portrait viewports at 0.6497..0.6570 against a 0.6667 floor when the ideal was
+    // exactly 0.6667. Being 12% nearer raises the ideal to 0.7467 and clears it.
     //
-    // This is the 12% the original `FRAME_MARGIN` was reaching for, applied to the
-    // quantity that actually needs it. It is NOT a width allowance: the horizontal
-    // overhang of the widest brand is a separate, genuine cost, and paying for it by
-    // shrinking that one brand is the only way both floors can hold — see the note
-    // above.
-    this.fitGap = fitDistanceForRoster(aspect, CAMERA_FOV) / FRAME_MARGIN
+    // Why it is taken ONLY where the height floor binds, and never off the width
+    // term: the two floors are bounds on the same distance in OPPOSITE directions.
+    // The height floor is an upper bound (nearer is bigger, which is what it wants),
+    // so headroom means coming nearer. The width floor is a lower bound (the glyph
+    // must not overhang the frame), so coming nearer makes it WORSE. Applying 12% to
+    // the whole fit therefore helped portrait viewports, where the height binds, and
+    // hurt landscape ones, where the width binds — it widened the widest brand's
+    // overhang from 0.249 to 1.383 world units on 16:9. So the margin is computed on
+    // the height-only distance and only adopted when that is what binds.
+    //
+    // `requiredGlyphWorldSize` is asked which floor binds rather than re-deriving the
+    // two candidates here, so this decision keeps agreeing with `glyphSize.ts` if the
+    // floors or the roster's narrowest aspect are ever retuned.
+    const roster = fitDistanceForRoster(aspect, CAMERA_FOV)
+    const binding = requiredGlyphWorldSize(aspect, CAMERA_FOV, roster, GLYPH_MIN_BBOX_ASPECT)
+    this.fitGap = binding.binding === 'height' ? roster / FRAME_MARGIN : roster
     this.fitDistance = this.fitGap + SUBJECT_Z
   }
 
