@@ -1167,10 +1167,10 @@ async function recordV6Sample(cdp, viewport, row) {
 
   // --- the two routes, with the clipping case separated out ----------------
   if (clipped) {
-    // Defined so the comparison is meaningful: visible share of the viewport width,
-    // and how far the rest overhangs.
-    const visibleFrac = round(Math.min(1, (row.geoBox.x1 - row.geoBox.x0) / vw) -
-      (overLeft > 0 ? overLeft / vw : 0) - (overRight > 0 ? overRight / vw : 0), 4)
+    // The comparison is not merely failing here, it is UNDEFINED: the live route projects
+    // the whole cloud including the part off-screen, while the pixel route can only count
+    // what is drawn. Reporting that as "routes disagree" — seven times, on the earlier run
+    // — attributed a measurement-definition fact to the page.
     record('V6', `${label} cross-check live vs pixels`, null,
       `SKIPPED (glyph exceeds the viewport — the comparison is not defined at this aspect): ` +
       `the live route projects the whole cloud, including the ${round(overLeft + overRight, 0)} px that fall ` +
@@ -1179,16 +1179,42 @@ async function recordV6Sample(cdp, viewport, row) {
       `The two cannot agree by construction, so this is reported as SKIPPED rather than as a disagreement. ` +
       `See the two criteria below for the honest measurement of this case.`,
       { clipped, overhangPx, live: row.live, pixels: th })
-    record('V6', `${label} visible width share (clipped glyph)`, visibleFrac >= MIN_WIDTH_SHARE,
-      `${(visibleFrac * 100).toFixed(1)}% of the viewport width is inside the frame ` +
-      `(glyph projects ${round(live.wPx)} px wide into ${vw} px, overhang ${round(overLeft + overRight, 0)} px)`,
-      { visibleFrac, overhangPx, liveWPx: live.wPx, vw })
-    record('V6', `${label} horizontal overhang is reported, not hidden`, true,
-      `overhang ${(overhangFrac * 100).toFixed(1)}% of the viewport width ` +
-      `(left ${overhangPx.left} px, right ${overhangPx.right} px); a glyph at 2/3 height with the roster's ` +
-      `0.695..1.634 bbox aspect is geometrically forced past the edge on a viewport this narrow, so this is ` +
-      `reported as a fact about the layout rather than folded into a pass/fail`,
-      { overhangPx, overhangFrac })
+
+    // How much of the glyph is actually ON SCREEN, as a share of the viewport width.
+    //
+    // This is the intersection of the projected box with the frame, which is the thing a
+    // visitor can see. The first version of this line subtracted both overhangs from the
+    // box's total width, double-counting the clipped parts and producing negative shares
+    // (-85%) for a glyph that in fact filled its viewport edge to edge.
+    //
+    // Note the honest limit of this number: a box that overhangs BOTH edges saturates at
+    // 1.0 by definition, so for those samples the informative quantity is the overhang
+    // reported alongside, not this share. It is still worth measuring, because a
+    // one-sided overhang gives a real fraction — groq's 67.8% on 390x844 against the
+    // user's 33.3% floor.
+    const visiblePx = Math.min(vw, row.geoBox.x1) - Math.max(0, row.geoBox.x0)
+    const visibleFrac = round(Math.max(0, visiblePx) / vw, 4)
+    const saturates = overLeft > 0 && overRight > 0
+    // A glyph that saturates BOTH edges has no width share to measure — the honest
+    // report is the overhang, as data, and the fact that the width comparison cannot be
+    // made at this aspect. This is recorded as SKIPPED rather than as a PASS, because
+    // `true` here would be a criterion that asserts nothing: it would pass identically
+    // whether the glyph were 1.2x or 12x the viewport, which is exactly the "a criterion
+    // that cannot fail is not a criterion" failure this probe exists to remove.
+    if (saturates) {
+      record('V6', `${label} visible width share (clipped glyph)`, null,
+        `SKIPPED (glyph overhangs BOTH horizontal edges): visible share is 1.0 by definition at this ` +
+        `aspect, so it cannot be compared against the ${(MIN_WIDTH_SHARE * 100).toFixed(1)}% floor. ` +
+        `The measured fact is the overhang: ${(overhangFrac * 100).toFixed(1)}% of the viewport width ` +
+        `(left ${overhangPx.left} px, right ${overhangPx.right} px) lies outside the frame.`,
+        { visibleFrac, saturates, overhangPx, overhangFrac, liveWPx: live.wPx, vw })
+    } else {
+      record('V6', `${label} visible width share (clipped glyph)`, visibleFrac >= MIN_WIDTH_SHARE,
+        `${(visibleFrac * 100).toFixed(1)}% of the viewport width is inside the frame ` +
+        `(glyph projects ${round(live.wPx)} px wide into ${vw} px, overhang ${round(overLeft + overRight, 0)} px), ` +
+        `against the user's ${(MIN_WIDTH_SHARE * 100).toFixed(1)}% width floor`,
+        { visibleFrac, saturates, overhangPx, liveWPx: live.wPx, vw, floor: MIN_WIDTH_SHARE })
+    }
   } else {
     record('V6', `${label} cross-check live vs pixels`, !!pixelAgrees,
       pixelAgrees
@@ -1510,7 +1536,53 @@ async function criterionV6(cdp, viewport) {
  * answering the V3 question.
  */
 async function criterionV3(cdp, opts) {
-  console.log('\n=== CRITERION 1 — V3 camera + comet retreat together ===')
+  console.log('\n=== CRITERION 1 — V3 camera + comet retreat together ===' +
+    (opts && opts.fault ? ` [FAULT INJECTION: ${opts.fault.label}]` : ''))
+
+  /**
+   * Falsification — pin the content plane so V3's premise is deliberately broken.
+   *
+   * The repaired V3 has to be shown capable of FAILING on demand, or its PASS on the LF
+   * branch means nothing. The baseline is not always available to compare against, so this
+   * injects the exact defect V3 exists to catch: it stops the content retreating with the
+   * camera, which is what the shipped code did before the fix (`this.points.position.z`
+   * nailed to `SUBJECT_Z` while `advanceCamera` moved only the camera). The override is a
+   * property setter on the engine's `points.position`, so `advanceCamera`'s own write
+   * lands and is then forced back — the engine is not patched, its output is.
+   *
+   * This is a fault INJECTOR, not a substitute camera: the dolly still runs the engine's
+   * own function and camZ still sweeps, so the only thing changed is that the content no
+   * longer follows. V3 must report a large jitter and a within-brand slope matching the
+   * world-nailed control.
+   */
+  if (opts && opts.fault) {
+    const injected = await cdp.eval(`(() => {
+      const eng = window.__SUB2API_PARTICLE_ENGINE__;
+      if (!eng) return { error: 'no engine handle' };
+      const pts = eng.debugScene.points;
+      const pinned = pts.position.z;
+      if (pts.position.__faultPinned) return { ok: true, already: true, pinned };
+      const inner = pts.position;
+      const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(inner), 'z')
+        || Object.getOwnPropertyDescriptor(inner, 'z');
+      // Force z back to the pinned value every frame by intercepting the setter that
+      // advanceCamera uses. The engine is not patched; its output is.
+      Object.defineProperty(inner, 'z', {
+        configurable: true,
+        get() { return pinned },
+        set(v) { void v; },
+      });
+      pts.position.__faultPinned = true;
+      return { ok: true, pinned, hadDescriptor: !!descriptor };
+    })()`)
+    console.log(`  fault: ${JSON.stringify(injected)}`)
+    record('INSTRUMENT', `fault injection applied (${opts.fault.label})`, !!injected.ok,
+      injected.ok
+        ? `the content plane is pinned at z=${injected.pinned}: \`advanceCamera\` still writes its own content z every ` +
+          `frame and the write is discarded, so the camera retreats alone — exactly the pre-fix behaviour V3 must catch`
+        : `could not inject the fault: ${JSON.stringify(injected)}`,
+      injected)
+  }
 
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: 1440, height: 900, deviceScaleFactor: 1, mobile: false,
@@ -2814,7 +2886,11 @@ async function main() {
       await criterionV6(cdp, vp)
     }
   }
-  if (wants('v3')) await criterionV3(cdp)
+  if (wants('v3')) {
+    await criterionV3(cdp, args['fault-pin-content']
+      ? { fault: { label: 'content plane pinned — the camera retreats alone (the pre-fix defect)' } }
+      : null)
+  }
   measurements.partialRun = only ? { criteria: only } : null
 
   // The asset half runs last and its verdicts are merged in, so a single exit code
