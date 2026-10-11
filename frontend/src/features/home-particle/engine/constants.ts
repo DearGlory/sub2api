@@ -23,8 +23,18 @@ export const CYCLE_SECONDS =
 
 // --- Subject space ----------------------------------------------------------
 
-/** Half-width of the S-curve, in world units. */
-export const AMPLITUDE_X = 9.0
+/**
+ * Half-width of the S-curve, in world units.
+ *
+ * [user] 图案不要太宽 — the patrol used to swing +/-9, which parks the widest
+ * roster brand (16.479 world units wide) at x = +/-9 and pushes its far edge to
+ * x = 17.24 while the V6 frame only reaches 10.51. 2.56 is the user's number and
+ * it is what makes the widest brand fit the frame at all: 2.56 + 8.24 = 10.80
+ * against a 10.51 half-width, the residual 0.29 being covered by the per-brand
+ * uniform shrink in `brandTargets`/`glyphSize` rather than by moving the camera
+ * further back (see `updateCameraFit` for why the margin cannot be spent here).
+ */
+export const AMPLITUDE_X = 2.56
 /** Vertical sway amplitude, which is what makes the sweep read as an S. */
 export const SWAY_Y = 1.6
 /** Depth sway so the S is not flat. */
