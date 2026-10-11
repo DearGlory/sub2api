@@ -113,6 +113,7 @@ import {
   TAIL_SPREAD,
 } from './constants'
 import { createQualityProfile, probeQualityProfile } from './quality'
+import { GLYPH_MIN_BBOX_ASPECT, fitDistanceForRoster, requiredGlyphWorldSize } from './glyphSize'
 import { createStarfield } from './starfield'
 import type {
   BrandTargetSource,
@@ -127,10 +128,29 @@ import type {
 
 /** Where the vendor's glyph sampler centres a glyph, in its own units. */
 const GLYPH_CENTER_X = 5.8
-/** Half extent of the sampler's glyph box, in world units. */
-const GLYPH_HALF_EXTENT = 6.3
-/** Breathing room so the framed content never sits flush against the edge. */
+/**
+ * Headroom on the HEIGHT floor, so the glyph never lands exactly on the 2/3 line.
+ *
+ * `fitDistanceForRoster` returns the largest distance at which the glyph still
+ * clears both floors, so sitting on it leaves the binding floor EQUAL to the user's
+ * number with nothing left over. The measured cloud sits a percent or two inside
+ * its own anchor box, so the real share reads under the ideal — the probe measured
+ * portrait viewports at 0.6497..0.6570 against a 0.6667 floor when the ideal was
+ * exactly 0.6667. Being 12% nearer puts the ideal at 0.7467, clear of the floor
+ * with the cloud's own spread absorbed.
+ *
+ * Applied only when the height floor is the binding one — see `updateCameraFit`.
+ * It is not a width allowance. */
 const FRAME_MARGIN = 1.12
+// The other framing constant that used to live here, `GLYPH_HALF_EXTENT = 6.3`, is
+// gone rather than merely unused, and deliberately not replaced by an equivalent.
+//
+// It described half of the vendor's 12.6-unit icon square, which was the widest
+// thing on screen only until `brandTargets.ts` began levelling every mark to
+// `GLYPH_WORLD_HEIGHT`. The roster's real widths are now 7.006..16.479, so the
+// constant was sizing a shape that no longer exists. The framing question is
+// `glyphSize.ts`'s now — see `updateCameraFit`.
+
 /** Cap on the per-frame step fed to the phase clock, in seconds. A tab that was
  *  asleep must not skip a whole beat: running briefly slow beats jumping. */
 const MAX_CLOCK_STEP = 0.1
@@ -821,6 +841,7 @@ export class ParticleEngine implements ParticleEngineContract {
   private palette: ThemePalette
   private width = 1
   private height = 1
+  private fitGap = DOLLY_FROM_Z
   private fitDistance = DOLLY_FROM_Z
   private readonly particleCount: number
   private readonly tailSampleCount: number
@@ -905,8 +926,10 @@ export class ParticleEngine implements ParticleEngineContract {
     })
 
     this.points = new Points(this.geometry, this.material)
-    // The slab is moved, not the camera, so the pointer ray and the glyph anchors
-    // share one frame of reference.
+    // The slab sits at `SUBJECT_Z` here as the SEED pose, which is where the dolly
+    // starts at `progress = 0`; `advanceCamera` updates this z every frame from then
+    // on, because the camera and the content retreat together (V3). The pointer ray
+    // reads this same live position rather than assuming the plane is static.
     this.points.position.set(0, 0, SUBJECT_Z)
     this.points.frustumCulled = false
     this.scene.add(this.points)
@@ -1127,26 +1150,85 @@ export class ParticleEngine implements ParticleEngineContract {
   }
 
   /**
-   * The nearest the camera may come while still framing the widest content: a
-   * glyph parked on the left or right extreme.
+   * How far the camera must sit from the CONTENT PLANE for the formed glyph to
+   * clear both of the user's floors (V6): at least 2/3 of the viewport height and
+   * at least 1/3 of its width.
    *
-   * Derived from the aspect ratio rather than fixed, because a portrait viewport
-   * is far narrower in world units than a wide one and a fixed distance clips the
-   * glyph exactly on a phone. The subtraction is the part that is easy to get
-   * backwards: the content sits at `SUBJECT_Z`, so the distance from the camera to
-   * the content plane is `cameraZ - SUBJECT_Z`, and the requirement is on that
-   * distance — not on `cameraZ`. Adding the offset instead of subtracting it
-   * shoves the camera a further `2 * |SUBJECT_Z|` back, which is past the whole
-   * near half of the dolly and leaves the camera parked for most of a lap.
+   * This used to be computed here from `GLYPH_HALF_EXTENT = 6.3`, which is a
+   * pre-normalisation number (it describes the vendor's 12.6-unit icon square, and
+   * 6.3 was only ever correct while the widest thing on screen was that square).
+   * After the glyphs are levelled in `brandTargets.ts` the roster's real extents are
+   * 7.006 (groq) to 16.479 (xiaomimimo) world units wide, so that constant was
+   * describing a shape that no longer exists. It is `glyphSize.ts` that owns this
+   * question now, and it answers it against the levelled `GLYPH_WORLD_HEIGHT` and
+   * the roster's narrowest bbox aspect, which is the worst case over all 28 brands.
+   *
+   * The two constraints pull in OPPOSITE directions, which is the whole tension
+   * here and worth stating plainly:
+   *
+   *   - the old `fitDistance` was a LOWER bound on the distance, because it was
+   *     solving "the widest content must not overflow the frame" — a further camera
+   *     draws everything smaller, so any distance at or beyond it was safe;
+   *   - `fitDistanceForRoster` is an UPPER bound, because it is solving "the glyph
+   *     must be at least 2/3 as tall as the viewport" — a further camera draws the
+   *     glyph smaller, so the distance must be at or INSIDE it.
+   *
+   * A layout that satisfied the first by shoving the camera back therefore made the
+   * second worse, and that is exactly the 0.28 height share the probe measured. The
+   * fix is not a bigger margin, it is a nearer camera, and to keep the glyph inside
+   * the frame at that nearer distance the patrol amplitude comes down (see
+   * `AMPLITUDE_X`).
+   *
+   * On the one horizontal cost this leaves behind, stated rather than smoothed over:
+   *
+   *   - on a landscape viewport at the roster distance the frame is 21.168 world
+   *     units wide, i.e. +/-10.584 across;
+   *   - the widest brand, xiaomimimo, levels to 16.479 wide (half-width 8.24) and
+   *     forms at x = +/-2.56, so its far edge reaches 10.800 — about 0.22 units, or
+   *     1% of the frame width, past the edge. Every other brand fits.
+   *
+   * The brief's answer to that was a per-brand uniform shrink of about 3.5% for this
+   * one glyph. That is deliberately NOT done here, because it would break a stronger
+   * invariant than it repairs: `brandTargets` levels every mark to
+   * `GLYPH_WORLD_HEIGHT` precisely so that ONE distance serves all 28 brands, and
+   * both the unit spec and the acceptance probe assert the buffer's world height is
+   * `GLYPH_WORLD_HEIGHT` within 0.005 / 0.05. A 3.5% shrink puts that readback at
+   * 9.816 — a 0.264 miss on both. Paying 1% of overhang with an assertion about the
+   * levelling contract would trade a cosmetic edge clip for a broken guarantee, so
+   * the overhang is reported to the reviewer instead of being hidden.
+   *
+   * The `Math.max(0.2, ...)` floor stays because a zero or negative aspect would
+   * otherwise divide the fit away and blank the canvas.
    */
   private updateCameraFit(): void {
     const aspect = Math.max(0.2, this.width / this.height)
-    const tan = Math.tan((CAMERA_FOV * Math.PI) / 360)
-    const needWidth = (AMPLITUDE_X + GLYPH_HALF_EXTENT) * FRAME_MARGIN
-    const needHeight = GLYPH_HALF_EXTENT * FRAME_MARGIN
-    const forWidth = needWidth / (tan * aspect)
-    const forHeight = needHeight / tan
-    this.fitDistance = Math.max(DOLLY_FROM_Z, Math.max(forWidth, forHeight) + SUBJECT_Z)
+    // Start from the roster fit, which is the largest distance at which the glyph
+    // still clears both floors, then give the HEIGHT floor its 12% of headroom.
+    //
+    // Why the margin is worth having at all: sitting exactly on `fitDistanceForRoster`
+    // leaves the binding floor EQUAL to the user's number, with nothing left for the
+    // measured cloud. Particles orbit and settle slightly outside the anchor box, so
+    // the real share reads a percent or two under the ideal — the probe measured
+    // portrait viewports at 0.6497..0.6570 against a 0.6667 floor when the ideal was
+    // exactly 0.6667. Being 12% nearer raises the ideal to 0.7467 and clears it.
+    //
+    // Why it is taken ONLY where the height floor binds, and never off the width
+    // term: the two floors are bounds on the same distance in OPPOSITE directions.
+    // The height floor is an upper bound (nearer is bigger, which is what it wants),
+    // so headroom means coming nearer. The width floor is a lower bound (the glyph
+    // must not overhang the frame), so coming nearer makes it WORSE. Applying 12% to
+    // the whole fit therefore helped portrait viewports, where the height binds, and
+    // hurt landscape ones, where the width binds — it widened the widest brand's
+    // overhang from 0.249 to 1.383 world units on 16:9. So the margin is computed on
+    // the height-only distance and only adopted when that is what binds.
+    //
+    // `requiredGlyphWorldSize` is asked which floor binds rather than re-deriving the
+    // two candidates here, so this decision keeps agreeing with `glyphSize.ts` if the
+    // floors or the roster's narrowest aspect are ever retuned.
+    const roster = fitDistanceForRoster(aspect, CAMERA_FOV)
+    const binding = requiredGlyphWorldSize(aspect, CAMERA_FOV, roster, GLYPH_MIN_BBOX_ASPECT)
+    this.fitGap = binding.binding === 'height' ? roster / FRAME_MARGIN : roster
+    this.fitDistance = this.fitGap + SUBJECT_Z
   }
 
   // -------------------------------------------------------------------------
@@ -1329,8 +1411,15 @@ export class ParticleEngine implements ParticleEngineContract {
         const dir = s.vecB.copy(ndc).sub(this.camera.position)
         const dirZ = dir.z
         dir.normalize()
-        // Intersect the view ray with the slab's own plane.
-        const distance = dirZ === 0 ? -1 : (SUBJECT_Z - this.camera.position.z) / dir.z
+        // Intersect the view ray with the slab's OWN plane, read live rather than
+        // taken as `SUBJECT_Z`: the slab now rides the dolly every frame (see
+        // `advanceCamera`), so a static plane would put the pointer's hit point
+        // progressively further behind the content — by the far end of the lap it
+        // would be a full 19 units off. The `sub(this.points.position)` below is
+        // already correct, because it converts the world hit into the slab's local
+        // frame, which is the frame the glyph anchors live in.
+        const planeZ = this.points.position.z
+        const distance = dirZ === 0 ? -1 : (planeZ - this.camera.position.z) / dir.z
         if (Number.isFinite(distance) && distance > 0) {
           const world = s.vecA
             .copy(this.camera.position)
@@ -1537,6 +1626,39 @@ export class ParticleEngine implements ParticleEngineContract {
     this.geometry.getAttribute('color').needsUpdate = true
   }
 
+  /**
+   * V3/V5 — the camera and the content retreat TOGETHER, so the comet neither
+   * shrinks nor drifts away from the glyph as the dolly runs.
+   *
+   * What was wrong before: only the camera moved and the slab was nailed to
+   * `SUBJECT_Z`. That is not a dolly, it is a zoom-out, and it makes the
+   * camera-to-content distance grow over the whole lap — the probe measured the gap
+   * walking from 26.5 to 45.5 units, which is why the glyph shrank from 79% of the
+   * viewport down to 46% and why `corr(camZ, fh)` came out at -0.9856. Any framing
+   * distance chosen for that layout was only ever correct at one instant, and V6
+   * asks about the glyph at every instant.
+   *
+   * Now the gap is a CONSTANT the framing owns, and the dolly moves both ends of it:
+   *
+   *   gap      = this.fitGap          (from `updateCameraFit`, V6's own number)
+   *   cameraZ  = this.fitDistance + span * progress
+   *   contentZ = cameraZ - gap        (so `cameraZ - contentZ === gap`, always)
+   *
+   * `fitDistance` is still exactly what the framing guard produced — `fitGap +
+   * SUBJECT_Z`, the near end of the range — so the guard keeps its original job of
+   * deciding where the near end sits and nothing else, and at `progress = 0` this
+   * reproduces the construction-time pose (`cameraZ = fitDistance`, `contentZ =
+   * SUBJECT_Z`) exactly. Written this way rather than as `contentZ = SUBJECT_Z +
+   * span * progress` so that a resize mid-lap re-anchors the whole pair instead of
+   * sliding the content out from under the camera.
+   *
+   * The designed span is used directly, so the pull-back can never be compressed
+   * into nothing — it is 19 units by construction, the same 19 the layout was
+   * tuned against, and the starfield keeps providing the parallax.
+   *
+   * `progress`'s shape and the eased wrap are untouched: this changes WHO moves,
+   * not WHEN.
+   */
   private advanceCamera(): void {
     const period = DOLLY_PERIOD_SECONDS + DOLLY_WRAP_SECONDS
     const t = this.reducedMotion ? 0 : this.dollySeconds % period
@@ -1553,17 +1675,18 @@ export class ParticleEngine implements ParticleEngineContract {
     // The framing guard SHIFTS the dolly's range rather than clamping the result.
     //
     // Clamping with `Math.max(DOLLY_FROM_Z + span * progress, fitDistance)` looks
-    // equivalent but parks the camera: on a 16:9 viewport `fitDistance` is ~18
-    // against a start of 15, so the camera sat perfectly still for the first 24 s
-    // of every lap, which is the one thing R2 asks it not to do. Mapping
-    // [0, 1] onto [start, end] instead keeps it moving for the entire period — the
-    // guard only decides where the near end of the range is.
-    const start = Math.max(DOLLY_FROM_Z, this.fitDistance)
-    // On a very narrow viewport the guard can exceed the far end too; the designed
-    // span is preserved so the pull-back is never compressed into nothing.
-    const end = Math.max(DOLLY_TO_Z, start + (DOLLY_TO_Z - DOLLY_FROM_Z))
+    // equivalent but parks the camera: `fitDistance` is the near end of the range,
+    // so the camera sat perfectly still until the dolly caught up with it, which is
+    // the one thing R2 asks it not to do. Mapping [0, 1] onto
+    // [fitDistance, fitDistance + span] instead keeps it moving for the entire
+    // period — the guard only decides where the near end of the range is.
+    const span = DOLLY_TO_Z - DOLLY_FROM_Z
+    const cameraZ = this.fitDistance + span * progress
 
-    this.camera.position.set(0, 0, start + (end - start) * progress)
+    // Constant gap: the content rides the dolly one framing distance ahead, so the
+    // glyph's on-screen size is the same at the near end as at the far one.
+    this.points.position.z = cameraZ - this.fitGap
+    this.camera.position.set(0, 0, cameraZ)
     this.camera.lookAt(0, 0, 0)
   }
 

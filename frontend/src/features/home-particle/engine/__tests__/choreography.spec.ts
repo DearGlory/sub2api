@@ -560,7 +560,7 @@ describe('choreography: sampleTrail', () => {
     // stale number here quietly passing.
     const backTo = 4 - TAIL_SECONDS
     expect(previous).toBeCloseTo(
-      -AMPLITUDE_X + (18 * (1 - Math.cos(Math.PI * backTo / LEG_SECONDS))) / 2,
+      -AMPLITUDE_X + (2 * AMPLITUDE_X * (1 - Math.cos(Math.PI * backTo / LEG_SECONDS))) / 2,
       6
     )
   })
@@ -944,7 +944,11 @@ describe('choreography: option handling', () => {
     const choreo = createChoreography(makeOptions())
     choreo.update(3)
     expect(choreo.state.headX).not.toBe(0)
-    expect(Math.abs(choreo.state.headX)).toBeGreaterThan(1)
+    // Expressed as a share of the sweep rather than as a literal: the head sits at
+    // ~12% of `AMPLITUDE_X` here, so an absolute threshold would be a statement about
+    // the amplitude, not about the bug this guards. A tenth of the sweep is still far
+    // above zero and cannot be hit by a state object whose head never moved.
+    expect(Math.abs(choreo.state.headX)).toBeGreaterThan(AMPLITUDE_X * 0.1)
     expect(choreo.state).not.toHaveProperty('x')
   })
 })
