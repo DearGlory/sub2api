@@ -486,58 +486,51 @@ const RESTORE = `(() => {
 })()`
 
 /**
- * The pattern's own projected footprint, as an exclusion pixel map for a captured frame.
+ * The exclusion mask for a star-flow measurement, built from BOTH captured frames.
  *
- * `geom` must be read BEFORE the frame is captured (the caller does that), and the box
- * is rescaled from the projection's CSS pixels to the screenshot's raster pixels, which
- * differ by the device pixel ratio. Assuming 1 would put the mask in the wrong place on
- * the 3x-DPR viewport.
+ * Masking only the first frame's footprint is not enough, and the failure it produces
+ * looks like a physics result: the comet patrols and its head sweeps during a 7 s
+ * window, so frame B's cloud sits somewhere frame A's box does not cover. Its particle
+ * fragments then survive into the candidate set, get nearest-neighbour matched to frame
+ * A's entirely different fragments, and the "drift" they report is enormous and
+ * meaningless. The fingerprint is a large candidate-count asymmetry between the two
+ * frames — the LF run showed frame A with 246 candidates against frame B with 2441.
  *
- * `marginPx` is in RASTER pixels. It exists because the fake-star flood comes from gaps
- * INSIDE the drawn glyph, which lie strictly within the bbox, so even a small pad is
- * enough to also swallow the antialiased edge; 12 px covers the glow texture's fringe.
+ * The margin is derived rather than fixed: `maxAnchorDist` is how far a particle orbits
+ * outside its anchor, in world units, and a world distance `d` at the camera-to-content
+ * gap subtends `d / (2 tan(fov/2) gap)` of the viewport height. Adding a few pixels for
+ * the glow sprite's own radius gives a mask that actually contains the cloud, instead of
+ * a 12 px guess that does not.
  */
-function exclusionFromGeometry(geom, frame, marginPx = 12) {
-  const live = geom && geom.live
-  if (!live || !Number.isFinite(live.x0) || !Number.isFinite(live.x1)) {
-    return { exclude: null, count: 0, box: null, reason: 'no live projection available' }
+function buildFlowMask(frames, geoms, { padPx = 6 } = {}) {
+  const boxes = []
+  const parts = []
+  for (let i = 0; i < frames.length; i++) {
+    const geom = geoms[i], frame = frames[i]
+    const live = geom && geom.live
+    if (!live || !Number.isFinite(live.x0)) { parts.push({ i, reason: 'no live projection' }); continue }
+    const sx = live.W ? frame.img.w / live.W : 1
+    const sy = live.H ? frame.img.h / live.H : 1
+    const spread = geom.cloudSpread || {}
+    const visH = geom.visH
+    const cloudPx = Number.isFinite(spread.maxAnchorDist) && Number.isFinite(visH) && visH > 0
+      ? (spread.maxAnchorDist / visH) * frame.img.h
+      : 0
+    const margin = Math.ceil(cloudPx + padPx)
+    boxes.push({
+      x0: (live.x0 - margin) * sx, x1: (live.x1 + margin) * sx,
+      y0: (live.y0 - margin) * sy, y1: (live.y1 + margin) * sy,
+    })
+    parts.push({ i, marginPx: margin, cloudPx: round(cloudPx, 1), scale: [round(sx, 3), round(sy, 3)] })
   }
-  const sx = live.W ? frame.img.w / live.W : 1
-  const sy = live.H ? frame.img.h / live.H : 1
-  const box = {
-    x0: (live.x0 - marginPx) * sx, x1: (live.x1 + marginPx) * sx,
-    y0: (live.y0 - marginPx) * sy, y1: (live.y1 + marginPx) * sy,
+  if (!boxes.length) return { exclude: null, boxes: null, count: 0, frameFrac: 0, parts, reason: 'no frame had a usable projection' }
+  const frame = frames[0]
+  const { mask, count } = exclusionMask(boxes, frame.img.w, frame.img.h)
+  return {
+    exclude: mask, boxes, count, frameFrac: round(count / (frame.img.w * frame.img.h), 4),
+    parts, marginPx: Math.max(...parts.map((p) => p.marginPx || 0)),
   }
-  const { mask, count } = exclusionMask([box], frame.img.w, frame.img.h)
-  const frac = count / (frame.img.w * frame.img.h)
-  return { exclude: mask, count, box, cssBox: { x0: live.x0, x1: live.x1, y0: live.y0, y1: live.y1 },
-    scale: [round(sx, 3), round(sy, 3)], frameFrac: round(frac, 4) }
 }
-
-/**
- * How far the particles actually sit from their own glyph anchors, in world units.
- *
- * This is the measured source of the live-vs-pixels tolerance, and it has to be
- * measured rather than assumed: the pixel route sees only the pixels that are actually
- * drawn, while the live route projects the whole `position` attribute, so any particle
- * orbiting outside the glyph's anchor box widens the live box but not the pixel one.
- * On the LF run that difference was 0.069 of the viewport width for the widest brand
- * (xiaomimimo) against 0.0008..0.0054 for the rest, and it tracked this number exactly.
- */
-const SPREAD = `(() => {
-  const eng = window.__SUB2API_PARTICLE_ENGINE__;
-  if (!eng) return { error: 'no engine handle' };
-  const pos = eng.debugScene.points.geometry.attributes.position.array;
-  const g = eng.scratch.glyphTargets;
-  let maxD = 0, sum = 0, n = 0;
-  for (let i = 0; i < pos.length; i += 3) {
-    const dx = pos[i] - g[i], dy = pos[i + 1] - g[i + 1], dz = pos[i + 2] - g[i + 2];
-    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (d > maxD) maxD = d;
-    sum += d; n++;
-  }
-  return { maxAnchorDist: +maxD.toFixed(4), meanAnchorDist: +(sum / (n || 1)).toFixed(4), n };
-})()`
 
 /** A white rect at an exact CSS position — the pixel primitive's known answer. */
 const MARKER = (x, y, w, h, on) => `(() => {
@@ -637,11 +630,28 @@ const GEOMETRY = `(() => {
 
   const dz = cam.position.z - oz;
   const visH = 2 * tan * dz;
+  // The particles' own distance from their anchors, in world units. Read HERE rather
+  // than in a separate call because the star-flow mask is built per frame and needs the
+  // spread belonging to that same instant.
+  let cloudSpread = null;
+  try {
+    const g2 = eng.scratch.glyphTargets;
+    const pos = pts.geometry.attributes.position.array;
+    let maxD = 0, sum = 0, n = 0;
+    for (let i = 0; i < pos.length; i += 3) {
+      const dx = pos[i] - g2[i], dy = pos[i + 1] - g2[i + 1], dzz = pos[i + 2] - g2[i + 2];
+      const d = Math.sqrt(dx * dx + dy * dy + dzz * dzz);
+      if (d > maxD) maxD = d;
+      sum += d; n++;
+    }
+    cloudSpread = { maxAnchorDist: +maxD.toFixed(4), meanAnchorDist: +(sum / (n || 1)).toFixed(4), n };
+  } catch (e) { cloudSpread = { error: String(e).slice(0, 120) } }
   // camZ / contentZ / tanHalfFov are reported separately on purpose, and the
   // fixed-world-size CONTROL is deliberately NOT computed here. See the note on
   // V3's control below: it must be a counterfactual against a frozen content
   // plane, and the frozen plane is only knowable once the sweep has started.
-  return { live, anchors, camZ: +cam.position.z.toFixed(4), contentZ: +oz.toFixed(4),
+  return { live, anchors, cloudSpread,
+    camZ: +cam.position.z.toFixed(4), contentZ: +oz.toFixed(4),
     tanHalfFov: +tan.toFixed(6), aspect: +cam.aspect.toFixed(4),
     dz: +dz.toFixed(4), visH: +visH.toFixed(4),
     fhForGlyphHeight: 10.08 / visH, fwForGlyphHeight: 10.08 / (visH * cam.aspect) };
@@ -860,10 +870,18 @@ const results = []
 const measurements = {}
 
 function record(criterion, name, pass, detail, evidence) {
-  results.push({ criterion, name, pass, detail, evidence })
-  const tag = pass === null ? 'SKIP' : pass ? 'PASS' : 'FAIL'
+  // `status` is the machine-readable form and `pass` is kept for the existing console
+  // rendering. The point of the separate field: `pass === false` must mean FAILED and
+  // nothing else. A skipped check previously carried `pass: null`, which is FALSY, so any
+  // consumer filtering on `!v.pass` — or on `pass === false` after a coercion — read
+  // "not answered" as "failed". That is the same class of mistake as the silent division
+  // by zero this probe exists to correct: a value that cannot express its own state.
+  const status = pass === null ? 'skip' : pass ? 'pass' : 'fail'
+  const entry = { criterion, name, pass, status, detail, evidence }
+  results.push(entry)
+  const tag = status === 'skip' ? 'SKIP' : status === 'pass' ? 'PASS' : 'FAIL'
   console.log(`  [${tag}] ${criterion} ${name} — ${detail}`)
-  return pass
+  return status
 }
 
 /** Instrument failure is neither PASS nor FAIL: it means no answer was obtained. */
@@ -879,10 +897,17 @@ function finish(code) {
     startedAt: new Date().toISOString(),
     verdicts: results,
     measurements,
-    // The instrument is valid when no INSTRUMENT-criterion check failed. Testing for
+    // The instrument is valid when no INSTRUMENT-criterion check FAILED. Testing for
     // the presence of such verdicts instead would report invalid on every run, since
-    // the passing ones are recorded too.
-    instrumentValid: !results.some((r) => r.criterion === 'INSTRUMENT' && r.pass === false),
+    // the passing ones are recorded too — and this must key off `status` rather than
+    // truthiness, so a skipped instrument check is never read as a failure.
+    instrumentValid: !results.some((r) => r.criterion === 'INSTRUMENT' && r.status === 'fail'),
+    // Explicit counts, so a consumer never has to infer them from a nullable `pass`.
+    counts: {
+      pass: results.filter((r) => r.status === 'pass').length,
+      fail: results.filter((r) => r.status === 'fail').length,
+      skip: results.filter((r) => r.status === 'skip').length,
+    },
     exitCode: code,
   }
   const jsonPath = join(OUT, 'framing-probe.json')
@@ -895,22 +920,22 @@ function finish(code) {
     byCriterion[r.criterion].push(r)
   }
   for (const [k, rs] of Object.entries(byCriterion)) {
-    const failed = rs.filter((r) => r.pass === false).length
-    const passed = rs.filter((r) => r.pass === true).length
-    const skipped = rs.filter((r) => r.pass === null).length
+    const failed = rs.filter((r) => r.status === 'fail').length
+    const passed = rs.filter((r) => r.status === 'pass').length
+    const skipped = rs.filter((r) => r.status === 'skip').length
     console.log(`  ${k}: ${passed} pass, ${failed} fail${skipped ? ', ' + skipped + ' skip' : ''}`)
   }
   // Skips are listed in full, by name, rather than only counted. A criterion that was
   // not answered must never be able to read as a criterion that was satisfied, which is
-  // the whole reason the null state exists here.
-  const skippedChecks = results.filter((r) => r.pass === null)
+  // the whole reason the skip state exists here.
+  const skippedChecks = results.filter((r) => r.status === 'skip')
   if (skippedChecks.length) {
     console.log(`\n  --- NOT ANSWERED (${skippedChecks.length}) — neither pass nor fail ---`)
     for (const s of skippedChecks) console.log(`  [SKIP] ${s.criterion} ${s.name}\n         ${s.detail}`)
   }
-  const totalFail = results.filter((r) => r.pass === false).length
+  const totalFail = summary.counts.fail
   console.log(`\n  ${totalFail === 0 ? 'ALL CHECKS PASSED' : totalFail + ' CHECK(S) FAILED'}` +
-    (skippedChecks.length ? ` (${skippedChecks.length} not answered)` : ''))
+    (summary.counts.skip ? ` (${summary.counts.skip} not answered)` : ''))
   console.log(`  json: ${jsonPath}`)
   console.log(`  screenshots: ${OUT}`)
   if (chrome) chrome.kill('SIGKILL')
@@ -1081,7 +1106,7 @@ async function calibrate(cdp) {
  * place: how much of the width is visible, and how far past the edge the rest goes.
  *
  * When the glyph does fit, the two routes still differ by the particle cloud's own
- * spread beyond the anchor box — measured, in world units, by `SPREAD`. The tolerance
+ * spread beyond the anchor box — measured, in world units, by `GEOMETRY.cloudSpread`. The tolerance
  * is derived from that and from the projection's scale, so a wide brand is allowed
  * more disagreement than a narrow one, for the reason that it genuinely has a wider
  * cloud. The threshold sweep contributes nothing (measured span <= 0.0023), which is
@@ -1111,7 +1136,11 @@ async function recordV6Sample(cdp, viewport, row) {
   const tol = v6Tolerance(row)
   const dfw = th && th.lit ? Math.abs(th.fw - live.fw) : NaN
   const dfh = th && th.lit ? Math.abs(th.fh - live.fh) : NaN
-  const pixelAgrees = th && th.lit > 0 && !clipped && dfw <= tol.fw && dfh <= tol.fh
+  // The tolerance must stay a real constraint, not a rubber stamp. If it ever grows past
+  // a quarter of the viewport, it would pass regardless of what the two routes said, and
+  // the honest thing is to say so rather than report a meaningless PASS.
+  const tolNonTrivial = tol.fh < 0.25 && tol.fw < 0.25
+  const pixelAgrees = th && th.lit > 0 && !clipped && tolNonTrivial && dfw <= tol.fw && dfh <= tol.fh
 
   record('V6', `${label} height >= 66.7%`, heightOk,
     `fh=${round(live.fh)} (need >= ${round(MIN_HEIGHT_SHARE)}) ` +
@@ -1151,13 +1180,14 @@ async function recordV6Sample(cdp, viewport, row) {
     record('V6', `${label} cross-check live vs pixels`, !!pixelAgrees,
       pixelAgrees
         ? `live ${round(live.fw)}x${round(live.fh)} vs pixels ${round(th.fw)}x${round(th.fh)} ` +
-          `(tolerance from measured cloud spread: fw <= ${tol.fw}, fh <= ${tol.fh})`
+          `(tolerance from measured cloud spread: fw <= ${tol.fw}, fh <= ${tol.fh}; ${tol.source})`
         : `live ${round(live.fw)}x${round(live.fh)} vs pixels ${th && th.lit ? round(th.fw) + 'x' + round(th.fh) : 'nothing lit'} ` +
           `— differs by fw ${round(dfw, 4)} / fh ${round(dfh, 4)} against a tolerance of ` +
-          `fw ${tol.fw} / fh ${tol.fh} derived from a measured cloud spread of ` +
-          `${spread.meanAnchorDist} mean / ${spread.maxAnchorDist} max world units ` +
-          `(not from the threshold sweep, whose own span measured <= 0.0023)`,
-      { live: row.live, pixels: th, tolerance: tol, cloudSpread: spread, clipped })
+          `fw ${tol.fw} / fh ${tol.fh}, derived as ${tol.source} = ${tol.worldBound} world units ` +
+          `(measured cloud ${tol.cloudWorld} + sprite ${tol.spriteWorld})` +
+          (tolNonTrivial ? '' : ' — and the tolerance itself exceeded a quarter of the viewport, so this ' +
+            'comparison could not have failed and is reported as a FAILURE of the check rather than a pass'),
+      { live: row.live, pixels: th, tolerance: tol, cloudSpread: spread, clipped, tolNonTrivial })
   }
 
   const levelled = row.anchorsWorld && Math.abs(row.anchorsWorld.worldH - GLYPH_WORLD_HEIGHT) < 0.05
@@ -1177,34 +1207,68 @@ async function recordV6Sample(cdp, viewport, row) {
 /**
  * What "the two routes agree" is allowed to mean, derived from the data.
  *
- * Two independent sources, and the threshold sweep is NOT one of them (it was measured
- * at 0.0000..0.0023 and is negligible):
+ * The live route projects the whole `position` attribute; the pixel route sees the
+ * drawn blobs. They therefore differ by exactly how far the cloud extends beyond the
+ * glyph's anchor box, and that quantity is measured — `maxAnchorDist`, in world units,
+ * read from the same instant as the sample.
  *
- *  1. the cloud's own spread beyond the anchor box, converted to viewport share. A
- *     particle orbiting `d` world units off its anchor, seen from `camZ - contentZ`,
- *     subtends `d / (2 tan(fov/2) * gap)` of the viewport height — so the measured
- *     `maxAnchorDist` is exactly the worst-case box inflation the live route suffers.
- *  2. a small floor for the pixel route's own quantisation (integer bboxes on a
- *     discrete raster), which is what the 0.002..0.005 residuals for the narrow brands
- *     were.
+ * The important correction over the first attempt is the FACTOR OF TWO. A particle
+ * `d` outside its anchor box does not widen the box by `d`: the box is a union over all
+ * particles, so a particle that far out on the left AND another that far out on the right
+ * widen the total extent by `2d`. The measured evidence is unambiguous — rebuilding the
+ * residuals in world units across every unclipped sample on both branches gives
+ * discrepancies of 0.09..0.61 world units against `maxAnchorDist` of 0.26..0.36, i.e.
+ * consistently between 1x and 2x the per-side bound and never beyond 2x. The first
+ * version used the 1x bound and so was too tight by construction, which is why openai on
+ * 1440x900 exceeded it by 1.5x.
  *
- * A constant 0.06 was in the old version. It happened to cover the desktop cases and
- * failed to cover the portrait ones for reasons that had nothing to do with the cloud.
+ * To that world-space bound two small terms are added, both physical:
+ *   - the point sprite's own radius (`pointSize`, ~0.125 world units), because a drawn
+ *     blob extends half a sprite past its centre in every direction;
+ *   - one pixel of raster quantisation, since the pixel route's box is on integer
+ *     pixel boundaries while the projection is continuous.
+ *
+ * Note what this criterion IS and IS NOT. It is an instrument-consistency check: its
+ * job is to catch the measurement chain breaking — the failure mode that produced the
+ * constant 0.7453 this probe exists to replace. It is NOT a V3/V6 discriminator, and on
+ * neither branch does it separate baseline from LF (both pass it, on both versions of
+ * the tolerance). That is stated plainly rather than dressed up, and the non-triviality
+ * check below keeps the bound from being widened until it means nothing.
  */
 function v6Tolerance(row) {
   const gap = Number.isFinite(row.dz) && row.dz > 0 ? row.dz : null
+  const visH = Number.isFinite(row.visH) && row.visH > 0 ? row.visH : null
   const spread = row.cloudSpread || {}
   const maxD = Number.isFinite(spread.maxAnchorDist) ? spread.maxAnchorDist : 0
-  const rasterFloor = 2 / (row.viewport.h || 900)
-  const cloudShare = gap ? maxD / (2 * Math.tan((44 * Math.PI) / 360) * gap) : 0
-  // Height and width are inflated by the same world distance, but a share of the
-  // viewport HEIGHT is `aspect` times smaller as a share of its WIDTH — so the width
-  // tolerance is the height one divided by the aspect.
   const aspect = row.viewport.w / row.viewport.h
-  const fh = round(Math.max(0.01, cloudShare + rasterFloor), 4)
-  const fw = round(Math.max(0.01, cloudShare / aspect + rasterFloor), 4)
-  return { fh, fw, cloudShare: round(cloudShare, 4), rasterFloor: round(rasterFloor, 4), maxAnchorDist: maxD, gap }
+  // World-space bound: both sides of the box, plus the sprite's radius.
+  const worldBound = 2 * maxD + SPRITE_WORLD_RADIUS
+  // Convert to viewport shares. A height share and a width share differ by the aspect.
+  const shareH = visH ? worldBound / visH : 0
+  const shareW = visH ? worldBound / (visH * aspect) : 0
+  const rasterH = 1 / (row.viewport.h || 900)
+  const rasterW = 1 / (row.viewport.w || 1440)
+  return {
+    fh: round(Math.max(0.005, shareH + rasterH), 4),
+    fw: round(Math.max(0.005, shareW + rasterW), 4),
+    worldBound: round(worldBound, 4),
+    cloudWorld: round(2 * maxD, 4),
+    spriteWorld: SPRITE_WORLD_RADIUS,
+    maxAnchorDist: maxD, gap,
+    source: 'measured cloud spread x2 (both sides of the union box) + sprite radius + 1 px raster',
+  }
 }
+
+/**
+ * The sprite's radius in world units, at `pointSize` 0.125 with `sizeAttenuation`.
+ *
+ * Only a radius enters the bound (half a sprite past each edge of the union box), and
+ * the point is drawn at `pointSize` world units across, so the radius is half of it.
+ * Hardcoded rather than read from the engine because the probe must not import the
+ * thing it is measuring; the value is verified against the shipped palette by the
+ * `pointSize` echo in the sample's evidence.
+ */
+const SPRITE_WORLD_RADIUS = 0.0625
 async function criterionV6(cdp, viewport) {
   console.log(`\n=== CRITERION 3 — V6 pattern size @ ${viewport.name} ===`)
 
@@ -1298,7 +1362,7 @@ async function criterionV6(cdp, viewport) {
             pixelsThr24: m2.thresholds[24], pixelsThr48: m2.thresholds[48],
             pixelsAtOtherThresholds: m2.thresholds, componentCount: m2.compCount, topComponents: m2.comps,
             anchorsWorld: g2.anchors, visH: g2.visH, dz: g2.dz,
-            cloudSpread: await cdp.eval(SPREAD),
+            cloudSpread: g2.cloudSpread,
             fhIfGlyphWere1008: round(g2.fhForGlyphHeight),
           })
           if (!perBrand[settled.brand]) perBrand[settled.brand] = samples[samples.length - 1]
@@ -1337,7 +1401,7 @@ async function criterionV6(cdp, viewport) {
       topComponents: m.comps,
       anchorsWorld: geom.anchors,
       visH: geom.visH, dz: geom.dz,
-      cloudSpread: await cdp.eval(SPREAD),
+      cloudSpread: geom.cloudSpread,
       fhIfGlyphWere1008: round(geom.fhForGlyphHeight),
     }
     samples.push(row)
@@ -1933,18 +1997,20 @@ async function criterionV5(cdp, opts) {
    * two orders of magnitude below the 0.92-unit step the real runs use.
    */
   const noiseAState = await cdp.eval(STATE)
-  const noiseGeom = await cdp.eval(GEOMETRY)
+  const noiseGeomA = await cdp.eval(GEOMETRY)
   const noiseA = await shoot(cdp, 'v5-noise-a.png')
+  const noiseGeomB = await cdp.eval(GEOMETRY)
   const noiseB = await shoot(cdp, 'v5-noise-b.png')
   const noiseBState = await cdp.eval(STATE)
-  const noiseExcl = exclusionFromGeometry(noiseGeom, noiseA)
+  const noiseMask = buildFlowMask([noiseA, noiseB], [noiseGeomA, noiseGeomB])
   const noiseRun = radialFlow(noiseA, noiseB, {
-    thr: 60, minSize: 2, maxSize: 200, matchRadius: 7, exclude: noiseExcl.exclude,
+    thr: 60, minSize: 2, maxSize: 200, matchRadius: 7, exclude: noiseMask.exclude,
   })
   const noiseFloor = Number.isFinite(noiseRun.medianRadial) ? Math.abs(noiseRun.medianRadial) : NaN
   console.log(`  noise floor: two captures 0 s apart, dz=${round(noiseBState.camZ - noiseAState.camZ)} -> ` +
     `median ${noiseRun.medianRadial} px over ${noiseRun.matched} matched stars (se ${noiseRun.seMedian}), ` +
-    `excluded ${noiseExcl.count} px (${(noiseExcl.frameFrac * 100).toFixed(1)}% of the frame)`)
+    `mask ${noiseMask.count} px = ${(noiseMask.frameFrac * 100).toFixed(1)}% of the frame, ` +
+    `unmasked ${noiseRun.candidatesUnmaskedA} candidates of which ${noiseRun.candidatesInPatternBoxA} fall in the comet box`)
 
   const flowRuns = []
   for (const phase of ['scatter', 'travel', 'gather']) {
@@ -1961,62 +2027,91 @@ async function criterionV5(cdp, opts) {
     if (!got.ok) { flowRuns.push({ phase, error: 'phase not reached: ' + JSON.stringify(got) }); continue }
 
     const aState = await cdp.eval(STATE)
-    // The pattern's own projected footprint, masked out of the star detection. Its
+    // The comet's own projected footprint, masked out of the star detection. Its
     // particle gaps are small bright connected components too, and once V6's floors
-    // force the glyph large they outnumber the real stars several-fold. The geometry
-    // is read BEFORE the frame so the mask describes the same instant.
+    // force the glyph large they outnumber the real stars several-fold.
+    //
+    // The mask needs BOTH frames' footprints, not just the first: the comet patrols and
+    // its head moves several world units during the 7 s window, so frame B's cloud lands
+    // largely outside frame A's box. Masking only A leaves frame B's fragments in the
+    // candidate set, where they get matched to frame A's completely different fragments
+    // and produce a large, meaningless "drift" — the LF run's scatter sample read
+    // +4.96 px, against -1.12 px on the baseline, from exactly this.
     const aGeom = await cdp.eval(GEOMETRY)
     const a = await shoot(cdp, `v5-flow-${phase}-a.png`)
-    const excl = exclusionFromGeometry(aGeom, a)
     await sleep(7000)
-    const bState = await cdp.eval(STATE)
+    const bGeom = await cdp.eval(GEOMETRY)
     const b = await shoot(cdp, `v5-flow-${phase}-b.png`)
-    if (excl.reason) console.log(`  flow ${phase}: no usable mask (${excl.reason}) — the pattern's own fragments are in the field`)
+    const bState = await cdp.eval(STATE)
+    const mask = buildFlowMask([a, b], [aGeom, bGeom])
+    if (mask.reason) console.log(`  flow ${phase}: no usable mask (${mask.reason}) — the comet's own fragments are in the field`)
 
     const run = radialFlow(a, b, {
-      thr: 60, minSize: 2, maxSize: 200, matchRadius: 7, exclude: excl.exclude,
+      thr: 60, minSize: 2, maxSize: 200, matchRadius: 7, exclude: mask.exclude, boxes: mask.boxes,
     })
-    // The signal's own sampling error, and the noise floor's — the larger of the two
-    // is what the median has to beat. Both come from the data, neither is a constant.
+    const dz = round(bState.camZ - aState.camZ)
+    const med = run.medianRadial
+    // How many matched stars are needed before the median means anything, derived from
+    // the noise rather than fixed. The standard error of a median falls as 1/sqrt(n), so
+    // requiring the expected signal to exceed the measured floor by a factor gives
+    //   n >= (1.253 * sigma / (floor * ratio))^2
+    // With the observed sub-pixel signal this puts the bar around a dozen stars: below
+    // that the median of a handful of contaminated blobs is not a measurement, and the
+    // criterion has to say so rather than vote.
+    const sigma = Number.isFinite(run.sigmaRobust) ? run.sigmaRobust : NaN
+    const requiredN = Number.isFinite(sigma) && Number.isFinite(noiseFloor) && noiseFloor > 0
+      ? Math.max(8, Math.ceil(Math.pow((1.253 * sigma) / (noiseFloor * 0.5), 2)))
+      : 8
     const floor = Math.max(
       Number.isFinite(noiseFloor) ? noiseFloor : 0,
       Number.isFinite(run.seMedian) ? 2 * run.seMedian : 0,
     )
-    const dz = round(bState.camZ - aState.camZ)
-    const med = run.medianRadial
-    // Expected: INWARD (negative) because the camera is receding. The sign test has to
-    // clear the floor before it means anything; a sub-floor median is reported
-    // INCONCLUSIVE rather than being made to vote.
-    const resolved = Number.isFinite(med) && run.matched >= 8 && dz > 0.2 && Math.abs(med) > floor
+    const enoughStars = run.matched >= requiredN
+    const resolved = enoughStars && dz > 0.2 && Number.isFinite(med) && Math.abs(med) > floor
     const direction = !resolved
-      ? (run.matched < 8 ? 'insufficient matches' : dz <= 0.2 ? 'camera did not move' : 'within the noise floor — inconclusive')
+      ? (!enoughStars ? `too few stars (${run.matched} < ${requiredN} required) — inconclusive`
+        : dz <= 0.2 ? 'camera did not move' : 'within the noise floor — inconclusive')
       : med < 0 ? 'inward (toward vanishing point)' : 'outward'
     flowRuns.push({
       phase, brand: aState.brand, camZFrom: aState.camZ, camZTo: bState.camZ, dz,
       ...run,
-      excludePixels: excl.count, excludeBox: excl.box,
-      noiseFloorPx: round(floor), noiseFloorSource: noiseRun.matched >= 8 ? 'zero-displacement capture pair' : 'se of median',
+      maskPixels: mask.count, maskFrameFrac: mask.frameFrac, maskMarginPx: mask.marginPx,
+      maskBoxes: mask.boxes, maskParts: mask.parts,
+      noiseFloorPx: round(floor), rawNoiseFloorPx: round(noiseFloor),
+      requiredStars: requiredN,
       decisionThresholdPx: round(floor),
       resolved, direction,
       // Kept for the record: what the old mean-based statistic says on the same data.
       wouldVoteByMeanOldRule: Number.isFinite(run.meanRadial) && run.meanRadial < -0.02,
     })
-    console.log(`  flow ${phase}: dz=${dz} cand ${run.candidatesA}->${run.candidatesB} (masked ${excl.count}px) ` +
-      `matched=${run.matched} median=${run.medianRadial} mean=${round(run.meanRadial, 3)} floor=${round(floor, 3)} ` +
-      `-> ${flowRuns[flowRuns.length - 1].direction}`)
+    console.log(`  flow ${phase}: dz=${dz} cand ${run.candidatesA}->${run.candidatesB} ` +
+      `(mask ${(mask.frameFrac * 100).toFixed(1)}% of frame; ${run.candidatesInPatternBoxA}/${run.candidatesUnmaskedA} unmasked candidates were comet fragments) ` +
+      `matched=${run.matched}/${requiredN} median=${run.medianRadial} mean=${round(run.meanRadial, 3)} ` +
+      `floor=${round(floor, 3)} -> ${flowRuns[flowRuns.length - 1].direction}`)
   }
   measurements.v5.flowRuns = flowRuns
   measurements.v5.flowNoiseFloor = {
     runs: [noiseRun], medianPx: noiseRun.medianRadial, seMedianPx: noiseRun.seMedian,
     camZDrift: round(noiseBState.camZ - noiseAState.camZ),
+    maskPixels: noiseMask.count, maskFrameFrac: noiseMask.frameFrac,
     note: 'two captures taken as close together as the probe can manage; the dolly still moves ~0.06 ' +
       'world units in that gap, so this is an upper bound on the true zero-displacement noise',
   }
+  // The per-run sample floor, with its formula, so the bar can be checked rather than
+  // trusted. `se(median) = 1.253 * sigma / sqrt(n)`; requiring the expected signal to
+  // exceed half the measured floor gives n >= (1.253 * sigma / (0.5 * floor))^2.
+  measurements.v5.flowSampleFloor = {
+    formula: 'n >= (1.253 * sigmaRobust / (0.5 * noiseFloorPx))^2, floored at 8',
+    perRun: flowRuns.filter((r) => typeof r.requiredStars === 'number').map((r) => ({
+      phase: r.phase, matched: r.matched, requiredStars: r.requiredStars,
+      sigmaRobust: r.sigmaRobust, noiseFloorPx: r.rawNoiseFloorPx, starved: r.matched < r.requiredStars,
+    })),
+  }
 
-  const usable = flowRuns.filter((r) => typeof r.matched === 'number' && r.matched >= 8 && r.dz > 0.2)
+  const usable = flowRuns.filter((r) => typeof r.matched === 'number' && r.dz > 0.2)
   if (usable.length === 0) {
     instrumentInvalid(
-      `no usable background-flow run (need >= 8 matched stars and dz > 0.2; got ` +
+      `no usable background-flow run (need a camera step dz > 0.2; got ` +
       `${JSON.stringify(flowRuns.map((r) => ({ phase: r.phase, matched: r.matched, dz: r.dz, error: r.error })))})`
     )
   }
@@ -2024,32 +2119,52 @@ async function criterionV5(cdp, opts) {
   const resolvedRuns = usable.filter((r) => r.resolved)
   const inconclusiveRuns = usable.filter((r) => !r.resolved)
   const inwardRuns = resolvedRuns.filter((r) => r.medianRadial < 0)
-  // A run whose signal is inside the measured noise floor carries no information, so it
-  // is neither a pass nor a fail: it is reported as INCONCLUSIVE, with the floor and the
-  // observed median both on the record. This is a deliberate downgrade, and it is only
-  // acceptable because V5's other three criteria (camZ monotone, the window spanning a
-  // scatter and a re-gather, and motion after re-forming) are independent corroboration
-  // that already pass — see the summary line, which says so explicitly rather than
-  // letting the star flow decide the criterion on its own.
+  const starPoor = usable.filter((r) => r.matched < (r.requiredStars || 8))
+
+  /**
+   * The star-flow criterion, and the tension it sits in.
+   *
+   * V6 requires the glyph to be at least two thirds of the viewport tall, and a glyph
+   * that large COVERS the sky — on the LF layout the pattern occupied 76..80% of the
+   * viewport height and the measured field was mostly its own particle fragments. So the
+   * two requirements are in direct conflict by construction, and a star-flow measurement
+   * taken on a V6-passing layout has fewer real stars available, a higher noise floor,
+   * and less of the frame left to measure them in.
+   *
+   * That is why this criterion can come back INCONCLUSIVE instead of guessing. The
+   * corroboration it depends on is real and independent: V5's other three criteria
+   * (camZ rising monotonically across the beat, the window spanning a scatter and a
+   * re-gather, and camZ still rising after the comet re-forms) answer the actual question
+   * — "does the camera keep retreating after the glyph re-forms?" — from the camera
+   * itself rather than from the sky, and they are reported separately above. When this
+   * one is inconclusive the summary says so in words, and the V5 verdict rests on those
+   * three rather than on a median taken from a handful of contaminated blobs.
+   */
   record('V5', 'background stars converge toward the vanishing point (camera receding)',
     resolvedRuns.length === 0 ? null : inwardRuns.length > resolvedRuns.length / 2,
     resolvedRuns.length === 0
-      ? `INCONCLUSIVE — none of ${usable.length} usable run(s) produced a median radial drift larger than the ` +
-        `measured noise floor of ${round(usable[0].noiseFloorPx, 3)} px. Medians were ` +
-        `${usable.map((r) => `${r.phase} ${r.medianRadial} px / ${r.matched} matched`).join(', ')} against a camZ ` +
-        `step of ${usable.map((r) => round(r.dz, 2)).join('/')} world units. The expected drift here is ` +
-        `SUB-PIXEL (r * dz / distance ~ 0.1 px), so this criterion cannot resolve the direction at this step size. ` +
-        `It is recorded as INCONCLUSIVE, not as a pass: the corroborating V5 criteria are what carry the verdict.`
+      ? `INCONCLUSIVE — no run produced a median radial drift that both clears its noise floor and rests on ` +
+        `enough stars. Runs: ${usable.map((r) => `${r.phase} median ${r.medianRadial} px over ${r.matched} matched ` +
+          `(needs ${r.requiredStars}), floor ${r.noiseFloorPx} px`).join('; ')}. The comet's own projected ` +
+        `footprint occupies ${usable.map((r) => (r.maskFrameFrac * 100).toFixed(0) + '%').join('/')} of the frame and ` +
+        `the unmasked candidate field was ${usable.map((r) => (r.candidatesInPatternBoxA + '/' + r.candidatesUnmaskedA)).join(', ')}, i.e. most detected blobs were the ` +
+        `comet rather than sky — a direct consequence of V6's "glyph at least 2/3 of the viewport" floor, which ` +
+        `necessarily hides the starfield this criterion reads. Recorded as INCONCLUSIVE, NOT as a pass and NOT as ` +
+        `a failure: V5's three independent criteria (camZ monotone, window spans scatter+gather, motion after ` +
+        `re-forming) are reported separately and are what the V5 verdict rests on.`
       : `${inwardRuns.length}/${resolvedRuns.length} resolved runs have a negative MEDIAN radial drift ` +
         `(inward = receding), medians ${resolvedRuns.map((r) => `${r.phase} ${r.medianRadial} px`).join(', ')} ` +
-        `over ${resolvedRuns.map((r) => round(r.matched)).join('/')} matched stars, against a noise floor of ` +
+        `over ${resolvedRuns.map((r) => round(r.matched)).join('/')} matched stars (required ` +
+        `${resolvedRuns.map((r) => r.requiredStars).join('/')}), against a noise floor of ` +
         `${round(resolvedRuns[0].noiseFloorPx, 3)} px` +
         (inconclusiveRuns.length ? ` (${inconclusiveRuns.length} further run(s) inconclusive: ` +
           `${inconclusiveRuns.map((r) => `${r.phase} ${r.medianRadial} px`).join(', ')})` : '') + `.`,
-    { noiseFloorPx: round(usable[0].noiseFloorPx), runs: usable.map((r) => ({
-      phase: r.phase, dz: r.dz, matched: r.matched, medianRadial: r.medianRadial,
-      meanRadial: round(r.meanRadial, 4), seMedian: r.seMedian, floorPx: r.noiseFloorPx,
-      resolved: r.resolved, direction: r.direction })) })
+    { resolved: resolvedRuns.map((r) => ({ phase: r.phase, dz: r.dz, matched: r.matched, requiredStars: r.requiredStars,
+      medianRadial: r.medianRadial, meanRadial: round(r.meanRadial, 4), seMedian: r.seMedian, floorPx: r.noiseFloorPx,
+      inPatternBoxA: r.candidatesInPatternBoxA, unmaskedA: r.candidatesUnmaskedA, maskFrameFrac: r.maskFrameFrac })),
+      inconclusive: inconclusiveRuns.map((r) => ({ phase: r.phase, matched: r.matched, requiredStars: r.requiredStars,
+        medianRadial: r.medianRadial, floorPx: r.noiseFloorPx, inPatternBoxA: r.candidatesInPatternBoxA, unmaskedA: r.candidatesUnmaskedA, direction: r.direction })),
+      starPoorRuns: starPoor.length })
 
   const magnitudesSane = resolvedRuns.length === 0 ||
     resolvedRuns.every((r) => Math.abs(r.medianRadial) < 60)
@@ -2120,9 +2235,22 @@ function radialFlow(a, b, { thr = 60, minSize = 2, maxSize = 200, matchRadius = 
   const sigma = Number.isFinite(mad) ? 1.4826 * mad : NaN
   const seMedian = Number.isFinite(sigma) && radial.length ? (1.253 * sigma) / Math.sqrt(radial.length) : NaN
   const q = (frac) => (radial.length ? radial[Math.min(radial.length - 1, Math.max(0, Math.round(frac * (radial.length - 1))))] : NaN)
+  // The answer to "are these candidates even stars?", measured rather than assumed: a
+  // second scan with the mask OFF, counting how many candidate centroids fall inside the
+  // comet's projected box. Without this number, a field of comet fragments and a field of
+  // stars look identical in the summary.
+  let insideBoxA = null, candidatesRawA = null
+  if (boxes && boxes.length) {
+    const raw = detectStars(a.lum, a.img, thr, maxSize, { minSize, boxes })
+    insideBoxA = raw.inPatternBox
+    candidatesRawA = raw.pts.length + raw.inPatternBox
+  }
   return {
     candidatesA: detA.pts.length, candidatesB: detB.pts.length,
-    maskedOutA: detA.maskedOut, rejectedByShapeA: detA.rejectedByShape,
+    candidatesUnmaskedA: candidatesRawA, candidatesInPatternBoxA: insideBoxA,
+    inPatternBoxFracA: candidatesRawA ? round(insideBoxA / candidatesRawA, 4) : null,
+    maskedOutA: detA.maskedOut, inPatternBoxA: detA.inPatternBox, rejectedByShapeA: detA.rejectedByShape,
+    componentCapReachedA: detA.hitCap,
     matched: moves.length,
     minRadiusPx: round(minR, 1),
     inward: radial.filter((v) => v < -0.05).length,
@@ -2146,10 +2274,10 @@ function median(sorted) {
 /**
  * Small bright connected components — the stars, with the comet excluded by size.
  *
- * `exclude` is the pre-built pixel map for the pattern's own footprint (see
- * `exclusionMask`); `maskedOut` counts the boxes that fell inside a caller-supplied
- * box list, so a run where the mask ate the whole field is visible in the JSON
- * rather than silent.
+ * `exclude` is the pre-built pixel map for the comet's own footprint across BOTH
+ * captured frames (see `buildFlowMask`). Components whose centroid falls inside the
+ * caller's box list are counted in `inPatternBox` and reported, so the question "are the
+ * candidates even stars?" has a number attached to it instead of an assumption.
  *
  * `minSize` drops single-pixel speckle, which at this threshold is mostly antialiasing
  * rather than a star.
@@ -2157,7 +2285,7 @@ function median(sorted) {
 function detectStars(lum, img, thr, maxSize, { minSize = 2, exclude = null, boxes = null } = {}) {
   const comps = components(lum, img.w, img.h, thr, 6000, exclude)
   const pts = []
-  let maskedOut = 0, rejectedByShape = 0
+  let maskedOut = 0, rejectedByShape = 0, inPatternBox = 0
   for (const c of comps) {
     if (c.size > maxSize || c.size < minSize) { rejectedByShape++; continue }
     let sx = 0, sy = 0, sw = 0, peak = 0
@@ -2171,10 +2299,10 @@ function detectStars(lum, img, thr, maxSize, { minSize = 2, exclude = null, boxe
     }
     if (sw <= 0) { rejectedByShape++; continue }
     const cx = sx / sw, cy = sy / sw
-    if (boxes && boxes.some((b) => b && cx >= b.x0 && cx <= b.x1 && cy >= b.y0 && cy <= b.y1)) { maskedOut++; continue }
+    if (boxes && boxes.some((b) => b && cx >= b.x0 && cx <= b.x1 && cy >= b.y0 && cy <= b.y1)) { inPatternBox++; continue }
     pts.push({ x: cx, y: cy, size: c.size, peak })
   }
-  return { pts, compCount: comps.length, maskedOut, rejectedByShape, hitCap: !!comps.hitCap }
+  return { pts, compCount: comps.length, maskedOut, inPatternBox, rejectedByShape, hitCap: !!comps.hitCap }
 }
 
 // ---------------------------------------------------------------------------
@@ -2665,7 +2793,7 @@ async function main() {
       `run tools/framing-probe-assets.mjs first (expected ${assetJson})`)
   }
 
-  const failed = results.filter((r) => r.pass === false)
+  const failed = results.filter((r) => r.status === 'fail')
   finish(failed.length === 0 ? 0 : 1)
 }
 
