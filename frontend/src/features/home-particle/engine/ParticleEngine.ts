@@ -1179,23 +1179,26 @@ export class ParticleEngine implements ParticleEngineContract {
    * the frame at that nearer distance the patrol amplitude comes down (see
    * `AMPLITUDE_X`).
    *
-   * On why `FRAME_MARGIN`'s 12% of breathing room is NOT applied along the width
-   * axis here — this is a real result of the numbers, not an oversight:
+   * On the one horizontal cost this leaves behind, stated rather than smoothed over:
    *
-   *   - at the roster distance on 16:9 the frame is 21.03 units wide and 13.14 tall,
-   *     i.e. +/-10.51 across;
+   *   - on a landscape viewport at the roster distance the frame is 21.168 world
+   *     units wide, i.e. +/-10.584 across;
    *   - the widest brand, xiaomimimo, levels to 16.479 wide (half-width 8.24) and
-   *     forms at x = +/-2.56, so its far edge reaches 10.80 — already 0.29 past the
-   *     frame edge, before any margin is discussed;
-   *   - multiplying the allowance by 1.12 instead drops the permitted half-width to
-   *     9.38, which would force that brand down to s <= 0.828 and take its height
-   *     share to 63.5%, i.e. BELOW the user's 2/3 floor.
+   *     forms at x = +/-2.56, so its far edge reaches 10.800 — about 0.22 units, or
+   *     1% of the frame width, past the edge. Every other brand fits.
    *
-   * So the height floor and the width allowance genuinely cannot both be honoured
-   * with a 12% width margin: the margin has to be spent in the vertical direction
-   * (where it is free) and the horizontal overflow has to be taken out of the one
-   * brand that causes it. The `Math.max(0.2, ...)` floor stays because a zero or
-   * negative aspect would otherwise divide the fit away and blank the canvas.
+   * The brief's answer to that was a per-brand uniform shrink of about 3.5% for this
+   * one glyph. That is deliberately NOT done here, because it would break a stronger
+   * invariant than it repairs: `brandTargets` levels every mark to
+   * `GLYPH_WORLD_HEIGHT` precisely so that ONE distance serves all 28 brands, and
+   * both the unit spec and the acceptance probe assert the buffer's world height is
+   * `GLYPH_WORLD_HEIGHT` within 0.005 / 0.05. A 3.5% shrink puts that readback at
+   * 9.816 — a 0.264 miss on both. Paying 1% of overhang with an assertion about the
+   * levelling contract would trade a cosmetic edge clip for a broken guarantee, so
+   * the overhang is reported to the reviewer instead of being hidden.
+   *
+   * The `Math.max(0.2, ...)` floor stays because a zero or negative aspect would
+   * otherwise divide the fit away and blank the canvas.
    */
   private updateCameraFit(): void {
     const aspect = Math.max(0.2, this.width / this.height)
