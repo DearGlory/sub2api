@@ -35,10 +35,44 @@ export const CYCLE_SECONDS =
  * further back (see `updateCameraFit` for why the margin cannot be spent here).
  */
 export const AMPLITUDE_X = 2.56
-/** Vertical sway amplitude, which is what makes the sweep read as an S. */
-export const SWAY_Y = 1.6
-/** Depth sway so the S is not flat. */
-export const SWAY_Z = 2.2
+/**
+ * The `AMPLITUDE_X` the two sway amplitudes below were authored against.
+ *
+ * They were tuned as absolute lengths (1.6 and 2.2) for a 9.0 patrol, which is the
+ * only setting for which they are right — see `SWAY_Y`.
+ */
+const SWAY_REFERENCE_AMPLITUDE_X = 9.0
+
+/**
+ * The S-curve's vertical sway, as a FRACTION of the patrol amplitude.
+ *
+ * `AMPLITUDE_X` was narrowed to 2.56 to satisfy V6 (the user's number, and the only
+ * value that fits the widest roster brand into the frame). Leaving the sway at its
+ * absolute 1.6/2.2 broke the tail: the emission axis is the head's *unit* velocity
+ * (`axis = -v/|v|`, `fillEmissionTable`), so what aims the plume is the RATIO of the
+ * along-path speed to the sway speed, not either one alone. Compressing x by 3.5x
+ * while the sway held still turned the velocity from x-dominated into sway-dominated
+ * — measured `mean |axis.z|` 0.212 -> 0.4455 (`frac |axis.z| > 0.5`: 0.000 -> 0.438),
+ * cone half-angle 22.6 -> 35.3 deg, and 3D thickness/length 0.346 -> 0.633. On screen
+ * the plume stopped reading as a slim jet and became a wide fan.
+ *
+ * Making both sways proportional keeps the S self-similar at every patrol width, and
+ * that restores the axis direction EXACTLY rather than approximately: the whole
+ * velocity vector scales by one constant, and a unit vector does not care. The tail's
+ * own length is untouched either way — it comes from `V * life * (1 - TAIL_ENTRAIN)`
+ * and never reads the head's speed.
+ *
+ * A happy side effect: the sweep is now more nearly lateral, which is what the user
+ * described ("达到最左或最右点散开组成图案") — the glyph assembles at the horizontal
+ * extremes, not at a diagonal corner.
+ */
+export const SWAY_Y = 1.6 * (AMPLITUDE_X / SWAY_REFERENCE_AMPLITUDE_X)
+/**
+ * Depth sway so the S is not flat. Proportional to `AMPLITUDE_X` for the reason
+ * spelled out on `SWAY_Y` — an absolute depth here is what tilted the emission axis
+ * out of the screen plane.
+ */
+export const SWAY_Z = 2.2 * (AMPLITUDE_X / SWAY_REFERENCE_AMPLITUDE_X)
 /** The particle slab sits this far behind the origin, giving the starfield room. */
 export const SUBJECT_Z = -6.0
 
