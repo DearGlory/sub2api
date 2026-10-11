@@ -113,6 +113,7 @@ import {
   TAIL_SPREAD,
 } from './constants'
 import { createQualityProfile, probeQualityProfile } from './quality'
+import { fitDistanceForRoster } from './glyphSize'
 import { createStarfield } from './starfield'
 import type {
   BrandTargetSource,
@@ -127,10 +128,18 @@ import type {
 
 /** Where the vendor's glyph sampler centres a glyph, in its own units. */
 const GLYPH_CENTER_X = 5.8
-/** Half extent of the sampler's glyph box, in world units. */
-const GLYPH_HALF_EXTENT = 6.3
-/** Breathing room so the framed content never sits flush against the edge. */
-const FRAME_MARGIN = 1.12
+// The framing constants that used to live here — `GLYPH_HALF_EXTENT = 6.3` and the
+// `FRAME_MARGIN = 1.12` applied on top of it — are both gone rather than merely
+// unused, and deliberately not replaced by equivalents.
+//
+// `GLYPH_HALF_EXTENT` described half of the vendor's 12.6-unit icon square, which
+// was the widest thing on screen only until `brandTargets.ts` began levelling every
+// mark to `GLYPH_WORLD_HEIGHT`. The roster's real widths are now 7.006..16.479, so
+// the constant was sizing a shape that no longer exists. `FRAME_MARGIN` cannot be
+// spent along the width axis at all: at the roster distance it would force the one
+// over-wide brand down to a 63.5% height share, under the user's 2/3 floor. The
+// framing question is `glyphSize.ts`'s now — see `updateCameraFit`.
+
 /** Cap on the per-frame step fed to the phase clock, in seconds. A tab that was
  *  asleep must not skip a whole beat: running briefly slow beats jumping. */
 const MAX_CLOCK_STEP = 0.1
@@ -821,6 +830,7 @@ export class ParticleEngine implements ParticleEngineContract {
   private palette: ThemePalette
   private width = 1
   private height = 1
+  private fitGap = DOLLY_FROM_Z
   private fitDistance = DOLLY_FROM_Z
   private readonly particleCount: number
   private readonly tailSampleCount: number
@@ -1127,26 +1137,57 @@ export class ParticleEngine implements ParticleEngineContract {
   }
 
   /**
-   * The nearest the camera may come while still framing the widest content: a
-   * glyph parked on the left or right extreme.
+   * How far the camera must sit from the CONTENT PLANE for the formed glyph to
+   * clear both of the user's floors (V6): at least 2/3 of the viewport height and
+   * at least 1/3 of its width.
    *
-   * Derived from the aspect ratio rather than fixed, because a portrait viewport
-   * is far narrower in world units than a wide one and a fixed distance clips the
-   * glyph exactly on a phone. The subtraction is the part that is easy to get
-   * backwards: the content sits at `SUBJECT_Z`, so the distance from the camera to
-   * the content plane is `cameraZ - SUBJECT_Z`, and the requirement is on that
-   * distance — not on `cameraZ`. Adding the offset instead of subtracting it
-   * shoves the camera a further `2 * |SUBJECT_Z|` back, which is past the whole
-   * near half of the dolly and leaves the camera parked for most of a lap.
+   * This used to be computed here from `GLYPH_HALF_EXTENT = 6.3`, which is a
+   * pre-normalisation number (it describes the vendor's 12.6-unit icon square, and
+   * 6.3 was only ever correct while the widest thing on screen was that square).
+   * After the glyphs are levelled in `brandTargets.ts` the roster's real extents are
+   * 7.006 (groq) to 16.479 (xiaomimimo) world units wide, so that constant was
+   * describing a shape that no longer exists. It is `glyphSize.ts` that owns this
+   * question now, and it answers it against the levelled `GLYPH_WORLD_HEIGHT` and
+   * the roster's narrowest bbox aspect, which is the worst case over all 28 brands.
+   *
+   * The two constraints pull in OPPOSITE directions, which is the whole tension
+   * here and worth stating plainly:
+   *
+   *   - the old `fitDistance` was a LOWER bound on the distance, because it was
+   *     solving "the widest content must not overflow the frame" — a further camera
+   *     draws everything smaller, so any distance at or beyond it was safe;
+   *   - `fitDistanceForRoster` is an UPPER bound, because it is solving "the glyph
+   *     must be at least 2/3 as tall as the viewport" — a further camera draws the
+   *     glyph smaller, so the distance must be at or INSIDE it.
+   *
+   * A layout that satisfied the first by shoving the camera back therefore made the
+   * second worse, and that is exactly the 0.28 height share the probe measured. The
+   * fix is not a bigger margin, it is a nearer camera, and to keep the glyph inside
+   * the frame at that nearer distance the patrol amplitude comes down (see
+   * `AMPLITUDE_X`).
+   *
+   * On why `FRAME_MARGIN`'s 12% of breathing room is NOT applied along the width
+   * axis here — this is a real result of the numbers, not an oversight:
+   *
+   *   - at the roster distance on 16:9 the frame is 21.03 units wide and 13.14 tall,
+   *     i.e. +/-10.51 across;
+   *   - the widest brand, xiaomimimo, levels to 16.479 wide (half-width 8.24) and
+   *     forms at x = +/-2.56, so its far edge reaches 10.80 — already 0.29 past the
+   *     frame edge, before any margin is discussed;
+   *   - multiplying the allowance by 1.12 instead drops the permitted half-width to
+   *     9.38, which would force that brand down to s <= 0.828 and take its height
+   *     share to 63.5%, i.e. BELOW the user's 2/3 floor.
+   *
+   * So the height floor and the width allowance genuinely cannot both be honoured
+   * with a 12% width margin: the margin has to be spent in the vertical direction
+   * (where it is free) and the horizontal overflow has to be taken out of the one
+   * brand that causes it. The `Math.max(0.2, ...)` floor stays because a zero or
+   * negative aspect would otherwise divide the fit away and blank the canvas.
    */
   private updateCameraFit(): void {
     const aspect = Math.max(0.2, this.width / this.height)
-    const tan = Math.tan((CAMERA_FOV * Math.PI) / 360)
-    const needWidth = (AMPLITUDE_X + GLYPH_HALF_EXTENT) * FRAME_MARGIN
-    const needHeight = GLYPH_HALF_EXTENT * FRAME_MARGIN
-    const forWidth = needWidth / (tan * aspect)
-    const forHeight = needHeight / tan
-    this.fitDistance = Math.max(DOLLY_FROM_Z, Math.max(forWidth, forHeight) + SUBJECT_Z)
+    this.fitGap = fitDistanceForRoster(aspect, CAMERA_FOV)
+    this.fitDistance = this.fitGap + SUBJECT_Z
   }
 
   // -------------------------------------------------------------------------
