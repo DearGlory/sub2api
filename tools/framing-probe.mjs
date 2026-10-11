@@ -410,7 +410,17 @@ function withinGroupSlope(points, groupOf) {
   let sxy = 0, sxx = 0, syy = 0, groupsUsed = 0, usable = 0
   const perGroup = []
   for (const [g, arr] of groups) {
-    if (arr.length < 2) { perGroup.push({ group: g, n: arr.length, span: null }); continue }
+    // Every point in a group must have finite x and y. A single NaN anywhere in the
+    // arithmetic would poison the pooled sums into NaN, and NaN comparisons are all
+    // false — so `sxx <= 0` would not fire and the slope would quietly come back NaN
+    // while every guard downstream still read as "many". Refusing the group outright is
+    // the only safe handling; the caller then reports that the confound could not be
+    // removed instead of accepting a number that is not one.
+    const bad = arr.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))
+    if (arr.length < 2 || bad) {
+      perGroup.push({ group: g, n: arr.length, usable: false, reason: bad ? 'non-finite x or y' : 'fewer than 2 points' })
+      continue
+    }
     const mx = mean(arr.map((p) => p.x))
     const my = mean(arr.map((p) => p.y))
     let gxx = 0, gxy = 0, gyy = 0
@@ -418,17 +428,21 @@ function withinGroupSlope(points, groupOf) {
       const a = p.x - mx, b = p.y - my
       gxx += a * a; gxy += a * b; gyy += b * b
     }
-    if (gxx <= 0) { perGroup.push({ group: g, n: arr.length, span: null }); continue }
+    if (!(gxx > 0)) {
+      perGroup.push({ group: g, n: arr.length, usable: false, reason: 'no spread in x within this group' })
+      continue
+    }
     groupsUsed++; usable += arr.length
     sxx += gxx; sxy += gxy; syy += gyy
     perGroup.push({
-      group: g, n: arr.length,
+      group: g, n: arr.length, usable: true,
       camZSpan: round(Math.max(...arr.map((p) => p.x)) - Math.min(...arr.map((p) => p.x)), 3),
       yRange: [round(Math.min(...arr.map((p) => p.y)), 4), round(Math.max(...arr.map((p) => p.y)), 4)],
       ySpreadPct: round(((Math.max(...arr.map((p) => p.y)) - Math.min(...arr.map((p) => p.y))) / (my || 1)) * 100, 2),
     })
   }
-  if (sxx <= 0) return { slope: null, corr: null, groupsUsed, usable, sxx: 0, syy, sxy, perGroup }
+  const finite = Number.isFinite(sxx) && Number.isFinite(sxy) && Number.isFinite(syy) && sxx > 0
+  if (!finite) return { slope: null, corr: null, groupsUsed, usable, sxx: 0, syy, sxy, perGroup }
   return {
     slope: sxy / sxx,
     corr: syy > 0 ? sxy / Math.sqrt(sxx * syy) : null,
@@ -1675,31 +1689,44 @@ async function criterionV3(cdp, opts) {
   // camZ steps. That ratio is the "how much did the measurement move, for how much a
   // world-nailed comet would have moved, at identical camZ" number, and it is not
   // fooled by a brand offset because each brand is demeaned out.
-  const measuredFit = withinGroupSlope(
-    paired.map((p) => ({ ...p, brand: p.brand })),
-    (p) => p.brand,
-  )
-  const controlFit = withinGroupSlope(
-    samples.map((s) => ({ x: s.camZ, y: s.fhIfFixedWorldSize, brand: s.brand })),
-    (p) => p.brand,
-  )
+  // All three fits go through ONE construction path — `{ x, y, brand }` — so they
+  // cannot drift apart. The earlier version built the measured fit with `camZ`/`fh`
+  // key names while the estimator read `x`/`y`, which produced a perfectly good
+  // `liveWithinBrand` fit alongside an all-null `measuredWithinBrand` one; the criterion
+  // then read the null one and reported "NaN per world unit" as if that were a
+  // measurement. One shape, one estimator, no second path to get wrong.
+  const asXY = (arr, xKey, yKey) => arr.map((p) => ({ x: p[xKey], y: p[yKey], brand: p.brand }))
+  const measuredFit = withinGroupSlope(asXY(paired, 'camZ', 'fh'), (p) => p.brand)
+  const controlFit = withinGroupSlope(asXY(samples, 'camZ', 'fhIfFixedWorldSize'), (p) => p.brand)
+  // The live route's fit, reported alongside for the record. It is built from the same
+  // path as the other two; `live.fh` is nested, so it is mapped explicitly rather than
+  // through `asXY`'s flat key lookup.
   const liveFit = withinGroupSlope(
-    samples.map((s) => ({ x: s.camZ, y: s.live.fh, brand: s.brand })),
-    (p) => p.brand,
+    samples.map((s) => ({ x: s.camZ, y: s.live.fh, brand: s.brand })), (p) => p.brand,
   )
   const responseRatio = measuredFit.slope != null && controlFit.slope != null && controlFit.slope !== 0
     ? measuredFit.slope / controlFit.slope
     : null
-  const deconfounded = measuredFit.groupsUsed >= 2 && measuredFit.slope != null && controlFit.slope != null
+  // `deconfounded` is about whether the estimator could do its job at all: at least two
+  // brands each with camZ spread, and both a measured and a control slope to compare.
+  // It is NOT a statement about the outcome, and it must not be true on nulls — an
+  // undefined slope means the confound could not be removed, which is a FAIL with the
+  // reason stated, not a silently-true precondition.
+  const deconfounded = measuredFit.groupsUsed >= 2 && measuredFit.usable >= 3 &&
+    Number.isFinite(measuredFit.slope) && Number.isFinite(controlFit.slope) &&
+    Number.isFinite(responseRatio)
   const deconfoundedOk = deconfounded && Math.abs(responseRatio) < 0.5
   const fhVaries = Math.max(...fhs) - Math.min(...fhs) > 0.01
 
   // The per-brand spread, reported so the cross-brand step can be seen as a brand
-  // effect rather than taken on trust.
-  const brandTable = measuredFit.perGroup.map((g) => {
-    const rows = paired.filter((p) => p.brand === g.group)
-    return { brand: g.group, n: rows.length, camZSpan: g.camZSpan, fhRange: g.yRange, fhSpreadPct: g.ySpreadPct }
-  })
+  // effect rather than taken on trust. Built from the SAME fit as the verdict, so the
+  // table and the number cannot disagree — the earlier version rendered this from one
+  // fit while the verdict read another, and the two then showed different camZ spans for
+  // the same brand.
+  const brandTable = measuredFit.perGroup.map((g) => ({
+    brand: g.group, n: g.n, usable: !!g.usable, reason: g.reason,
+    camZSpan: g.camZSpan, fhRange: g.yRange, fhSpreadPct: g.ySpreadPct,
+  }))
   measurements.v3.brandDeconfounding = {
     measuredWithinBrand: measuredFit, controlWithinBrand: controlFit, liveWithinBrand: liveFit,
     responseRatio: round(responseRatio), deconfounded, brandTable,
@@ -1707,8 +1734,8 @@ async function criterionV3(cdp, opts) {
       'within-brand (fixed-effects) response, not the pooled correlation',
   }
   for (const g of brandTable) {
-    console.log(`  brand ${g.brand}: n=${g.n} camZ span ${g.camZSpan} | fh ${g.fhRange[0]}..${g.fhRange[1]} ` +
-      `(${g.fhSpreadPct}% of itself inside one brand)`)
+    console.log(`  brand ${g.brand}: n=${g.n} camZ span ${g.camZSpan} | fh ${g.fhRange ? g.fhRange[0] + '..' + g.fhRange[1] : 'n/a'} ` +
+      `(${g.fhSpreadPct}% of itself inside one brand)${g.usable ? '' : ' — UNUSABLE: ' + g.reason}`)
   }
 
   record('V3', 'fh is not the fixed-world-size function of camZ (brand de-confounded)', deconfoundedOk,
@@ -1733,21 +1760,33 @@ async function criterionV3(cdp, opts) {
     `brand; a brand effect shows up as a level step BETWEEN them.`,
     { brandTable, measuredRangePct: measurements.v3.measuredRangePct })
 
-  // The ratio criterion. When the control is degenerate there is no ratio to form, so
-  // the comparison is reported as a FAIL with the reason stated — never as a silent
-  // pass, and never as the inverted sentence the previous version emitted.
+  // The ratio criterion.
+  //
+  // The copy is driven by WHICH WAY the ratio points, because the same sentence cannot
+  // carry both conclusions: `ratio ~= 1` means the measurement moved exactly as much as a
+  // world-nailed comet would have (so it is NOT following the camera), while `ratio << 1`
+  // means it barely moved at all (so it IS). The previous wording — "measured jitter is
+  // far below the control" — asserted the second reading unconditionally, which is how a
+  // genuine FAIL at ratio 0.9465 came out phrased as if it had passed, and how an
+  // `Infinity` from a degenerate control came out phrased as if 5.59% were below 0%.
+  //
+  // A degenerate control has no ratio at all, so it gets its own branch and FAILs.
   const jitterRatio = controlDegenerate ? null : jitter / controlJitter
   const jitterRatioOk = !controlDegenerate && jitterRatio < 0.5
-  record('V3', 'measured jitter is far below the fixed-world-size control', jitterRatioOk,
+  const ratioReading = controlDegenerate ? 'undefined (control is constant)'
+    : jitterRatio >= 0.5 ? `TRACKING the control (ratio ${round(jitterRatio)} ~ 1): the measurement moved as much as a ` +
+      `world-nailed comet would have, so the comet is NOT following the camera`
+      : `independent of camZ (ratio ${round(jitterRatio)} << 1): the measurement held while the control would have moved`
+  record('V3', 'measured jitter is well below the fixed-world-size control', jitterRatioOk,
     controlDegenerate
       ? `control degenerate — cannot form a ratio: the control spans 0 across a camZ sweep of ` +
-        `${camRange.span}, so "measured / control" has no meaning. Measured jitter is ` +
-        `${round(jitter * 100, 2)}%, which cannot be compared to a constant control.`
+        `${camRange.span} world units, so "measured / control" has no meaning and the criterion FAILS. ` +
+        `Measured jitter was ${round(jitter * 100, 2)}%, which cannot be compared to a constant.`
       : `measured jitter ${round(jitter * 100, 2)}% vs ${round(controlJitter * 100, 2)}% for a comet of fixed world ` +
-        `size (ratio ${round(jitterRatio)}) — a ratio near 1 means the measurement is tracking the control, i.e. the ` +
-        `comet is not following the camera at all, which is what corr(camZ, fh) = ${round(corrPixels)} says independently`,
+        `size — ratio ${round(jitterRatio)} (must be < 0.5 to pass). Reading: ${ratioReading}. ` +
+        `The independent check on camZ gives corr(camZ, fh) = ${round(corrPixels)}.`,
     { measured: round(jitter), fixedControl: round(controlJitter), ratio: round(jitterRatio),
-      controlDegenerate, frozenPlaneZ: planeAtSweepStart })
+      ratioReading, controlDegenerate, frozenPlaneZ: planeAtSweepStart })
 
   // Report the sweep honestly: it covers the whole dolly DOMAIN, by driving the
   // engine's own clock, not by waiting out 152 s of wall-clock.
