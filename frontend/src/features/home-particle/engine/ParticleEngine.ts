@@ -915,8 +915,10 @@ export class ParticleEngine implements ParticleEngineContract {
     })
 
     this.points = new Points(this.geometry, this.material)
-    // The slab is moved, not the camera, so the pointer ray and the glyph anchors
-    // share one frame of reference.
+    // The slab sits at `SUBJECT_Z` here as the SEED pose, which is where the dolly
+    // starts at `progress = 0`; `advanceCamera` updates this z every frame from then
+    // on, because the camera and the content retreat together (V3). The pointer ray
+    // reads this same live position rather than assuming the plane is static.
     this.points.position.set(0, 0, SUBJECT_Z)
     this.points.frustumCulled = false
     this.scene.add(this.points)
@@ -1370,8 +1372,15 @@ export class ParticleEngine implements ParticleEngineContract {
         const dir = s.vecB.copy(ndc).sub(this.camera.position)
         const dirZ = dir.z
         dir.normalize()
-        // Intersect the view ray with the slab's own plane.
-        const distance = dirZ === 0 ? -1 : (SUBJECT_Z - this.camera.position.z) / dir.z
+        // Intersect the view ray with the slab's OWN plane, read live rather than
+        // taken as `SUBJECT_Z`: the slab now rides the dolly every frame (see
+        // `advanceCamera`), so a static plane would put the pointer's hit point
+        // progressively further behind the content — by the far end of the lap it
+        // would be a full 19 units off. The `sub(this.points.position)` below is
+        // already correct, because it converts the world hit into the slab's local
+        // frame, which is the frame the glyph anchors live in.
+        const planeZ = this.points.position.z
+        const distance = dirZ === 0 ? -1 : (planeZ - this.camera.position.z) / dir.z
         if (Number.isFinite(distance) && distance > 0) {
           const world = s.vecA
             .copy(this.camera.position)
@@ -1578,6 +1587,39 @@ export class ParticleEngine implements ParticleEngineContract {
     this.geometry.getAttribute('color').needsUpdate = true
   }
 
+  /**
+   * V3/V5 — the camera and the content retreat TOGETHER, so the comet neither
+   * shrinks nor drifts away from the glyph as the dolly runs.
+   *
+   * What was wrong before: only the camera moved and the slab was nailed to
+   * `SUBJECT_Z`. That is not a dolly, it is a zoom-out, and it makes the
+   * camera-to-content distance grow over the whole lap — the probe measured the gap
+   * walking from 26.5 to 45.5 units, which is why the glyph shrank from 79% of the
+   * viewport down to 46% and why `corr(camZ, fh)` came out at -0.9856. Any framing
+   * distance chosen for that layout was only ever correct at one instant, and V6
+   * asks about the glyph at every instant.
+   *
+   * Now the gap is a CONSTANT the framing owns, and the dolly moves both ends of it:
+   *
+   *   gap      = this.fitGap          (from `updateCameraFit`, V6's own number)
+   *   cameraZ  = this.fitDistance + span * progress
+   *   contentZ = cameraZ - gap        (so `cameraZ - contentZ === gap`, always)
+   *
+   * `fitDistance` is still exactly what the framing guard produced — `fitGap +
+   * SUBJECT_Z`, the near end of the range — so the guard keeps its original job of
+   * deciding where the near end sits and nothing else, and at `progress = 0` this
+   * reproduces the construction-time pose (`cameraZ = fitDistance`, `contentZ =
+   * SUBJECT_Z`) exactly. Written this way rather than as `contentZ = SUBJECT_Z +
+   * span * progress` so that a resize mid-lap re-anchors the whole pair instead of
+   * sliding the content out from under the camera.
+   *
+   * The designed span is used directly, so the pull-back can never be compressed
+   * into nothing — it is 19 units by construction, the same 19 the layout was
+   * tuned against, and the starfield keeps providing the parallax.
+   *
+   * `progress`'s shape and the eased wrap are untouched: this changes WHO moves,
+   * not WHEN.
+   */
   private advanceCamera(): void {
     const period = DOLLY_PERIOD_SECONDS + DOLLY_WRAP_SECONDS
     const t = this.reducedMotion ? 0 : this.dollySeconds % period
@@ -1594,17 +1636,18 @@ export class ParticleEngine implements ParticleEngineContract {
     // The framing guard SHIFTS the dolly's range rather than clamping the result.
     //
     // Clamping with `Math.max(DOLLY_FROM_Z + span * progress, fitDistance)` looks
-    // equivalent but parks the camera: on a 16:9 viewport `fitDistance` is ~18
-    // against a start of 15, so the camera sat perfectly still for the first 24 s
-    // of every lap, which is the one thing R2 asks it not to do. Mapping
-    // [0, 1] onto [start, end] instead keeps it moving for the entire period — the
-    // guard only decides where the near end of the range is.
-    const start = Math.max(DOLLY_FROM_Z, this.fitDistance)
-    // On a very narrow viewport the guard can exceed the far end too; the designed
-    // span is preserved so the pull-back is never compressed into nothing.
-    const end = Math.max(DOLLY_TO_Z, start + (DOLLY_TO_Z - DOLLY_FROM_Z))
+    // equivalent but parks the camera: `fitDistance` is the near end of the range,
+    // so the camera sat perfectly still until the dolly caught up with it, which is
+    // the one thing R2 asks it not to do. Mapping [0, 1] onto
+    // [fitDistance, fitDistance + span] instead keeps it moving for the entire
+    // period — the guard only decides where the near end of the range is.
+    const span = DOLLY_TO_Z - DOLLY_FROM_Z
+    const cameraZ = this.fitDistance + span * progress
 
-    this.camera.position.set(0, 0, start + (end - start) * progress)
+    // Constant gap: the content rides the dolly one framing distance ahead, so the
+    // glyph's on-screen size is the same at the near end as at the far one.
+    this.points.position.z = cameraZ - this.fitGap
+    this.camera.position.set(0, 0, cameraZ)
     this.camera.lookAt(0, 0, 0)
   }
 
