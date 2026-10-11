@@ -128,17 +128,34 @@ import type {
 
 /** Where the vendor's glyph sampler centres a glyph, in its own units. */
 const GLYPH_CENTER_X = 5.8
-// The framing constants that used to live here — `GLYPH_HALF_EXTENT = 6.3` and the
-// `FRAME_MARGIN = 1.12` applied on top of it — are both gone rather than merely
-// unused, and deliberately not replaced by equivalents.
+/**
+ * Breathing room on the HEIGHT axis only, so the glyph never lands exactly on the
+ * user's 2/3 floor.
+ *
+ * The floor is a floor: `fitDistanceForRoster` puts the ideal height share exactly
+ * on 2/3 whenever the height is what binds, which leaves zero room for the
+ * measured cloud — particles orbit and settle slightly wider than the anchor box,
+ * so the real share reads a percent or two UNDER the ideal and misses a floor it
+ * nominally equals. Portrait viewports are exactly this case, and the probe
+ * measured them at 0.6497..0.6570 against a 0.6667 floor.
+ *
+ * 12% of headroom puts the ideal share at 2/3 * 1.12 = 0.7467, which is clear of
+ * the floor even after the cloud's own spread.
+ *
+ * This margin is deliberately NOT applied to the width axis, and that is a result
+ * of the numbers rather than taste — see `updateCameraFit` for the arithmetic. The
+ * same 12% across the width would force the widest brand down to a 63.5% height
+ * share and fail the very floor this constant exists to protect.
+ */
+const FRAME_MARGIN = 1.12
+// The other framing constant that used to live here, `GLYPH_HALF_EXTENT = 6.3`, is
+// gone rather than merely unused, and deliberately not replaced by an equivalent.
 //
-// `GLYPH_HALF_EXTENT` described half of the vendor's 12.6-unit icon square, which
-// was the widest thing on screen only until `brandTargets.ts` began levelling every
-// mark to `GLYPH_WORLD_HEIGHT`. The roster's real widths are now 7.006..16.479, so
-// the constant was sizing a shape that no longer exists. `FRAME_MARGIN` cannot be
-// spent along the width axis at all: at the roster distance it would force the one
-// over-wide brand down to a 63.5% height share, under the user's 2/3 floor. The
-// framing question is `glyphSize.ts`'s now — see `updateCameraFit`.
+// It described half of the vendor's 12.6-unit icon square, which was the widest
+// thing on screen only until `brandTargets.ts` began levelling every mark to
+// `GLYPH_WORLD_HEIGHT`. The roster's real widths are now 7.006..16.479, so the
+// constant was sizing a shape that no longer exists. The framing question is
+// `glyphSize.ts`'s now — see `updateCameraFit`.
 
 /** Cap on the per-frame step fed to the phase clock, in seconds. A tab that was
  *  asleep must not skip a whole beat: running briefly slow beats jumping. */
@@ -1188,7 +1205,24 @@ export class ParticleEngine implements ParticleEngineContract {
    */
   private updateCameraFit(): void {
     const aspect = Math.max(0.2, this.width / this.height)
-    this.fitGap = fitDistanceForRoster(aspect, CAMERA_FOV)
+    // Come `FRAME_MARGIN` nearer than the roster's largest usable distance, so the
+    // glyph lands 12% ABOVE both floors rather than exactly on one of them.
+    //
+    // Direction matters here and is worth stating: `fitDistanceForRoster` is the
+    // largest distance at which the glyph still clears the floors, so sitting on it
+    // leaves the ideal share exactly EQUAL to a floor. Both floors are minima, and a
+    // nearer camera only ever enlarges the projection, so dividing the distance
+    // moves the ideal share to 2/3 * 1.12 = 0.7467 and 1/3 * 1.12 = 0.3733 — over
+    // both, with room for the cloud's own spread (particles orbit wider than the
+    // anchor box, which is why portrait viewports measured 0.65 against a 0.6667
+    // floor when the ideal was exactly 0.6667).
+    //
+    // This is the 12% the original `FRAME_MARGIN` was reaching for, applied to the
+    // quantity that actually needs it. It is NOT a width allowance: the horizontal
+    // overhang of the widest brand is a separate, genuine cost, and paying for it by
+    // shrinking that one brand is the only way both floors can hold — see the note
+    // above.
+    this.fitGap = fitDistanceForRoster(aspect, CAMERA_FOV) / FRAME_MARGIN
     this.fitDistance = this.fitGap + SUBJECT_Z
   }
 
