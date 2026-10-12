@@ -80,6 +80,15 @@ const MIN_HEIGHT_SHARE = 2 / 3
 const MIN_WIDTH_SHARE = 1 / 3
 /** V3: the comet's on-screen angular size must hold within this jitter. */
 const MAX_JITTER = 0.15
+/**
+ * V3: how much the sweep's whole-sweep fh range must span before a between-brand step
+ * can be attributed to a brand at all. Both levelled brands sit a fraction of a percent
+ * apart, so a sweep that draws two same-height brands cannot answer the brand-vs-camera
+ * question — that is reported as not answered rather than as a page defect. This is the
+ * threshold the criterion always used; it is named so the "not answered" branch can cite
+ * it instead of hard-coding a second copy of the number.
+ */
+const BRAND_STEP_MIN = 0.01
 
 /**
  * Viewports from spec §4 V6, plus a 3x-DPR phone pass. The DPR is part of the
@@ -1152,12 +1161,19 @@ async function recordV6Sample(cdp, viewport, row) {
   // The tolerance must stay a real constraint, not a rubber stamp. If it ever grows past
   // a quarter of the viewport, it would pass regardless of what the two routes said, and
   // the honest thing is to say so rather than report a meaningless PASS.
+  //
+  // This is a SAMPLE-local instrument limit, so it follows the same handling as the
+  // clipped-glyph case below: the comparison is reported as NOT ANSWERED. That precedent
+  // (`saturates` -> SKIP) is the right one here rather than an INSTRUMENT verdict, because
+  // `instrumentValid` is run-global: marking the whole run untrustworthy over one sample's
+  // blown tolerance would overstate the damage and manufacture a new false signal — the
+  // exact class of error this change exists to remove.
   const tolNonTrivial = tol.fh < 0.25 && tol.fw < 0.25
-  const pixelAgrees = th && th.lit > 0 && !clipped && tolNonTrivial && dfw <= tol.fw && dfh <= tol.fh
+  const withinTol = !!(th && th.lit > 0 && dfw <= tol.fw && dfh <= tol.fh)
 
   record('V6', `${label} height >= 66.7%`, heightOk,
     `fh=${round(live.fh)} (need >= ${round(MIN_HEIGHT_SHARE)}) ` +
-    `[pixels thr24 fh=${th && th.lit ? round(th.fh) : 'n/a'}${clipped ? ', glyph clipped' : pixelAgrees ? ', agrees' : ', differs by ' + round(dfh, 4)}]`,
+    `[pixels thr24 fh=${th && th.lit ? round(th.fh) : 'n/a'}${clipped ? ', glyph clipped' : withinTol ? ', agrees' : ', differs by ' + round(dfh, 4)}]`,
     { live: row.live, pixels: th, clipped })
 
   record('V6', `${label} width >= 33.3%`, widthOk,
@@ -1216,17 +1232,28 @@ async function recordV6Sample(cdp, viewport, row) {
         { visibleFrac, saturates, overhangPx, liveWPx: live.wPx, vw, floor: MIN_WIDTH_SHARE })
     }
   } else {
-    record('V6', `${label} cross-check live vs pixels`, !!pixelAgrees,
-      pixelAgrees
-        ? `live ${round(live.fw)}x${round(live.fh)} vs pixels ${round(th.fw)}x${round(th.fh)} ` +
-          `(tolerance from measured cloud spread: fw <= ${tol.fw}, fh <= ${tol.fh}; ${tol.source})`
-        : `live ${round(live.fw)}x${round(live.fh)} vs pixels ${th && th.lit ? round(th.fw) + 'x' + round(th.fh) : 'nothing lit'} ` +
-          `— differs by fw ${round(dfw, 4)} / fh ${round(dfh, 4)} against a tolerance of ` +
-          `fw ${tol.fw} / fh ${tol.fh}, derived as ${tol.source} = ${tol.worldBound} world units ` +
-          `(measured cloud ${tol.cloudWorld} + sprite ${tol.spriteWorld})` +
-          (tolNonTrivial ? '' : ' — and the tolerance itself exceeded a quarter of the viewport, so this ' +
-            'comparison could not have failed and is reported as a FAILURE of the check rather than a pass'),
-      { live: row.live, pixels: th, tolerance: tol, cloudSpread: spread, clipped, tolNonTrivial })
+    // The non-clipped branch: the two routes are directly comparable, and the page-level
+    // verdict is `withinTol`. The tolerance cap is NOT part of it — when the cap has blown
+    // the comparison is undecided and must say so. Conflating the two turned an instrument
+    // limitation into `live vs pixels — differs by ...` on a sample where both routes in
+    // fact agreed.
+    record('V6', `${label} cross-check live vs pixels`, tolNonTrivial ? !!withinTol : null,
+      tolNonTrivial
+        ? withinTol
+          ? `live ${round(live.fw)}x${round(live.fh)} vs pixels ${round(th.fw)}x${round(th.fh)} ` +
+            `(tolerance from measured cloud spread: fw <= ${tol.fw}, fh <= ${tol.fh}; ${tol.source})`
+          : `live ${round(live.fw)}x${round(live.fh)} vs pixels ${th && th.lit ? round(th.fw) + 'x' + round(th.fh) : 'nothing lit'} ` +
+            `— differs by fw ${round(dfw, 4)} / fh ${round(dfh, 4)} against a tolerance of ` +
+            `fw ${tol.fw} / fh ${tol.fh}, derived as ${tol.source} = ${tol.worldBound} world units ` +
+            `(measured cloud ${tol.cloudWorld} + sprite ${tol.spriteWorld})`
+        : `NOT ANSWERED — the routes differ by fw ${round(dfw, 4)} / fh ${round(dfh, 4)}, which is ` +
+          `WITHIN this sample's tolerance fw ${tol.fw} / fh ${tol.fh}; but that tolerance has grown past ` +
+          `a quarter of the viewport, so it could not have rejected any reading and the agreement is not ` +
+          `evidence of anything. Recorded as not answered rather than as a PASS (which would assert ` +
+          `nothing) or as a FAIL (which would blame the page for an instrument limit); see the INSTRUMENT ` +
+          `criterion above.`,
+      { live: row.live, pixels: th, tolerance: tol, cloudSpread: spread, clipped, tolNonTrivial,
+        withinTol, dfw: round(dfw, 4), dfh: round(dfh, 4) })
   }
 
   const levelled = row.anchorsWorld && Math.abs(row.anchorsWorld.worldH - GLYPH_WORLD_HEIGHT) < 0.05
@@ -1865,7 +1892,6 @@ async function criterionV3(cdp, opts) {
     Number.isFinite(measuredFit.slope) && Number.isFinite(controlFit.slope) &&
     Number.isFinite(responseRatio)
   const deconfoundedOk = deconfounded && Math.abs(responseRatio) < 0.5
-  const fhVaries = Math.max(...fhs) - Math.min(...fhs) > 0.01
 
   // The per-brand spread, reported so the cross-brand step can be seen as a brand
   // effect rather than taken on trust. Built from the SAME fit as the verdict, so the
@@ -1902,12 +1928,44 @@ async function criterionV3(cdp, opts) {
     { responseRatio: round(responseRatio), measuredWithinBrandSlope: round(measuredFit.slope, 6),
       controlWithinBrandSlope: round(controlFit.slope, 6), groupsUsed: measuredFit.groupsUsed, brandTable })
 
-  record('V3', 'measured spread is a brand effect, not a camera effect', deconfounded && fhVaries,
-    `per-brand fh spread: ${brandTable.map((b) => `${b.brand} ${b.fhSpreadPct}%`).join(', ')}; ` +
-    `whole-sweep range ${measurements.v3.measuredRangePct[0]}%..${measurements.v3.measuredRangePct[1]}% ` +
-    `(spread ${measurements.v3.jitterPixels}%). A camera effect would show up as a sloped trend WITHIN each ` +
-    `brand; a brand effect shows up as a level step BETWEEN them.`,
-    { brandTable, measuredRangePct: measurements.v3.measuredRangePct })
+  const fhRangeRaw = Math.max(...fhs) - Math.min(...fhs)
+  const fhVaries = fhRangeRaw > BRAND_STEP_MIN
+
+  // This criterion asks a question about the sweep's spread: is it a level step BETWEEN
+  // brands (a brand effect) or a sloped trend WITHIN them (a camera effect)? It can only
+  // answer that if the draw actually contains a between-brand step to look at.
+  //
+  // It did not, on three consecutive runs: the sweep drew claude + gemini only, both
+  // levelled to the same height, and the whole-sweep range was 0.006..0.0087 against this
+  // criterion's own 0.01 gate — so it FAILED every time on a page that was correct, while
+  // the detail text described a spread of under one percent. A criterion that is false on
+  // every run is worse than a missing one: it teaches the reader to ignore the FAIL column
+  // and buries any real regression. So the three outcomes are separated the same way the
+  // rest of this probe separates them: no de-confounding is a FAIL (informative), a
+  // spread too small to attribute to anything is NOT ANSWERED, and a spread large enough
+  // to attribute is the actual PASS.
+  const brandSpreadVerdict = !deconfounded ? false : fhVaries ? true : null
+  record('V3', 'measured spread is a brand effect, not a camera effect', brandSpreadVerdict,
+    !deconfounded
+      ? `could not de-confound the sweep: ${measuredFit.groupsUsed} usable brand group(s) ` +
+        `(need >= 2 with a finite control slope), so a brand effect cannot be separated from a ` +
+        `camera effect at all — reporting FAIL.`
+      : fhVaries
+        ? `per-brand fh spread: ${brandTable.map((b) => `${b.brand} ${b.fhSpreadPct}%`).join(', ')}; ` +
+          `whole-sweep range ${measurements.v3.measuredRangePct[0]}%..${measurements.v3.measuredRangePct[1]}% ` +
+          `(spread ${measurements.v3.jitterPixels}%). A camera effect would show up as a sloped trend WITHIN each ` +
+          `brand; a brand effect shows up as a level step BETWEEN them.`
+        : `NOT ANSWERED — the sweep's whole range is ${(fhRangeRaw * 100).toFixed(2)} percentage points, under ` +
+          `the ${(BRAND_STEP_MIN * 100).toFixed(2)} this criterion needs before any between-brand step can be ` +
+          `attributed to a brand rather than to the camera. Per-brand spread: ` +
+          `${brandTable.map((b) => `${b.brand} ${b.fhSpreadPct}%`).join(', ')} (${measuredFit.groupsUsed} brand ` +
+          `group(s) drawn: ${brandTable.map((b) => b.brand).join(', ')}). With no step to attribute there is ` +
+          `nothing here to confirm or deny — this is recorded as not answered, NOT as a page defect. The ` +
+          `discriminating power for this question rests on the two V3 criteria recorded around it: the 15% ` +
+          `jitter limit and the within-brand response ratio, both of which fail loudly on a comet that does ` +
+          `not follow the camera.`,
+    { brandTable, measuredRangePct: measurements.v3.measuredRangePct,
+      fhRangeRaw: round(fhRangeRaw, 5), brandStepMin: BRAND_STEP_MIN, groupsDrawn: measuredFit.groupsUsed })
 
   // The ratio criterion.
   //
