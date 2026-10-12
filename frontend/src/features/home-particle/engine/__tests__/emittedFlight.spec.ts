@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BufferAttribute, BufferGeometry, Points } from 'three'
+import { BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three'
 import { createEngineScratch, fillEmissionTable, paletteFor, ParticleEngine } from '../ParticleEngine'
 import type { ChoreographyState } from '../types'
 
@@ -28,7 +28,7 @@ function flight(light = false) {
   }, {
     scratch, particleCount: count, choreography: { state }, geometry, tailGeometry,
     palette: paletteFor(light), light, reducedMotion: false,
-    points: new Points(geometry), tailPoints: new Points(tailGeometry),
+    points: new Points(geometry, new PointsMaterial({ size: paletteFor(light).pointSize })), tailPoints: new Points(tailGeometry),
     renderedPhase: 'travel', holdFade: 0,
     pointer: { active: false, lastMove: 0 },
   })

@@ -141,7 +141,7 @@ export function createCometBody(count: number) {
     const shade = 0.42 + 0.58 * Math.max(0, (z - y / r + 1) / 3)
     // A filled, shaded volume instead of a singular bright centre. The coma keeps
     // useful coverage outside the nucleus even against the page's bright galaxy.
-    alpha[i] = normalization * (nucleus ? 0.38 * texture * shade * Math.exp(-2.2 * (r / 0.62) ** 2) : 0.10 * Math.exp(-r * r * 3))
+    alpha[i] = normalization * (nucleus ? 0.90 * texture * shade * Math.exp(-3 * (r / 0.62) ** 2) : 0.16 * Math.exp(-r * r * 3))
     tone[i] = nucleus ? 0.66 + shade * 0.34 : 0.68
   }
   return { offsets, alpha, tone }

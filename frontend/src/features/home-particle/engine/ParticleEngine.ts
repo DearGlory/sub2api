@@ -1512,7 +1512,8 @@ export class ParticleEngine implements ParticleEngineContract {
     if (phase !== this.renderedPhase) {
       if (phase === 'gather' || phase === 'scatter') {
         s.shapeFrom.set(positions)
-        for (let i = 0; i < count; i++) s.shapeAlpha[i] = colors[i * 4 + 3]
+        const spriteScale = (this.points.material as PointsMaterial).size / this.palette.pointSize
+        for (let i = 0; i < count; i++) s.shapeAlpha[i] = colors[i * 4 + 3] * spriteScale * spriteScale
         s.pointerOffset.fill(0)
         velocities.fill(0)
       }
@@ -1598,6 +1599,12 @@ export class ParticleEngine implements ParticleEngineContract {
 
     const useHoldStep = phase === 'hold' && glyphMix > 0.5
     const cometMix = 1 - glyphMix
+    // The body needs a continuous glow at page scale; the emitted stream keeps its
+    // finer sprite. Compensate sprite area so coalescence cannot become a flash.
+    const bodySpriteScale = 1 + cometMix * (this.light ? 0.35 : 2.2)
+    const bodyMaterial = this.points.material as PointsMaterial
+    bodyMaterial.size = palette.pointSize * bodySpriteScale
+    const bodyCoverage = 1 / (bodySpriteScale * bodySpriteScale)
     const table = s.tailTable
     const departure = departureSeconds(phase, state.phaseProgress, LEG_SECONDS, SCATTER_SECONDS)
     const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6
@@ -1713,7 +1720,7 @@ export class ParticleEngine implements ParticleEngineContract {
       colors[colorIndex] = cr > cap ? cap : cr
       colors[colorIndex + 1] = cg > cap ? cap : cg
       colors[colorIndex + 2] = cb > cap ? cap : cb
-      colors[colorIndex + 3] = alpha
+      colors[colorIndex + 3] = alpha * bodyCoverage
     }
   }
 
