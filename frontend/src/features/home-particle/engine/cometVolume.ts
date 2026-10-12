@@ -48,7 +48,8 @@ const fragmentShader = /* glsl */ `
       float fine = noise(q*3.1+warp*2.2);
       float wisps = smoothstep(0.22, 0.78, broad*0.68+fine*0.32);
       float asymmetry = 0.66 + 0.34*dot(local,normalize(vec3(-0.7,0.45,0.8)));
-      return support*sqrt(support) * 0.28 * (0.22+wisps*1.1) * asymmetry;
+      // Steepen only the outer falloff: keep a filled center and the full geometric support.
+      return pow(support, 1.85) * 0.28 * (0.22+wisps*1.1) * asymmetry;
     #else
       float base = 0.0;
       for (int j=0; j<20; j++) {
