@@ -20,7 +20,10 @@ const fragmentShader = /* glsl */ `
   uniform float uOpacity;
   uniform float uTime;
   uniform float uLightTheme;
+  // xyz = active-birth centroid; w = transverse support half-axis, in the fixed subject frame.
   uniform vec4 uBins[20];
+  // xyz = unit flow tangent; w = longitudinal support half-axis (not a spherical radius).
+  uniform vec4 uBinAxes[20];
   uniform float uDensities[20];
   varying vec3 vFrame;
   float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
@@ -30,29 +33,37 @@ const fragmentShader = /* glsl */ `
       mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);
   }
   float density(vec3 p) {
-    float base = 0.0;
     #if IS_COMA == 1
       float radius = length((p-uCenter) / 1.53);
-      base = pow(max(0.0, 1.0-radius*radius), 2.0) * 0.37;
-      // The solid nucleus owns the centre, with a faint, genuinely 3D outer envelope.
+      float base = pow(max(0.0, 1.0-radius*radius), 2.0) * 0.17;
       base *= smoothstep(0.38, 0.58, radius);
       vec3 q = (p-uCenter) * 3.6;
+      return base * (0.16 + noise(q) * noise(q*2.7) * 1.3);
     #else
+      float base = 0.0;
       for (int j=0; j<20; j++) {
         if (uDensities[j] > 0.00001) {
-          vec3 d = (p-uBins[j].xyz) / max(uBins[j].w, 0.01);
-          float support = max(0.0, 1.0-dot(d,d));
-          base += support * support * uDensities[j];
+          vec3 axis = uBinAxes[j].xyz;
+          vec3 d = p-uBins[j].xyz;
+          float along = dot(d,axis);
+          vec3 across = d-axis*along;
+          float r2 = dot(across,across)/(uBins[j].w*uBins[j].w);
+          float s = along/uBinAxes[j].w;
+          float support = max(0.0, 1.0-r2-s*s);
+          if (support > 0.0) {
+            // Stretched world-space noise stays continuous across overlapping bins.
+            // A sparse fine stream sits inside a softer, wider dust layer.
+            vec3 q = p-axis*dot(p,axis)*0.91;
+            float coarse = noise(q*6.0 + vec3(0.0,uTime*0.018,0.0));
+            float fine = noise(q*17.0 + coarse*1.6);
+            float strands = smoothstep(0.32,0.76,coarse*0.7+fine*0.3);
+            float layers = exp(-r2*7.0)*0.48 + exp(-r2*2.1)*0.26;
+            base += support*support*uDensities[j]*layers*(0.12+strands*1.65);
+          }
         }
       }
-      // World-frame density: no head-attached scrolling or screen-space sheets.
-      vec3 q = p * vec3(3.1, 5.8, 4.5);
+      return base;
     #endif
-    if (base < 0.00001) return 0.0;
-    float coarse = noise(q + vec3(0.0, uTime * 0.025, 0.0));
-    float fine = noise(q * 2.7 + coarse * 1.4);
-    float filament = smoothstep(0.24, 0.8, coarse * 0.7 + fine * 0.3);
-    return base * (0.12 + filament * 1.35);
   }
   void main() {
     vec3 ray = normalize(vFrame-uCameraFrame);
@@ -88,7 +99,7 @@ const fragmentShader = /* glsl */ `
 `
 
 function proxy(name: string, coma: boolean, steps: number, options: CometVisualOptions,
-  bins: Float32Array, densities: Float32Array) {
+  bins: Float32Array, axes: Float32Array, densities: Float32Array) {
   const geometry = new BoxGeometry(1, 1, 1)
   geometry.deleteAttribute('normal')
   geometry.deleteAttribute('uv')
@@ -97,7 +108,8 @@ function proxy(name: string, coma: boolean, steps: number, options: CometVisualO
     uniforms: {
       uCenter: { value: new Vector3() }, uSize: { value: new Vector3(1, 1, 1) },
       uCameraFrame: { value: new Vector3() }, uOpacity: { value: 1 }, uTime: { value: 0 },
-      uLightTheme: { value: options.light ? 1 : 0 }, uBins: { value: bins }, uDensities: { value: densities },
+      uLightTheme: { value: options.light ? 1 : 0 }, uBins: { value: bins },
+      uBinAxes: { value: axes }, uDensities: { value: densities },
     },
     side: BackSide, blending: NormalBlending, transparent: true, depthWrite: false, depthTest: true,
   })
@@ -115,15 +127,17 @@ function proxy(name: string, coma: boolean, steps: number, options: CometVisualO
 
 export function createCometVolume(options: CometVisualOptions) {
   const bins = new Float32Array(BIN_COUNT * 4)
+  const axes = new Float32Array(BIN_COUNT * 4)
   const densities = new Float32Array(BIN_COUNT)
   const mass = new Float64Array(BIN_COUNT)
   const means = new Float64Array(BIN_COUNT * 3)
-  const variance = new Float64Array(BIN_COUNT)
+  // Symmetric weighted covariance: xx, yy, zz, xy, xz, yz. Never mix axial spread into width.
+  const covariance = new Float64Array(BIN_COUNT * 6)
   const ages = new Float64Array(BIN_COUNT)
   const samples = new Uint32Array(BIN_COUNT)
-  const steps = options.particleCount <= 1200 ? 16 : 28
-  const coma = proxy('comet-coma-volume', true, steps, options, bins, densities)
-  const tail = proxy('comet-tail-volume', false, steps, options, bins, densities)
+  const steps = options.particleCount <= 5000 ? 16 : 28
+  const coma = proxy('comet-coma-volume', true, steps, options, bins, axes, densities)
+  const tail = proxy('comet-tail-volume', false, steps, options, bins, axes, densities)
   const comaUniforms = coma.material.uniforms
   const tailUniforms = tail.material.uniforms
   const expectedPerBin = Math.max(12, options.particleCount / BIN_COUNT * 0.55)
@@ -141,9 +155,9 @@ export function createCometVolume(options: CometVisualOptions) {
       if (!frame.reducedMotion) noiseTime = frame.time
       comaUniforms.uTime!.value = tailUniforms.uTime!.value = noiseTime
       comaUniforms.uLightTheme!.value = tailUniforms.uLightTheme!.value = frame.light ? 1 : 0
-      mass.fill(0); means.fill(0); variance.fill(0); ages.fill(0); samples.fill(0)
-      bins.fill(0); densities.fill(0)
-      // One linear pool scan, weighted Welford variance avoids cancellation at deep chronology Z.
+      mass.fill(0); means.fill(0); covariance.fill(0); ages.fill(0); samples.fill(0)
+      bins.fill(0); axes.fill(0); densities.fill(0)
+      // One linear pool scan; weighted Welford covariance is stable at deep chronology Z.
       for (let i = 0; i < pool.count; i++) {
         if (pool.active[i] !== 1 || !Number.isFinite(pool.birthTime[i]) || pool.birthTime[i]! < 0) continue
         const age = pool.age[i]!, life = pool.life[i]!
@@ -159,7 +173,13 @@ export function createCometVolume(options: CometVisualOptions) {
         means[m] += dx * weight / nextMass
         means[m + 1] += dy * weight / nextMass
         means[m + 2] += dz * weight / nextMass
-        variance[b] += weight * (dx * (x - means[m]!) + dy * (y - means[m + 1]!) + dz * (z - means[m + 2]!))
+        const c = b * 6
+        covariance[c] += weight * dx * (x - means[m]!)
+        covariance[c + 1] += weight * dy * (y - means[m + 1]!)
+        covariance[c + 2] += weight * dz * (z - means[m + 2]!)
+        covariance[c + 3] += weight * dx * (y - means[m + 1]!)
+        covariance[c + 4] += weight * dx * (z - means[m + 2]!)
+        covariance[c + 5] += weight * dy * (z - means[m + 2]!)
         mass[b] = nextMass
         ages[b] += age * weight
         samples[b]++
@@ -168,15 +188,52 @@ export function createCometVolume(options: CometVisualOptions) {
       let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
       for (let b = 0; b < BIN_COUNT; b++) {
         if (mass[b]! <= 0) continue
-        const m = b * 3, k = b * 4
-        const radius = Math.min(2.8, 0.22 + ages[b]! / mass[b]! * 0.18 + 2.1 * Math.sqrt(Math.max(0, variance[b]! / mass[b]!)))
+        const m = b * 3, k = b * 4, c = b * 6
         const x = means[m]!, y = means[m + 1]!, z = means[m + 2]!
-        bins[k] = x; bins[k + 1] = y; bins[k + 2] = z; bins[k + 3] = radius
-        // Both sample count and surviving mass matter: a lone survivor cannot inflate a luminous cone.
+        // Only occupied neighbouring age bins establish the flow. Never aim at the current head.
+        let previous = b - 1, next = b + 1
+        while (previous >= 0 && mass[previous]! <= 0) previous--
+        while (next < BIN_COUNT && mass[next]! <= 0) next++
+        const p = (previous >= 0 ? previous : b) * 3
+        const n = (next < BIN_COUNT ? next : b) * 3
+        let ax = means[n]! - means[p]!, ay = means[n + 1]! - means[p + 1]!, az = means[n + 2]! - means[p + 2]!
+        let length = Math.hypot(ax, ay, az)
+        const xx = covariance[c]! / mass[b]!, yy = covariance[c + 1]! / mass[b]!, zz = covariance[c + 2]! / mass[b]!
+        const xy = covariance[c + 3]! / mass[b]!, xz = covariance[c + 4]! / mass[b]!, yz = covariance[c + 5]! / mass[b]!
+        if (length < 0.00001) {
+          // A single occupied bin still gets its principal axis from the born population.
+          ax = xx >= yy && xx >= zz ? 1 : 0
+          ay = yy > xx && yy >= zz ? 1 : 0
+          az = ax + ay === 0 ? 1 : 0
+          for (let iteration = 0; iteration < 6; iteration++) {
+            const vx = xx * ax + xy * ay + xz * az
+            const vy = xy * ax + yy * ay + yz * az
+            const vz = xz * ax + yz * ay + zz * az
+            const norm = Math.hypot(vx, vy, vz)
+            if (norm < 0.00001) break
+            ax = vx / norm; ay = vy / norm; az = vz / norm
+          }
+          length = 1
+        }
+        ax /= length; ay /= length; az /= length
+        const longitudinal = Math.max(0, ax * ax * xx + ay * ay * yy + az * az * zz
+          + 2 * (ax * ay * xy + ax * az * xz + ay * az * yz))
+        const transverse = Math.max(0, xx + yy + zz - longitudinal)
+        const age = ages[b]! / mass[b]!
+        const width = Math.min(1.15, 0.12 + age * 0.045 + 1.15 * Math.sqrt(transverse * 0.5))
+        const before = Math.hypot(x - means[p]!, y - means[p + 1]!, z - means[p + 2]!)
+        const after = Math.hypot(x - means[n]!, y - means[n + 1]!, z - means[n + 2]!)
+        const long = Math.min(4.5, Math.max(width * 1.5, 2.2 * Math.sqrt(longitudinal), Math.max(before, after) * 1.3))
+        bins[k] = x; bins[k + 1] = y; bins[k + 2] = z; bins[k + 3] = width
+        axes[k] = ax; axes[k + 1] = ay; axes[k + 2] = az; axes[k + 3] = long
+        // Surviving mass fades naturally in hold; sparse survivors never form a luminous cone.
         densities[b] = Math.min(1, mass[b]! / expectedPerBin) * Math.min(1, samples[b]! / 8) * 0.92
-        minX = Math.min(minX, x - radius); maxX = Math.max(maxX, x + radius)
-        minY = Math.min(minY, y - radius); maxY = Math.max(maxY, y + radius)
-        minZ = Math.min(minZ, z - radius); maxZ = Math.max(maxZ, z + radius)
+        const ex = Math.sqrt(width * width * (1 - ax * ax) + long * long * ax * ax)
+        const ey = Math.sqrt(width * width * (1 - ay * ay) + long * long * ay * ay)
+        const ez = Math.sqrt(width * width * (1 - az * az) + long * long * az * az)
+        minX = Math.min(minX, x - ex); maxX = Math.max(maxX, x + ex)
+        minY = Math.min(minY, y - ey); maxY = Math.max(maxY, y + ey)
+        minZ = Math.min(minZ, z - ez); maxZ = Math.max(maxZ, z + ez)
       }
       tail.visible = minX < Infinity
       if (tail.visible) {

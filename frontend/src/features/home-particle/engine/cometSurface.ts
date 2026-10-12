@@ -27,7 +27,7 @@ const vertexShader = /* glsl */ `
   varying vec3 vView;
   varying float vSeed;
   void main() {
-    // Each triangle has a single seed, centre and flat terrain normal: no stretched bridges.
+    // Triangle-local fracture centres preserve independent pieces; resting normals are continuous.
     vec3 p = aFaceCenter + (position - aFaceCenter) * (1.0 - 0.46 * uFracture);
     p += normal * uExpansion * (0.55 + 0.7 * aSeed);
     vec4 view = modelViewMatrix * vec4(p, 1.0);
@@ -59,8 +59,18 @@ const fragmentShader = /* glsl */ `
                mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x),
                    mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z);
   }
+  float relief(vec3 p) {
+    vec3 warp = vec3(noise(p*3.1), noise(p*3.1+17.0), noise(p*3.1-9.0));
+    return noise(p*24.0+warp*2.3)*0.012 + noise(p*67.0+warp)*0.0035;
+  }
   void main() {
     vec3 N = normalize(vNormal);
+    // Surface-gradient bump uses actual view-space tangents, so relief follows the terrain.
+    vec3 dx = dFdx(-vView), dy = dFdy(-vView);
+    vec3 rx = cross(dy, N), ry = cross(N, dx);
+    float det = dot(dx, rx);
+    float height = relief(vLocal);
+    N = normalize(abs(det)*N - sign(det)*(dFdx(height)*rx + dFdy(height)*ry));
     vec3 L = normalize((viewMatrix * vec4(uLightDirection, 0.0)).xyz);
     vec3 V = normalize(vView);
     float nl = max(dot(N, L), 0.0);
@@ -71,53 +81,83 @@ const fragmentShader = /* glsl */ `
     float B = 0.45 * sigma2 / (sigma2 + 0.09);
     float grazing = max(dot(L - N * nl, V - N * nv), 0.0);
     float diffuse = nl * (A + B * grazing / max(max(nl, nv), 0.12));
-    float strata = noise(vLocal * 8.0);
+    float strata = noise(vLocal * 5.0 + noise(vLocal * 2.8) * 2.0);
     float grain = noise(vLocal * 74.0);
-    float ice = smoothstep(0.51, 0.77, strata + 0.15 * sin(vLocal.y * 24.0 + strata * 6.0));
-    float seam = 1.0 - smoothstep(0.018, 0.065, abs(sin(vLocal.x * 12.0 + vLocal.z * 9.0 + strata * 5.0)));
-    vec3 rock = mix(vec3(0.22, 0.25, 0.29), vec3(0.42, 0.50, 0.57), ice);
-    rock = mix(rock, vec3(0.32, 0.27, 0.22), smoothstep(0.59, 0.8, noise(vLocal * 5.0 + 13.0)) * 0.5);
-    rock *= (0.72 + 0.32 * grain) * (1.0 - 0.65 * seam);
-    vec3 ambient = vec3(0.27, 0.32, 0.40) + uLightTheme * vec3(0.035);
+    float ice = smoothstep(0.47, 0.76, strata + 0.18 * noise(vLocal * 17.0));
+    vec3 rock = mix(vec3(0.20, 0.225, 0.25), vec3(0.43, 0.49, 0.53), ice);
+    rock = mix(rock, vec3(0.30, 0.26, 0.22), smoothstep(0.59, 0.8, noise(vLocal * 5.0 + 13.0)) * 0.5);
+    rock *= 0.76 + 0.3 * grain;
+    // Low sky fill preserves the dark hemisphere without flattening sun-facing relief.
+    vec3 ambient = vec3(0.085, 0.105, 0.14) + uLightTheme * vec3(0.025);
     vec3 color = rock * (ambient + vec3(1.02, 0.94, 0.82) * diffuse * 1.65);
     float edge = 1.0 - smoothstep(0.01, 0.07, min(vBarycentric.x, min(vBarycentric.y, vBarycentric.z)));
-    color += vec3(0.22, 0.085, 0.024) * uEnergy * max(seam, edge * step(0.76, vSeed));
+    color += vec3(0.22, 0.085, 0.024) * uEnergy * edge * step(0.76, vSeed);
     gl_FragColor = vec4(color, uOpacity);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
 `
 
+const terrainHash = (x: number, y: number, z: number): number => {
+  const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453
+  return h - Math.floor(h)
+}
+const mix = (a: number, b: number, t: number): number => a + (b - a) * t
+function terrainNoise(x: number, y: number, z: number): number {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z)
+  const fx = x - ix, fy = y - iy, fz = z - iz
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz)
+  return mix(mix(mix(terrainHash(ix, iy, iz), terrainHash(ix + 1, iy, iz), u),
+    mix(terrainHash(ix, iy + 1, iz), terrainHash(ix + 1, iy + 1, iz), u), v),
+  mix(mix(terrainHash(ix, iy, iz + 1), terrainHash(ix + 1, iy, iz + 1), u),
+    mix(terrainHash(ix, iy + 1, iz + 1), terrainHash(ix + 1, iy + 1, iz + 1), u), v), w)
+}
+function terrainRadius(x: number, y: number, z: number): number {
+  const warp = terrainNoise(x * 2.7 + 5, y * 2.7, z * 2.7)
+  const field = terrainNoise(x * 4.1 + warp, y * 4.1 - warp * 0.6, z * 4.1 + warp * 0.8)
+  // Broad, broken erosional channels are actual geometry, not dark contour paint.
+  const channel = 1 - smoothEnvelope(0.025, 0.13, Math.abs(field - 0.48))
+  const erosion = 0.35 + 0.65 * terrainNoise(x * 7 - 3, y * 7 + 8, z * 7)
+  return 1 + 0.22 * (terrainNoise(x * 2.5, y * 2.5, z * 2.5) - 0.5)
+    + 0.085 * (terrainNoise(x * 8, y * 8, z * 8) - 0.5)
+    + 0.025 * (terrainNoise(x * 15, y * 15, z * 15) - 0.5) - 0.16 * channel * erosion
+}
+
 /** Procedural rock/ice terrain, not a scanned astronomical asset. */
 export function createCometSurface(options: CometVisualOptions) {
-  // Non-indexed triangles keep fracture normals/centres independent. About 7k faces.
+  // Non-indexed triangles retain fracture centres. Continuous terrain normals share their height field.
   const geometry = new IcosahedronGeometry(COMET_SURFACE_RADIUS, 18)
   geometry.deleteAttribute('uv')
   const position = geometry.getAttribute('position')
-  const craters = [
-    new Vector3(0.6, 0.45, 0.7).normalize(), new Vector3(-0.5, 0.1, 0.9).normalize(),
-    new Vector3(0.15, -0.7, 0.6).normalize(), new Vector3(-0.2, 0.9, -0.4).normalize(),
-    new Vector3(0.9, -0.1, -0.4).normalize(), new Vector3(-0.8, -0.5, -0.2).normalize(),
-  ]
+  const normals = geometry.getAttribute('normal')
+  const direction = new Vector3(), edge = new Vector3(), face = new Vector3()
+  const sharedNormals = new Map<string, Vector3>()
+  const keys: string[] = []
   for (let i = 0; i < position.count; i++) {
-    const x = position.getX(i) / COMET_SURFACE_RADIUS
-    const y = position.getY(i) / COMET_SURFACE_RADIUS
-    const z = position.getZ(i) / COMET_SURFACE_RADIUS
-    let terrain = 1 + 0.065 * Math.sin(5 * x + 1) * Math.sin(6 * y - 2) * Math.cos(5 * z)
-    terrain += 0.029 * Math.sin(x * 21 + y * 11) * Math.sin(z * 19 - y * 13)
-    terrain += 0.018 * Math.cos(y * 32 + Math.sin(z * 8) * 2) // extruded ice strata
-    for (let c = 0; c < craters.length; c++) {
-      const axis = craters[c]!
-      const d = Math.sqrt(Math.max(0, 2 - 2 * (x * axis.x + y * axis.y + z * axis.z)))
-      const width = 0.19 + (c % 3) * 0.05
-      terrain -= 0.12 * Math.exp(-Math.pow(d / width, 4))
-      terrain += 0.038 * Math.exp(-Math.pow((d - width) / 0.055, 2))
-    }
+    direction.fromBufferAttribute(position, i).normalize()
+    const { x, y, z } = direction
+    const key = `${x.toFixed(6)},${y.toFixed(6)},${z.toFixed(6)}`
+    keys.push(key)
+    if (!sharedNormals.has(key)) sharedNormals.set(key, new Vector3())
+    const terrain = terrainRadius(x, y, z)
     position.setXYZ(i, x * COMET_SURFACE_RADIUS * terrain * 1.1,
       y * COMET_SURFACE_RADIUS * terrain * 0.92, z * COMET_SURFACE_RADIUS * terrain)
   }
+  // Area-weighted normals from the rendered triangles, welded only for resting shading.
+  // The geometry stays non-indexed so fracture centres and barycentrics remain independent.
+  for (let i = 0; i < position.count; i += 3) {
+    direction.fromBufferAttribute(position, i)
+    edge.fromBufferAttribute(position, i + 1).sub(direction)
+    face.fromBufferAttribute(position, i + 2).sub(direction)
+    face.crossVectors(edge, face)
+    for (let j = 0; j < 3; j++) sharedNormals.get(keys[i + j]!)!.add(face)
+  }
+  for (let i = 0; i < position.count; i++) {
+    direction.copy(sharedNormals.get(keys[i]!)!).normalize()
+    normals.setXYZ(i, direction.x, direction.y, direction.z)
+  }
   position.needsUpdate = true
-  geometry.computeVertexNormals()
+  normals.needsUpdate = true
   const center = new Float32Array(position.count * 3)
   const barycentric = new Float32Array(position.count * 3)
   const seed = new Float32Array(position.count)
@@ -144,7 +184,7 @@ export function createCometSurface(options: CometVisualOptions) {
   const material = new ShaderMaterial({
     name: 'comet-rough-rock-ice', vertexShader, fragmentShader,
     uniforms: {
-      uLightDirection: { value: new Vector3(-0.65, 0.85, 1.4).normalize() },
+      uLightDirection: { value: new Vector3(-1.4, 0.95, 0.55).normalize() },
       uRoughness: { value: 0.92 }, uOpacity: { value: 1 }, uEnergy: { value: 0 },
       uFracture: { value: 0 }, uExpansion: { value: 0 }, uLightTheme: { value: options.light ? 1 : 0 },
     },
