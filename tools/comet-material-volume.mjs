@@ -26,7 +26,9 @@ export function volumeProvenance(object,geometry) {
   const samples=[]
   let invalidBirth=0
   for(const b of births){
-    if(!finite(b?.birthTime)||b.birthTime<0||!finite(b?.age)||!finite(b?.life)||b.age<=0||b.age>=b.life||!Array.isArray(b.position)||b.position.length!==3||!b.position.every(finite)){invalidBirth++;continue}
+    if(!finite(b?.birthTime)||b.birthTime<0||!finite(b?.age)||b.age<0||!finite(b?.life)||b.life<=0||!Array.isArray(b.position)||b.position.length!==3||!b.position.every(finite)){invalidBirth++;continue}
+    // Newborns and expired slots have zero extinction; they are valid lifecycle states.
+    if(b.age===0||b.age>=b.life)continue
     const index=Math.min(n-1,Math.floor(b.age/3.2*n)),g=groups[index],w=(1-b.age/b.life)**1.7*Math.min(1,b.age/.035)
     if(!(w>0&&finite(w))){invalidBirth++;continue}
     g.mass+=w;g.count++;g.ageMass+=b.age*w;g.birthMin=Math.min(g.birthMin,b.birthTime);g.birthMax=Math.max(g.birthMax,b.birthTime)
