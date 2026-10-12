@@ -13,7 +13,8 @@
  * — the caller's sampling granularity, not the clock's own error.
  */
 import { describe, expect, it } from 'vitest'
-import { createChoreography } from '../choreography'
+import { createChoreography, sampleHeadPosition } from '../choreography'
+import { COALESCE_END } from '../flightTiming'
 import type { Point3 } from '../choreography'
 import type { Choreography, ChoreographyOptions, CometPhase } from '../types'
 import {
@@ -963,6 +964,140 @@ describe('choreography: framerate independence', () => {
     // At the start of leg 15 (odd) the head is at the left extreme... which for an
     // odd leg is +amplitude, since odd legs run +amp -> -amp.
     expect(choreo.state.headX).toBeCloseTo(AMPLITUDE_X, 3)
+  })
+})
+
+describe('choreography: continuous departure (C2)', () => {
+  const axes = ['x', 'y', 'z'] as const
+  const h = 1e-4 // seconds, not phase progress: scatter and travel have different lengths
+  const norm = (p: Point3) => Math.hypot(p.x, p.y, p.z)
+  const difference = (a: Point3, b: Point3, dt = 1): Point3 => ({
+    x: (a.x - b.x) / dt,
+    y: (a.y - b.y) / dt,
+    z: (a.z - b.z) / dt,
+  })
+  const sample = (leg: number, phase: CometPhase, progress: number) =>
+    sampleHeadPosition(leg, phase, progress, makeOptions())
+
+  function checkSeam(at: (seconds: number) => Point3, moving: boolean) {
+    const p = at(0)
+    const left = difference(p, at(-h), h)
+    const right = difference(at(h), p, h)
+    expect(norm(difference(left, right))).toBeLessThan(0.002)
+    const al = difference(difference(p, at(-h), h), difference(at(-h), at(-2 * h), h), h)
+    const ar = difference(difference(at(2 * h), at(h), h), difference(at(h), p, h), h)
+    expect(norm(difference(al, ar))).toBeLessThan(0.02)
+    if (moving) {
+      expect(norm(left)).toBeGreaterThan(0.3)
+      expect(norm(right)).toBeGreaterThan(0.3)
+    } else {
+      expect(norm(left)).toBeLessThan(0.002)
+      expect(norm(right)).toBeLessThan(0.002)
+      expect(norm(al)).toBeLessThan(0.02)
+      expect(norm(ar)).toBeLessThan(0.02)
+    }
+  }
+
+  it('stays at the logo until .62, then launches visibly within scatter, on both sides', () => {
+    for (const leg of [-2, -1, 0, 1, 2, 3]) {
+      const anchor = sample(leg, 'scatter', 0)
+      for (const p of [0, 0.3, COALESCE_END - 1e-6, COALESCE_END]) {
+        expect(sample(leg, 'scatter', p)).toEqual(anchor)
+      }
+      const at = (seconds: number) => sample(leg, 'scatter', COALESCE_END + seconds / SCATTER_SECONDS)
+      checkSeam(at, false)
+      // Numerical perception guard, NOT a claim that the rendered motion looks good.
+      expect(norm(difference(at(0.2), anchor))).toBeGreaterThan(0.04)
+      expect(Math.abs(sample(leg, 'scatter', 1).x - anchor.x)).toBeGreaterThanOrEqual(0.06)
+      let previous = 0
+      for (const seconds of [0.05, 0.1, 0.2, 0.3, 0.4]) {
+        const distance = norm(difference(at(seconds), anchor))
+        expect(distance).toBeGreaterThan(previous)
+        previous = distance
+      }
+    }
+  })
+
+  it('scatter1 and next travel0 share position, nonzero velocity and acceleration', () => {
+    for (const leg of [-2, -1, 0, 1, 2, 3]) {
+      expect(norm(difference(sample(leg, 'scatter', 1), sample(leg + 1, 'travel', 0)))).toBeLessThan(1e-12)
+      checkSeam((seconds) => seconds < 0
+        ? sample(leg, 'scatter', 1 + seconds / SCATTER_SECONDS)
+        : sample(leg + 1, 'travel', seconds / LEG_SECONDS), true)
+    }
+  })
+
+  it('travel1/gather0 and every stationary phase boundary meet at rest without a kick', () => {
+    for (const leg of [0, 1]) {
+      const anchor = sample(leg, 'gather', 0)
+      expect(norm(difference(sample(leg, 'travel', 1), anchor))).toBeLessThan(1e-12)
+      checkSeam((seconds) => seconds < 0
+        ? sample(leg, 'travel', 1 + seconds / LEG_SECONDS)
+        : sample(leg, 'gather', seconds / GATHER_SECONDS), false)
+      for (const [before, after] of [['gather', 'hold'], ['hold', 'scatter']] as const) {
+        expect(sample(leg, before, 1)).toEqual(sample(leg, after, 0))
+        checkSeam((seconds) => seconds < 0
+          ? sample(leg, before, 1 + seconds / PHASE_LENGTH[before])
+          : sample(leg, after, seconds / PHASE_LENGTH[after]), false)
+      }
+    }
+  })
+
+  it('keeps scatter state on the current leg while the head already flies the next leg', () => {
+    const choreo = createChoreography(makeOptions())
+    choreo.update(PHASE_START.scatter + SCATTER_SECONDS * 0.95)
+    expect(choreo.state.legIndex).toBe(0)
+    expect(choreo.state.fromX).toBe(-AMPLITUDE_X)
+    expect(choreo.state.toX).toBe(AMPLITUDE_X)
+    expect(choreo.state.headX).toBeLessThan(AMPLITUDE_X - 0.06)
+    choreo.update(SCATTER_SECONDS * 0.05 + 1e-8)
+    expect(choreo.state.legIndex).toBe(1)
+    expect(choreo.state.fromX).toBe(AMPLITUDE_X)
+    expect(choreo.state.toX).toBe(-AMPLITUDE_X)
+  })
+
+  it('replays actual 60/144 Hz state history across coalescence and the beat, also after resize', () => {
+    for (const fps of [60, 144]) {
+      const choreo = createChoreography(makeOptions())
+      const history: Point3[] = []
+      // Capture two real update-driven beats, rather than just testing a duplicate formula.
+      for (let frame = 0; frame < fps * 25; frame++) {
+        history.push({ x: choreo.state.headX, y: choreo.state.headY, z: choreo.state.headZ })
+        choreo.update(1 / fps)
+      }
+      const out = { x: 0, y: 0, z: 0 }
+      for (let frame = 0; frame < history.length; frame++) {
+        choreo.sampleTrail(25 - frame / fps, out)
+        for (const axis of axes) expect(out[axis]).toBeCloseTo(history[frame][axis], 9)
+      }
+      const scale = 3.462
+      choreo.setSwayY(SWAY_Y * scale)
+      for (let frame = 0; frame < history.length; frame++) {
+        choreo.sampleTrail(25 - frame / fps, out)
+        expect(out.x).toBeCloseTo(history[frame].x, 9)
+        expect(out.y).toBeCloseTo(history[frame].y * scale, 9)
+        expect(out.z).toBeCloseTo(history[frame].z, 9)
+      }
+    }
+  })
+
+  it('60 and 144 Hz playback agrees at common instants including scatter/travel', () => {
+    const low = createChoreography(makeOptions())
+    const high = createChoreography(makeOptions())
+    for (let tick = 1; tick <= 25 * 12; tick++) {
+      for (let i = 0; i < 5; i++) low.update(1 / 60)
+      for (let i = 0; i < 12; i++) high.update(1 / 144)
+      for (const key of ['headX', 'headY', 'headZ'] as const) {
+        expect(low.state[key], `t=${tick / 12} ${key}`).toBeCloseTo(high.state[key], 9)
+      }
+      // At exact boundaries floating point may choose either half-open phase;
+      // positions and the shared departure clock must still represent the same motion.
+      const pastLow = { x: 0, y: 0, z: 0 }
+      const pastHigh = { x: 0, y: 0, z: 0 }
+      low.sampleTrail(0.23, pastLow)
+      high.sampleTrail(0.23, pastHigh)
+      for (const axis of axes) expect(pastLow[axis]).toBeCloseTo(pastHigh[axis], 9)
+    }
   })
 })
 
