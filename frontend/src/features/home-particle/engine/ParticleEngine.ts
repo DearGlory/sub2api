@@ -1431,6 +1431,9 @@ export class ParticleEngine implements ParticleEngineContract {
   /** Queue the glyph after the current one, off the critical path. */
   private prefetchAhead(): void {
     const state = this.choreography.state
+    // Profiling found next-brand rasterisation in the first flight frame's idle
+    // task. Queue it during the preceding hold, with ample time before departure.
+    if (state.phase !== 'hold') return
     const next = this.roster[(state.brandIndex + 1) % this.roster.length]
     if (next) {
       this.brandSource.prefetch(next.slug, this.particleCount, this.quality.iconCanvasSize)

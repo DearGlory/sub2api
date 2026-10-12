@@ -79,13 +79,13 @@ export class EmittedTail {
       this.positions[k + 1] = this.birthPosition[k + 1] + this.birthVelocity[k + 1] * age
       this.positions[k + 2] = this.birthPosition[k + 2] + this.birthVelocity[k + 2] * age
       const u = age / this.life[i]
-      const fade = Math.pow(1 - u, 2.2) * Math.min(1, age / 0.035)
+      const fade = Math.pow(1 - u, 1.55) * Math.min(1, age / 0.035)
       const warm = 0.035 + 0.14 * u
       const lum = light ? 0.85 : 0.85 + 0.15 * (1 - u)
       this.colors[c] = (core.r + (accent.r - core.r) * warm) * lum
       this.colors[c + 1] = (core.g + (accent.g - core.g) * warm) * lum
       this.colors[c + 2] = (core.b + (accent.b - core.b) * warm) * lum
-      this.colors[c + 3] = fade * (light ? 0.36 : 0.19) * Math.min(3.6, 14760 / this.count)
+      this.colors[c + 3] = fade * (light ? 0.48 : 0.36) * Math.min(3.6, 14760 / this.count)
     }
 
     this.credit += emissionDelta * this.count / 2.85
@@ -127,7 +127,7 @@ export function createCometBody(count: number) {
     const z = noise(i, 277) * 2 - 1
     const angle = noise(i, 307) * Math.PI * 2
     const radial = Math.sqrt(1 - z * z)
-    const r = nucleus ? 0.31 * Math.cbrt(noise(i, 337)) : 0.25 + 0.72 * Math.pow(noise(i, 367), 1.7)
+    const r = nucleus ? 0.43 * Math.pow(noise(i, 337), 0.7) : 0.25 + 0.72 * Math.pow(noise(i, 367), 1.7)
     const x = r * radial * Math.cos(angle)
     const y = r * radial * Math.sin(angle)
     const texture = 0.76 + 0.24 * Math.sin(x * 34 + y * 17) * Math.sin(z * 9 - y * 23)
@@ -135,7 +135,7 @@ export function createCometBody(count: number) {
     offsets[i * 3 + 1] = y * (nucleus ? 0.79 : 1)
     offsets[i * 3 + 2] = r * z * 0.8
     const shade = 0.42 + 0.58 * Math.max(0, (z - y / r + 1) / 3)
-    alpha[i] = normalization * (nucleus ? 0.082 * texture * shade : 0.008 * Math.exp(-r * r * 3))
+    alpha[i] = normalization * (nucleus ? 0.10 * texture * shade * Math.exp(-2 * (r / 0.43) ** 2) : 0.021 * Math.exp(-r * r * 3))
     tone[i] = nucleus ? 0.66 + shade * 0.34 : 0.48
   }
   return { offsets, alpha, tone }
