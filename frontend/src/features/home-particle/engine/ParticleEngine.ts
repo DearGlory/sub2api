@@ -907,6 +907,7 @@ export class ParticleEngine implements ParticleEngineContract {
   private readonly stats: EngineStats
 
   private running = false
+  private programsPrepared = false
   private rafId = 0
   private disposed = false
   private lastFrameMs = 0
@@ -1130,6 +1131,24 @@ export class ParticleEngine implements ParticleEngineContract {
   start(): void {
     if (this.disposed || this.running) return
     this.running = true
+    try {
+      if (!this.programsPrepared) {
+        // three r184 compile traverses hidden objects too. Submit the event
+        // material now, without changing visibility or drawing a warmup frame.
+        this.renderer.compile(this.scene, this.camera)
+        // compile alone defers link-status waits and uniform/attribute reflection
+        // until first use. Complete them before the animation clock starts, also
+        // on drivers without KHR_parallel_shader_compile. This intentionally pays
+        // the cold driver cost once at startup rather than at the first gather.
+        for (const program of this.renderer.info.programs ?? []) program.getUniforms()
+        this.programsPrepared = true
+      }
+    } catch (error) {
+      this.stop()
+      this.options.onError?.(error)
+      return
+    }
+    if (this.disposed || !this.running) return
     this.lastFrameMs = 0
     this.rafId = requestAnimationFrame(this.tick)
   }
