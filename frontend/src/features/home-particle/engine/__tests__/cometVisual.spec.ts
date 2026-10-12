@@ -4,7 +4,7 @@ import { createCometVisual } from '../cometVisual'
 import { COMET_COMA_RADIUS, COMET_SURFACE_RADIUS } from '../cometVisualContract'
 import type { CometTailView, CometVisualFrame } from '../cometVisualContract'
 
-const options = { particleCount: 2000, light: false, reducedMotion: false }
+const options = { particleCount: 18000, light: false, reducedMotion: false }
 const frame = (changes: Partial<CometVisualFrame> = {}): CometVisualFrame => ({
   phase: 'travel', progress: 0, time: 0, delta: 1 / 60, headX: 2, headY: 1,
   headZ: -8, glyphMix: 0, departure: 1, light: false, reducedMotion: false, ...changes,
@@ -44,6 +44,35 @@ describe('procedural comet surface', () => {
     expect(visual.geometryBytes).toBe(bytes)
     expect(bytes).toBeLessThan(3.5 * 1024 * 1024)
     expect(COMET_COMA_RADIUS / 1.02).toBeCloseTo(1.5)
+    visual.dispose()
+  })
+
+  it('shares terrain normals at duplicate vertices while following actual displaced slopes', () => {
+    const visual = createCometVisual(options)
+    const geometry = nucleus(visual).geometry
+    const positions = geometry.getAttribute('position'), normals = geometry.getAttribute('normal')
+    const shared = new Map<string, Vector3>()
+    const a = new Vector3(), b = new Vector3(), c = new Vector3(), n = new Vector3()
+    let duplicates = 0, sloped = 0, aligned = 0
+    for (let i = 0; i < positions.count; i++) {
+      a.fromBufferAttribute(positions, i)
+      n.fromBufferAttribute(normals, i)
+      const key = a.toArray().map(value => value.toFixed(6)).join(',')
+      const previous = shared.get(key)
+      if (previous) { expect(n.distanceTo(previous)).toBeLessThan(0.0001); duplicates++ }
+      else shared.set(key, n.clone())
+      expect(n.length()).toBeCloseTo(1, 5)
+      if (n.dot(a.normalize()) < 0.95) sloped++
+      if (i % 3 === 0) {
+        a.fromBufferAttribute(positions, i)
+        b.fromBufferAttribute(positions, i + 1).sub(a)
+        c.fromBufferAttribute(positions, i + 2).sub(a)
+        if (b.cross(c).normalize().dot(n) > 0.7) aligned++
+      }
+    }
+    expect(duplicates).toBeGreaterThan(positions.count / 2)
+    expect(sloped).toBeGreaterThan(positions.count * 0.2)
+    expect(aligned).toBeGreaterThan(positions.count / 3 * 0.8)
     visual.dispose()
   })
 
@@ -167,6 +196,59 @@ describe('emitted volume', () => {
     expect(Array.from(densities).every(value => value === 0)).toBe(true)
     expect(uniforms.uBins!.value).toBe(bins)
     expect(uniforms.uDensities!.value).toBe(densities)
+    visual.dispose()
+  })
+
+  it('keeps axial spread out of transverse width and bounds rotated support at deep world Z', () => {
+    const visual = createCometVisual(options)
+    const tail = pool(96)
+    const mesh = tailMesh(visual), uniforms = material(mesh).uniforms
+    const axis = new Vector3(2, 1, 4).normalize()
+    const across = new Vector3(-1, 2, 0).normalize()
+    const populate = (stretch: number) => {
+      for (let i = 0; i < tail.count; i++) {
+        const bin = Math.floor(i / 32)
+        const along = bin * 2 + ((i % 32) - 15.5) * 0.035 * stretch
+        born(tail, i, 0, 0.08 + bin * 0.16)
+        tail.positions.set([
+          axis.x * along + across.x * (i % 2 ? 0.035 : -0.035),
+          axis.y * along + across.y * (i % 2 ? 0.035 : -0.035),
+          -12000 + axis.z * along,
+        ], i * 3)
+      }
+      visual.update(frame(), tail)
+    }
+    populate(1)
+    const bins = uniforms.uBins!.value as Float32Array
+    const axes = uniforms.uBinAxes!.value as Float32Array
+    const width = bins[7]!, long = axes[7]!
+    populate(5)
+    expect(bins[7]).toBeCloseTo(width, 2)
+    expect(axes[7]).toBeGreaterThan(long)
+    for (let j = 0; j < 3; j++) {
+      const k = j * 4
+      const direction = new Vector3(axes[k], axes[k + 1], axes[k + 2])
+      expect(direction.length()).toBeCloseTo(1, 5)
+      expect(direction.dot(axis)).toBeGreaterThan(0.999)
+      expect(axes[k + 3]!).toBeGreaterThan(bins[k + 3]! * 3)
+      if (j < 2) {
+        const distance = Math.hypot(bins[k + 4]! - bins[k]!, bins[k + 5]! - bins[k + 1]!, bins[k + 6]! - bins[k + 2]!)
+        expect(axes[k + 3]! + axes[k + 7]!).toBeGreaterThan(distance * 2)
+      }
+      const center = new Vector3(bins[k], bins[k + 1], bins[k + 2])
+      for (const sign of [-1, 1]) {
+        const endpoint = center.clone().addScaledVector(direction, sign * axes[k + 3]!).sub(mesh.position)
+        expect(Math.abs(endpoint.x)).toBeLessThanOrEqual(mesh.scale.x / 2 + 0.002)
+        expect(Math.abs(endpoint.y)).toBeLessThanOrEqual(mesh.scale.y / 2 + 0.002)
+        expect(Math.abs(endpoint.z)).toBeLessThanOrEqual(mesh.scale.z / 2 + 0.002)
+      }
+    }
+    const savedAxes = Array.from(axes)
+    visual.update(frame({ phase: 'hold', headX: 9999, time: 9 }), tail)
+    expect(Array.from(axes)).toEqual(savedAxes)
+    expect(uniforms.uBinAxes!.value).toBe(axes)
+    visual.update(frame({ reducedMotion: true, time: 100 }), tail)
+    expect(uniforms.uTime!.value).toBe(9)
     visual.dispose()
   })
 
