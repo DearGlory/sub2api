@@ -58,10 +58,14 @@ export class EmittedTail {
 
   update(delta: number, departure: number, canEmit: boolean, table: EmissionTable,
     headX: number, headY: number, headZ: number, core: Color, accent: Color, light: boolean): void {
-    const dt = Math.max(0, delta)
-    if (departure < this.previousDeparture || departure === 0) this.credit = 0
-    const emissionDelta = canEmit ? Math.min(dt, Math.max(0, departure - this.previousDeparture)) : 0
-    this.previousDeparture = departure
+    const dt = Number.isFinite(delta) ? Math.max(0, delta) : 0
+    // Coordinates and velocities already include chronology Z in the fixed
+    // SUBJECT_Z frame. Never add camera travel here or transform an existing birth.
+    const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6
+    const emitting = canEmit && moving && Number.isFinite(departure) && departure > 0
+    if (!emitting || departure < this.previousDeparture) this.credit = 0
+    const emissionDelta = emitting ? Math.min(dt, Math.max(0, departure - this.previousDeparture)) : 0
+    this.previousDeparture = Number.isFinite(departure) ? departure : 0
 
     for (let i = 0; i < this.count; i++) {
       if (this.active[i] === 2) this.active[i] = 0

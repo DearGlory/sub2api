@@ -81,9 +81,6 @@ import {
   CAMERA_FOV,
   CAMERA_NEAR,
   DOLLY_FROM_Z,
-  DOLLY_PERIOD_SECONDS,
-  DOLLY_TO_Z,
-  DOLLY_WRAP_SECONDS,
   FRICTION,
   GATHER_SECONDS,
   HEAD_CORE_RADIUS,
@@ -114,6 +111,7 @@ import {
   TAIL_SPREAD,
 } from './constants'
 import { COALESCE_END, departureSeconds } from './flightTiming'
+import { cameraTravelAt, glyphStopZ } from './spaceMotion'
 import { createQualityProfile, probeQualityProfile } from './quality'
 import { GLYPH_MIN_BBOX_ASPECT, fitDistanceForRoster, requiredGlyphWorldSize } from './glyphSize'
 import { createStarfield } from './starfield'
@@ -127,6 +125,13 @@ import type {
   QualityProfile,
   Starfield,
 } from './types'
+
+const SPACE_TIMING = {
+  legSeconds: LEG_SECONDS,
+  gatherSeconds: GATHER_SECONDS,
+  holdSeconds: HOLD_SECONDS,
+  scatterSeconds: SCATTER_SECONDS,
+}
 
 /** Where the vendor's glyph sampler centres a glyph, in its own units. */
 const GLYPH_CENTER_X = 5.8
@@ -913,6 +918,9 @@ export class ParticleEngine implements ParticleEngineContract {
   private pointerBound = false
 
   private currentBrandSlug: string | null = null
+  private currentGlyphLeg = -1
+  /** Centre represented by the previous geometry upload, before internal offsets. */
+  private readonly renderedHead = new Vector3()
   private lastPhase: CometPhase = 'travel'
   private holdFade = 0
   private renderedPhase: CometPhase = 'travel'
@@ -988,10 +996,8 @@ export class ParticleEngine implements ParticleEngineContract {
     })
 
     this.points = new Points(this.geometry, this.material)
-    // The slab sits at `SUBJECT_Z` here as the SEED pose, which is where the dolly
-    // starts at `progress = 0`; `advanceCamera` updates this z every frame from then
-    // on, because the camera and the content retreat together (V3). The pointer ray
-    // reads this same live position rather than assuming the plane is static.
+    // Both pools share this fixed origin. Motion lives in the geometry arrays;
+    // camera travel must never translate particles that have already been born.
     this.points.position.set(0, 0, SUBJECT_Z)
     this.points.frustumCulled = false
     this.scene.add(this.points)
@@ -1050,9 +1056,10 @@ export class ParticleEngine implements ParticleEngineContract {
     }
 
     this.updateCameraFit()
-    // After `updateCameraFit`, so the sway and the camera agree on the same aspect from
-    // the first frame. The choreography was constructed with the scaled sway already,
-    // but this also refills the emission table, which is where the sway becomes visible.
+    this.advanceCamera()
+    const head = this.choreography.state
+    this.renderedHead.set(head.headX, head.headY, head.headZ)
+    // The head and historical samples use the same viewport options.
     this.applyViewportSway()
     this.bindPointer()
     this.bindContextLoss()
@@ -1135,9 +1142,8 @@ export class ParticleEngine implements ParticleEngineContract {
     if (this.disposed || this.reducedMotion === value) return
     this.reducedMotion = value
     this.starfield.setReducedMotion(value)
-    // The dolly is the loudest motion here, so a reduced-motion visitor gets a
-    // fixed camera rather than a snap mid-sweep.
-    if (value) this.dollySeconds = 0
+    // Freeze both clocks at their current epoch. Resetting only the dolly would
+    // put a later world-space glyph behind the camera, and resuming would drift.
     this.updateCameraFit()
   }
 
@@ -1402,10 +1408,11 @@ export class ParticleEngine implements ParticleEngineContract {
 
     try {
       this.advanceClock(clockStep)
+      // Pointer unprojection must use this frame's camera matrix.
+      this.advanceCamera()
       this.writeEmissionTable()
       this.integrate(frameStep, now / 1000, clockStep)
       this.upload()
-      this.advanceCamera()
       this.starfield.update(clockStep, this.camera.position.z, now / 1000)
       this.renderer.render(this.scene, this.camera)
       this.publishStats(now)
@@ -1417,7 +1424,7 @@ export class ParticleEngine implements ParticleEngineContract {
   }
 
   private advanceClock(delta: number): void {
-    this.choreography.update(delta)
+    if (!this.reducedMotion) this.choreography.update(delta)
     const state = this.choreography.state
 
     if (state.phase !== this.lastPhase) {
@@ -1430,6 +1437,9 @@ export class ParticleEngine implements ParticleEngineContract {
       this.currentBrandSlug = brand.slug
       this.syncGlyph()
       this.options.onBrandChange?.(brand.slug, state.brandIndex)
+    } else if (this.currentGlyphLeg !== state.legIndex) {
+      // A one-brand/custom roster can keep the slug while the world anchor moves.
+      this.syncGlyph()
     }
     this.prefetchAhead()
 
@@ -1467,24 +1477,26 @@ export class ParticleEngine implements ParticleEngineContract {
     )
     if (!targets) return
 
-    // The glyph is drawn around whichever extreme the current leg ends on, so a
-    // brand switch mid-sweep still lands the shape where the comet arrived.
-    const amplitude = this.choreography.state.toX
+    // The anchor belongs to the leg, not the roster index. nextBrand() changes
+    // the mark at the same phase without changing its world-space destination.
+    const state = this.choreography.state
+    const amplitude = state.toX
+    const anchorZ = glyphStopZ(state.legIndex, SPACE_TIMING)
     const glyph = this.scratch.glyphTargets
     const n = Math.min(this.particleCount, Math.floor(targets.targets.length / 3))
     for (let i = 0; i < n; i++) {
       glyph[i * 3] = targets.targets[i * 3] - GLYPH_CENTER_X + amplitude
       glyph[i * 3 + 1] = targets.targets[i * 3 + 1]
-      glyph[i * 3 + 2] = targets.targets[i * 3 + 2]
+      glyph[i * 3 + 2] = targets.targets[i * 3 + 2] + anchorZ
     }
-    // Particles beyond the glyph's anchor count have nowhere to sit; parking them
-    // on the glyph's centre point keeps them inside the shape instead of leaving a
-    // visible clump where the last anchor ended.
+    // Missing anchors sit at this same destination, including its accumulated Z.
     for (let i = n; i < this.particleCount; i++) {
       glyph[i * 3] = amplitude
       glyph[i * 3 + 1] = 0
-      glyph[i * 3 + 2] = 0
+      glyph[i * 3 + 2] = anchorZ
     }
+    this.currentGlyphLeg = state.legIndex
+    this.scratch.glyphStrokeDepth.fill(0)
     this.scratch.glyphStrokeDepth.set(targets.strokeDepth.subarray(0, n))
 
     fillVoxSpaceIconOrbitField(
@@ -1520,6 +1532,16 @@ export class ParticleEngine implements ParticleEngineContract {
     if (phase !== this.renderedPhase) {
       if (phase === 'gather' || phase === 'scatter') {
         s.shapeFrom.set(positions)
+        if (phase === 'gather') {
+          // The prior upload was still in flight. Move its internal shape onto
+          // the exact stop anchor before morphing, so the centre stops in X/Z
+          // together even when the frame crosses the arrival boundary.
+          for (let i = 0; i < count; i++) {
+            s.shapeFrom[i * 3] += state.headX - this.renderedHead.x
+            s.shapeFrom[i * 3 + 1] += state.headY - this.renderedHead.y
+            s.shapeFrom[i * 3 + 2] += state.headZ - this.renderedHead.z
+          }
+        }
         for (let i = 0; i < count; i++) {
           const spriteScale = s.body.spriteScale[i]
           s.shapeAlpha[i] = colors[i * 4 + 3] * spriteScale * spriteScale
@@ -1552,16 +1574,13 @@ export class ParticleEngine implements ParticleEngineContract {
         ? getVoxSpaceHoldFrameFriction(frameStep)
         : Math.pow(FRICTION, frameStep)
 
-    // Hold pose: a slow tilt plus a front-to-back tone split, which is what gives
-    // the flat slab volume. Faded, so a brand switch cannot drop it in one frame.
+    // Internal orbit and depth tone remain local to the glyph. Rotating the
+    // whole group would orbit its accumulated Z around the world origin.
     this.holdFade = nextVoxSpaceIconHoldFade(this.holdFade, glyphMix, frameStep)
     writeVoxSpaceIconHoldPose(s.iconHoldPose, time, this.holdFade)
-    this.points.rotation.z = s.iconHoldPose.rotationZ * glyphMix
-    this.points.rotation.x = s.iconHoldPose.rotationX * glyphMix
-    this.points.rotation.y = s.iconHoldPose.rotationY * glyphMix
+    this.points.rotation.set(0, 0, 0)
 
-    // Pointer, resolved into the object's own frame so the repulsion stays under
-    // the cursor even while the slab is tilted.
+    // Resolve the pointer on the current head/glyph plane in the fixed group.
     let pointerActive = isVoxSpacePointerActive(
       this.pointer.active,
       this.pointer.lastMove,
@@ -1579,14 +1598,8 @@ export class ParticleEngine implements ParticleEngineContract {
         const dir = s.vecB.copy(ndc).sub(this.camera.position)
         const dirZ = dir.z
         dir.normalize()
-        // Intersect the view ray with the slab's OWN plane, read live rather than
-        // taken as `SUBJECT_Z`: the slab now rides the dolly every frame (see
-        // `advanceCamera`), so a static plane would put the pointer's hit point
-        // progressively further behind the content — by the far end of the lap it
-        // would be a full 19 units off. The `sub(this.points.position)` below is
-        // already correct, because it converts the world hit into the slab's local
-        // frame, which is the frame the glyph anchors live in.
-        const planeZ = this.points.position.z
+        // Geometry carries chronology Z; the Object3D origin stays at SUBJECT_Z.
+        const planeZ = this.points.position.z + state.headZ
         const distance = dirZ === 0 ? -1 : (planeZ - this.camera.position.z) / dir.z
         if (Number.isFinite(distance) && distance > 0) {
           const world = s.vecA
@@ -1711,7 +1724,7 @@ export class ParticleEngine implements ParticleEngineContract {
       // life runs out, so the far end of the plume dissolves instead of being cut off.
       // The head's own luminance is left where it was; nothing here shrinks the comet.
       const warm = glyphMix * 0.26 + cometMix * 0.045
-      const depth = Math.max(-1, Math.min(1, nz / 1.4)) * this.holdFade
+      const depth = Math.max(-1, Math.min(1, (nz - state.headZ) / 1.4)) * this.holdFade
       const shimmer = 0.86 + Math.sin(time * 2.1 + s.tailSeed[i] * 43.0) * 0.05 + depth * 0.08
       // The ion population is tinted toward the accent and the dust toward the cool
       // core, which is the one nod to the two-tail structure the brief asks for that
@@ -1745,6 +1758,7 @@ export class ParticleEngine implements ParticleEngineContract {
       s.body.spriteScale[i] = spriteScale
       colors[colorIndex + 3] = alpha / (spriteScale * spriteScale)
     }
+    this.renderedHead.set(state.headX, state.headY, state.headZ)
   }
 
   private upload(): void {
@@ -1755,69 +1769,13 @@ export class ParticleEngine implements ParticleEngineContract {
     this.tailGeometry.getAttribute('color').needsUpdate = true
   }
 
-  /**
-   * V3/V5 — the camera and the content retreat TOGETHER, so the comet neither
-   * shrinks nor drifts away from the glyph as the dolly runs.
-   *
-   * What was wrong before: only the camera moved and the slab was nailed to
-   * `SUBJECT_Z`. That is not a dolly, it is a zoom-out, and it makes the
-   * camera-to-content distance grow over the whole lap — the probe measured the gap
-   * walking from 26.5 to 45.5 units, which is why the glyph shrank from 79% of the
-   * viewport down to 46% and why `corr(camZ, fh)` came out at -0.9856. Any framing
-   * distance chosen for that layout was only ever correct at one instant, and V6
-   * asks about the glyph at every instant.
-   *
-   * Now the gap is a CONSTANT the framing owns, and the dolly moves both ends of it:
-   *
-   *   gap      = this.fitGap          (from `updateCameraFit`, V6's own number)
-   *   cameraZ  = this.fitDistance + span * progress
-   *   contentZ = cameraZ - gap        (so `cameraZ - contentZ === gap`, always)
-   *
-   * `fitDistance` is still exactly what the framing guard produced — `fitGap +
-   * SUBJECT_Z`, the near end of the range — so the guard keeps its original job of
-   * deciding where the near end sits and nothing else, and at `progress = 0` this
-   * reproduces the construction-time pose (`cameraZ = fitDistance`, `contentZ =
-   * SUBJECT_Z`) exactly. Written this way rather than as `contentZ = SUBJECT_Z +
-   * span * progress` so that a resize mid-lap re-anchors the whole pair instead of
-   * sliding the content out from under the camera.
-   *
-   * The designed span is used directly, so the pull-back can never be compressed
-   * into nothing — it is 19 units by construction, the same 19 the layout was
-   * tuned against, and the starfield keeps providing the parallax.
-   *
-   * `progress`'s shape and the eased wrap are untouched: this changes WHO moves,
-   * not WHEN.
-   */
+  /** Camera retreats indefinitely while both particle pools keep a fixed origin. */
   private advanceCamera(): void {
-    const period = DOLLY_PERIOD_SECONDS + DOLLY_WRAP_SECONDS
-    const t = this.reducedMotion ? 0 : this.dollySeconds % period
-
-    let progress: number
-    if (t < DOLLY_PERIOD_SECONDS) {
-      progress = t / DOLLY_PERIOD_SECONDS
-    } else {
-      // Eased wrap back to the near end; the starfield recycles stars as the camera
-      // passes them, so this reads as the field catching up rather than a cut.
-      progress = 1 - smootherStep((t - DOLLY_PERIOD_SECONDS) / DOLLY_WRAP_SECONDS)
-    }
-
-    // The framing guard SHIFTS the dolly's range rather than clamping the result.
-    //
-    // Clamping with `Math.max(DOLLY_FROM_Z + span * progress, fitDistance)` looks
-    // equivalent but parks the camera: `fitDistance` is the near end of the range,
-    // so the camera sat perfectly still until the dolly caught up with it, which is
-    // the one thing R2 asks it not to do. Mapping [0, 1] onto
-    // [fitDistance, fitDistance + span] instead keeps it moving for the entire
-    // period — the guard only decides where the near end of the range is.
-    const span = DOLLY_TO_Z - DOLLY_FROM_Z
-    const cameraZ = this.fitDistance + span * progress
-
-    // Constant gap: the content rides the dolly one framing distance ahead, so the
-    // glyph's on-screen size is the same at the near end as at the far one.
-    this.points.position.z = cameraZ - this.fitGap
-    this.tailPoints.position.z = this.points.position.z
+    const cameraZ = this.fitDistance + cameraTravelAt(this.dollySeconds)
     this.camera.position.set(0, 0, cameraZ)
-    this.camera.lookAt(0, 0, 0)
+    // A fixed -Z view also works when cameraZ crosses the world origin.
+    this.camera.quaternion.identity()
+    this.camera.updateMatrixWorld()
   }
 
   private publishStats(now: number): void {
