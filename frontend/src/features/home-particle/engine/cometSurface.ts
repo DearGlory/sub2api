@@ -1,4 +1,5 @@
-import { BufferAttribute, IcosahedronGeometry, Mesh, NormalBlending, ShaderMaterial, Vector3 } from 'three'
+import { IcosahedronGeometry, Mesh, NormalBlending, ShaderMaterial, Vector3 } from 'three'
+import { closeCometFractures, cometFractureVertex } from './cometFracture'
 import { COMET_SURFACE_RADIUS } from './cometVisualContract'
 import type { CometVisualFrame, CometVisualOptions } from './cometVisualContract'
 
@@ -26,13 +27,13 @@ const vertexShader = /* glsl */ `
   varying vec3 vBarycentric;
   varying vec3 vView;
   varying float vSeed;
+  ${cometFractureVertex}
   void main() {
-    // Triangle-local fracture centres preserve independent pieces; resting normals are continuous.
-    vec3 p = aFaceCenter + (position - aFaceCenter) * (1.0 - 0.46 * uFracture);
-    p += normal * uExpansion * (0.55 + 0.7 * aSeed);
+    vec3 p, n;
+    fractureTransform(p, n);
     vec4 view = modelViewMatrix * vec4(p, 1.0);
     vView = -view.xyz;
-    vNormal = normalize(normalMatrix * normal);
+    vNormal = normalize(normalMatrix * n);
     vLocal = position;
     vBarycentric = aBarycentric;
     vSeed = aSeed;
@@ -160,26 +161,7 @@ export function createCometSurface(options: CometVisualOptions) {
   }
   position.needsUpdate = true
   normals.needsUpdate = true
-  const center = new Float32Array(position.count * 3)
-  const barycentric = new Float32Array(position.count * 3)
-  const seed = new Float32Array(position.count)
-  for (let i = 0; i < position.count; i += 3) {
-    const cx = (position.getX(i) + position.getX(i + 1) + position.getX(i + 2)) / 3
-    const cy = (position.getY(i) + position.getY(i + 1) + position.getY(i + 2)) / 3
-    const cz = (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3
-    const random = Math.sin(i * 12.9898 + 78.233) * 43758.5453
-    for (let j = 0; j < 3; j++) {
-      const vertex = i + j
-      center[vertex * 3] = cx
-      center[vertex * 3 + 1] = cy
-      center[vertex * 3 + 2] = cz
-      barycentric[vertex * 3 + j] = 1
-      seed[vertex] = random - Math.floor(random)
-    }
-  }
-  geometry.setAttribute('aFaceCenter', new BufferAttribute(center, 3))
-  geometry.setAttribute('aBarycentric', new BufferAttribute(barycentric, 3))
-  geometry.setAttribute('aSeed', new BufferAttribute(seed, 1))
+  closeCometFractures(geometry)
   geometry.computeBoundingSphere()
   // Fragments may expand beyond the resting surface's bounds.
   geometry.boundingSphere!.radius += 1.6
