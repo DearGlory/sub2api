@@ -17,19 +17,22 @@ export function motionVerdict(m) {
 }
 const norm = (a) => Math.hypot(...a)
 const sub = (a, b) => a.map((v, i) => v - b[i])
-export function analyzeMotion(rows, boundary, dt) {
+export function analyzeMotion(rows, boundary, dt, nextPhase = 'travel') {
   const around = rows.filter(r => r.clock >= boundary - .21 && r.clock <= boundary + .21)
   const segments = around.slice(1).map((r, i) => {
     const p = around[i], span = r.clock - p.clock
     const velocity = sub(r.headSource, p.headSource).map(v => v / span)
     return { clock: r.clock, phase: r.phase, progress: r.progress, span,
       velocity, speed: norm(velocity), displacement: norm(sub(r.headSource, p.headSource)),
+      stateVelocity: r.stateHead && p.stateHead ? sub(r.stateHead, p.stateHead).map(v => v / span) : null,
       corePositionOnlySpeed: r.corePositionOnlyStep ? norm(r.corePositionOnlyStep) / span : null,
+      corePositionOnlyDisplacement: r.corePositionOnlyStep ? norm(r.corePositionOnlyStep) : null,
+      coreWorldPositionOnlySpeed: r.coreWorldPositionOnlyStep ? norm(r.coreWorldPositionOnlyStep) / span : null,
       coreWeightedCentroid: r.coreWeightedCentroid, coreUnweightedCentroid: r.coreUnweightedCentroid }
   })
   segments.forEach((s, i) => { s.acceleration = i ? sub(s.velocity, segments[i - 1].velocity).map(v => v / s.span) : null })
-  const pre = segments.filter(r => r.clock < boundary - 1e-8)
-  const post = segments.filter(r => r.clock >= boundary - 1e-8)
+  const pre = segments.filter(r => r.phase !== nextPhase)
+  const post = segments.filter(r => r.phase === nextPhase)
   if (pre.length < 2 || post.length < 2) return { status: 'instrument-invalid', boundary }
   const m = { boundary, sampleStep: dt, preSpeed: pre.at(-1).speed, postSpeed: post[0].speed,
     minimumAfterSpeed: Math.min(...post.map(r => r.speed)),

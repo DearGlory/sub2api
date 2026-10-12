@@ -4,7 +4,7 @@ import { dirname, resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 import { createHash } from 'node:crypto'
-import { launchChrome, connect, CDP, sleep } from './tail-probe-lib/cdp.mjs'
+import { launchChrome, connect, CDP, sleep, FREEZE_RAF } from './tail-probe-lib/cdp.mjs'
 import { installCausalProbe } from './comet-causal-page.mjs'
 import { LIMITS, compactVerdict, analyzeMotion, analyzePerf, selfCheck } from './comet-causal-verdicts.mjs'
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -73,6 +73,21 @@ try {
   if (!perf.originUnchanged || !perf.engineUnchanged || perf.visibility.some(v => v.state !== 'visible') || !perf.longtaskSupported) verdict('C4-instrument', 'instrument-invalid', '导航/HMR/隐藏页面/longtask不支持')
   verdict('C4-normal-run', 'manual-review', result.performance)
   console.log('正常rAF：' + Object.entries(result.performance.windows).map(([k, v]) => k + '=' + v.fps.toFixed(2) + 'fps').join(', '))
+  // A fresh engine behind a preinstalled rAF queue gives an exact, repeatable clock origin.
+  // This reload is AFTER the normal-run measurement and is never charged to C4.
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: FREEZE_RAF })
+  await cdp.send('Page.reload', { ignoreCache: false })
+  let fresh = false
+  for (let i = 0; i < 90; i++) {
+    fresh = await evaluate('!!window.__TP_FROZEN && !!window.__SUB2API_PARTICLE_ENGINE__?.running')
+    if (fresh) break
+    await sleep(400)
+  }
+  if (!fresh) throw Error('instrument-invalid: deterministic fresh engine did not mount')
+  await evaluate(`(async () => { await document.fonts.ready; const e=window.__SUB2API_PARTICLE_ENGINE__; e.setTheme(${theme === 'light'}); document.documentElement.classList.toggle('dark', ${theme === 'dark'}); return true })()`)
+  const deterministicMeta = await evaluate(`(${installCausalProbe.toString()})(${JSON.stringify({ limits: LIMITS, observe })})`)
+  save('deterministic-instrument.json', deterministicMeta)
+  if (deterministicMeta.invalid || JSON.stringify(deterministicMeta.methodSources) !== JSON.stringify(meta.methodSources)) throw Error('instrument-invalid: fresh engine unknown/implementation changed between runs')
   result.deterministic = await evaluate('window.__CCP.begin()')
   save('deterministic-start.json', result.deterministic)
   writeFileSync(join(out, 'birth-events.jsonl'), '')
@@ -98,7 +113,17 @@ try {
   const coalesces = final.checks.filter(c => c.criterion === 'C1-coalesce')
   if (coalesces.length !== 2 || final.missingTargets.length) verdict('C1-coverage', 'instrument-invalid', { coalesces: coalesces.length, missing: final.missingTargets })
   for (const check of final.checks) verdict(check.criterion, compactVerdict(check) ? 'pass' : 'fail', check)
+  result.phaseBoundaries = final.transitions.filter(t => t.clock >= result.deterministic.firstLeg * 12 + .3)
+    .map(t => {
+      const measurement = analyzeMotion(motion, t.clock, LIMITS.dt, t.to)
+      measurement.status = 'manual-review:phase-specific-no-generic-zero-speed-rule'
+      return { transition: t, measurement }
+    })
+  result.growthSeries = result.observations.filter(o => o.labels.some(l => l.label.startsWith('departure+')))
+    .map(o => ({ labels: o.labels, direction: o.direction, allVisible: o.allVisible, emittedVisible: o.emittedVisible, retainedMorph: o.retainedMorph }))
   const life = final.lifecycle
+  verdict('C1-pre-departure-tail', result.instrument.poolSeparation === 'legacy-unpartitioned' ? 'manual-review' : life.preDepartureFarTailFrames ? 'fail' : 'pass',
+    { frames: life.preDepartureFarTailFrames, maximum: life.preDepartureFarTailMaximum, note: '旧混池早期的大logo点不能当独立远尾；旧基线由收拢终态/重锁定否决。' })
   verdict('C1-birth-causality', life.premature || life.legacyRelatches ? 'fail' : life.unobserved || !life.births ? 'instrument-invalid' : 'pass', life)
   verdict('C1-birth-position', life.bornFar ? 'fail' : life.births ? 'pass' : 'instrument-invalid', { births: life.births, firstObservedBirthFartherThan1_5u: life.bornFar, resolution: LIMITS.dt, note: '真实出生首个integrate最终位置；非理想birthPosition。超过半径需核查首帧积分漂移。' })
   result.motion = final.boundaryClocks.map(boundary => analyzeMotion(motion, boundary, LIMITS.dt))

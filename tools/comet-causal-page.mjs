@@ -15,7 +15,7 @@ export function installCausalProbe(cfg) {
   const cycle = L.leg + L.gather + L.hold + L.scatter
   const clock = () => { const s = state(); return s.legIndex * cycle + phaseStart[s.phase] + s.phaseProgress * duration[s.phase] }
   const departure = leg => leg * cycle + phaseStart.scatter + L.scatter * L.coalesce
-  const currentDeparture = () => departure(state().phase === 'travel' ? state().legIndex - 1 : state().legIndex)
+  const currentDeparture = () => departure(state().phase === 'scatter' ? state().legIndex : state().legIndex - 1)
   const allPoints = [], inventory = []
   e.scene.traverse(o => {
     if (!o.isPoints) return
@@ -27,7 +27,8 @@ export function installCausalProbe(cfg) {
   })
   const meta = { inventory, engineKeys: Object.keys(e), scratchKeys: Object.keys(e.scratch || {}),
     methodSources: Object.fromEntries(['tick', 'advanceClock', 'writeEmissionTable', 'integrate', 'upload'].map(k => [k, String(e[k])])),
-    headSource: ['choreography.state.headX', 'choreography.state.headY', 'choreography.state.headZ'],
+    stateHeadPaths: ['choreography.state.headX', 'choreography.state.headY', 'choreography.state.headZ'],
+    headSource: null,
     url: location.href, timeOrigin: performance.timeOrigin, light: e.light, reducedMotion: e.reducedMotion,
     viewport: [innerWidth, innerHeight], userAgent: navigator.userAgent }
   let contract = cfg.observe
@@ -38,6 +39,8 @@ export function installCausalProbe(cfg) {
     if (frozenLegacy && e.scratch?.positions === e.points?.geometry?.getAttribute('position')?.array) {
       const count = e.points.geometry.getAttribute('position').count, coreEnd = Math.floor(count * .18)
       contract = { kind: 'legacy-unpartitioned-logo-to-tail', main: 'points', background: ['starfield.object'],
+        head: ['scratch.tailTable.xyz.0', 'scratch.tailTable.xyz.1', 'scratch.tailTable.xyz.2'],
+        headDescription: 'integrate directly consumes table.xyz[0..2]; Float32 actual emitter source, separate from state double precision path',
         pools: [{ id: 'main', points: 'points', start: 0, end: count, core: [0, coreEnd], mode: 'legacy-frozen',
           age: 'scratch.tailAge', life: 'scratch.tailLife', active: 'scratch.tailReady', birthPosition: 'scratch.tailBirthPosition' }] }
     }
@@ -64,7 +67,10 @@ export function installCausalProbe(cfg) {
     const life = p.mode === 'morph' ? null : get(p.life), age = p.mode === 'morph' ? null : get(p.age)
     if (!['morph', 'emitted', 'legacy-frozen'].includes(p.mode)) fail('unknown lifecycle mode')
     if (p.mode !== 'morph' && (!life || !age || life.length < end || age.length < end || (!p.active && !p.generation))) fail('lifecycle arrays incomplete: ' + p.id)
-    for (const key of ['active', 'generation', 'bornAt', 'birthPosition']) if (p[key] && !get(p[key])) fail('missing path ' + p[key])
+    for (const key of ['active', 'generation', 'bornAt', 'birthPosition']) if (p[key]) {
+      const array = get(p[key])
+      if (!ArrayBuffer.isView(array) || array.length < end * (key === 'birthPosition' ? 3 : 1)) fail('missing/short lifecycle array ' + p[key])
+    }
     if (p.bornAt && !['clock', 'integrate', 'departure'].includes(p.timeBasis)) fail('bornAt requires timeBasis')
     if (p.core && (!Number.isInteger(p.core[0]) || !Number.isInteger(p.core[1]) || p.core[0] < p.start || p.core[1] > end || p.core[1] <= p.core[0])) fail('core range invalid')
     pools.push({ ...p, end, o, pos, color, age, life, activeArray: p.active ? get(p.active) : null,
@@ -81,8 +87,11 @@ export function installCausalProbe(cfg) {
   }
   meta.poolSeparation = pools.some(p => p.mode === 'emitted') ?
     (new Set(pools.map(p => p.o)).size > 1 ? 'independent-tail-Points' : 'partitioned-buffer') : 'legacy-unpartitioned'
-  const head = () => (contract.head || meta.headSource).map(p => Number(get(p)))
-  if (!head().every(Number.isFinite)) fail('actual head source missing')
+  if (!Array.isArray(contract.head) || contract.head.length !== 3 || !contract.headDescription) fail('explicit actual head paths + headDescription required; no theoretical fallback')
+  meta.headSource = contract.head
+  const head = () => contract.head.map(p => Number(get(p)))
+  const stateHead = () => meta.stateHeadPaths.map(p => Number(get(p)))
+  if (!head().every(Number.isFinite) || !stateHead().every(Number.isFinite)) fail('actual/state head source missing')
   for (const k of ['stop', 'advanceClock', 'writeEmissionTable', 'integrate', 'upload', 'advanceCamera']) if (typeof e[k] !== 'function') fail('missing true update method ' + k)
   if (e.reducedMotion) fail('reduced motion active; normal motion probe cannot certify')
   const visible = o => { for (let a = o; a; a = a.parent) if (!a.visible) return false; return true }
@@ -102,6 +111,7 @@ export function installCausalProbe(cfg) {
   }
   function matrices() {
     e.scene.updateMatrixWorld(true)
+    e.camera.updateMatrixWorld(true)
     for (const p of pools) p.matrix = p.o === main ? null : main.matrixWorld.clone().invert().multiply(p.o.matrixWorld)
   }
   function livePerf(seconds) {
@@ -143,14 +153,21 @@ export function installCausalProbe(cfg) {
       requestAnimationFrame(tick); setTimeout(end, seconds * 1000 + 2000)
     })
   }
+  const world = xyz => transform({ matrix: main.matrixWorld }, xyz)
+  const projected = xyz => {
+    if (!xyz) return null
+    const v = e.camera.position.clone().set(...world(xyz)).project(e.camera)
+    return [v.x, v.y, v.z]
+  }
   let begun = false, firstLeg, endClock, integrateTime, n = 0, targets = [], ti = 0, previousPhase = null
-  const motion = [], checks = [], transitions = [], lifecycle = { births: 0, premature: 0, legacyRelatches: 0, recycled: 0, unobserved: 0, bornFar: 0 }
+  const checks = [], transitions = [], lifecycle = { births: 0, premature: 0, legacyRelatches: 0, recycled: 0, unobserved: 0, bornFar: 0, leftCensoredAtStart: 0, preDepartureFarTailFrames: 0, preDepartureFarTailMaximum: 0 }
   let lastState = null
   function begin() {
     e.stop(); matrices()
     firstLeg = state().legIndex + 1
     endClock = (firstLeg + 2) * cycle + .85
-    integrateTime = performance.now() / 1000
+    if (Math.abs(clock()) > 1e-10) fail('deterministic run requires fresh engine at clock zero')
+    integrateTime = 0
     for (let leg = firstLeg; leg < firstLeg + 2; leg++) {
       const add = (clock, label) => targets.push({ clock, label, leg })
       for (const progress of [0, .25, .5, .62, .8, .95, 1]) add(leg * cycle + phaseStart.scatter + progress * L.scatter, 'scatter-' + progress)
@@ -159,7 +176,9 @@ export function installCausalProbe(cfg) {
       for (let ms = 0; ms <= 1900; ms += 100) add(leg * cycle + phaseStart.scatter + ms / 1000, 'sequence+' + ms + 'ms')
     }
     targets.sort((a, b) => a.clock - b.clock)
-    for (const p of pools) for (let i = p.start; i < p.end; i++) p.prev[i] = read(p, i)
+    for (const p of pools) for (let i = p.start; i < p.end; i++) {
+      p.prev[i] = read(p, i); lifecycle.leftCensoredAtStart += +p.prev[i].active
+    }
     previousPhase = state().phase; begun = true
     return { firstLeg, endClock, startClock: clock(), dt: L.dt, targetCount: targets.length,
       chain: 'advanceClock -> writeEmissionTable -> integrate -> upload -> advanceCamera; renderer at snapshot only; no state seek/reset',
@@ -187,7 +206,9 @@ export function installCausalProbe(cfg) {
         tailAge: ages, observedBirthClock: born, active, observedGeneration: gen })
     }
     const summary = { clock: clock(), phase: s.phase, progress: s.phaseProgress, leg: s.legIndex, labels,
-      headSource: h, fromX: s.fromX, toX: s.toX,
+      headSource: h, stateHead: stateHead(), actualHeadWorld: world(h), actualHeadNDC: projected(h),
+      mainMatrixWorld: Array.from(main.matrixWorld.elements), cameraMatrixWorld: Array.from(e.camera.matrixWorld.elements),
+      cameraProjection: Array.from(e.camera.projectionMatrix.elements), fromX: s.fromX, toX: s.toX,
       direction: (s.phase === 'scatter' ? s.fromX - s.toX : s.toX - s.fromX) > 0 ? 'right' : 'left',
       allVisible: { ...dist(all), far3: all.filter(v => v > L.far).length },
       retainedMorph: { ...dist(retained), far3: retained.filter(v => v > L.far).length },
@@ -205,21 +226,23 @@ export function installCausalProbe(cfg) {
     const events = [], rows = []
     for (let step = 0; step < maxSteps && clock() < endClock; step++) {
       // A phase=1 request means the last real scatter frame, not an invented state at progress=1.
-      if (targets[ti]?.label === 'scatter-1' && targets[ti].clock > clock() + 1e-8 && targets[ti].clock <= clock() + L.dt + 1e-8) {
+      if (targets[ti]?.label === 'scatter-1' && targets[ti].clock > clock() && targets[ti].clock <= clock() + L.dt) {
         const labels = [targets[ti++]]
         return { done: false, events, rows, snapshot: capture(labels) }
       }
+      const oldMainMatrix = main.matrixWorld.clone()
       const before = clock(); integrateTime += L.dt
       e.advanceClock(L.dt); e.writeEmissionTable(); e.integrate(L.dt * 60, integrateTime); e.upload(); e.advanceCamera(); matrices(); n++
       const s = state(), now = clock(), h = head(), inScope = s.legIndex >= firstLeg
       if (Math.abs(now - before - L.dt) > 1e-7) fail('clock timing differs from frozen timing contract')
       if (window.__SUB2API_PARTICLE_ENGINE__ !== e || e.running) fail('HMR/remount or rAF restarted during deterministic sampling')
       if (s.phase !== previousPhase) { transitions.push({ clock: now, from: previousPhase, to: s.phase, leg: s.legIndex }); previousPhase = s.phase }
-      const coreSum = [0, 0, 0], corePlain = [0, 0, 0], coreStep = [0, 0, 0]
-      let weight = 0, stepWeight = 0, coreCount = 0
+      const coreSum = [0, 0, 0], corePlain = [0, 0, 0], coreStep = [0, 0, 0], coreWorldStep = [0, 0, 0]
+      let weight = 0, stepWeight = 0, coreCount = 0, preDepartureFarTail = 0
       const displacements = [], relatchAges = []; let worst = null
       for (const p of pools) for (let i = p.start; i < p.end; i++) {
-        const r = read(p, i), old = p.prev[i], isCore = p.core && i >= p.core[0] && i < p.core[1]
+        const r = read(p, i), old = p.prev[i], oldBorn = p.actualBorn[i], isCore = p.core && i >= p.core[0] && i < p.core[1]
+        if (inScope && p.mode === 'emitted' && s.phase === 'scatter' && s.phaseProgress < L.coalesce && r.a >= L.alpha && Math.hypot(...r.xyz.map((v, j) => v - h[j])) > L.far) preDepartureFarTail++
         const legacyRelatch = p.mode === 'legacy-frozen' && s.phase === 'scatter' && lastState?.phase !== 'scatter' && p.life[i] > 0
         const changed = r.active && (!old.active || (r.gen !== null && r.gen !== old.gen) ||
           (r.stamp !== null && r.stamp !== old.stamp) || r.age < old.age - 1e-6)
@@ -247,8 +270,8 @@ export function installCausalProbe(cfg) {
               reappearance: r.a >= L.alpha ? 'visible-now' : 'not-yet-visible' })
           }
         }
+        if (inScope && (old.a >= L.alpha && r.a < L.alpha || old.active && !r.active || changed) && Number.isFinite(oldBorn)) events.push({ type: 'disappearance', pool: p.id, particle: i, clock: now, birthClock: oldBorn, previousAlpha: old.a, alpha: r.a, previousPosition: old.xyz, position: r.xyz, died: old.active && !r.active, recycled: changed })
         if (!r.active) p.actualBorn[i] = NaN
-        if (inScope && old.a >= L.alpha && r.a < L.alpha && Number.isFinite(p.actualBorn[i])) events.push({ type: 'disappearance', pool: p.id, particle: i, clock: now, previousAlpha: old.a, alpha: r.a, position: r.xyz })
         if (inScope && old.a < L.alpha && r.a >= L.alpha && Number.isFinite(p.actualBorn[i])) events.push({ type: 'reappearance', pool: p.id, particle: i, clock: now, birthClock: p.actualBorn[i], alpha: r.a, position: r.xyz })
         // Only genuine same-generation emitted points enter continuity. Recycling never creates a teleport statistic.
         if (inScope && !changed && !legacyRelatch && r.active && old.active && Number.isFinite(p.actualBorn[i]) && old.a >= L.alpha && r.a >= L.alpha && (s.phase === 'travel' || s.phase === 'scatter')) {
@@ -258,23 +281,39 @@ export function installCausalProbe(cfg) {
         if (isCore) {
           coreCount++; r.xyz.forEach((v, j) => { corePlain[j] += v; coreSum[j] += v * r.a })
           weight += r.a
-          if (old.a >= L.alpha && r.a >= L.alpha) { stepWeight += old.a; r.xyz.forEach((v, j) => { coreStep[j] += (v - old.xyz[j]) * old.a }) }
+          if (old.a >= L.alpha && r.a >= L.alpha) {
+            stepWeight += old.a
+            r.xyz.forEach((v, j) => { coreStep[j] += (v - old.xyz[j]) * old.a })
+            const oldWorld = transform({ matrix: oldMainMatrix }, old.xyz), newWorld = world(r.xyz)
+            newWorld.forEach((v, j) => { coreWorldStep[j] += (v - oldWorld[j]) * old.a })
+          }
         }
         p.prev[i] = r
       }
       if (inScope) {
+        lifecycle.preDepartureFarTailFrames += +(preDepartureFarTail > 0)
+        lifecycle.preDepartureFarTailMaximum = Math.max(lifecycle.preDepartureFarTailMaximum, preDepartureFarTail)
         const row = { clock: now, phase: s.phase, progress: s.phaseProgress, leg: s.legIndex,
-          headSource: h, coreWeightedCentroid: weight ? coreSum.map(v => v / weight) : null,
+          headSource: h, stateHead: stateHead(), actualHeadWorld: world(h), actualHeadNDC: projected(h),
+          coreWeightedCentroid: weight ? coreSum.map(v => v / weight) : null,
+          coreWeightedCentroidNDC: weight ? projected(coreSum.map(v => v / weight)) : null,
           coreUnweightedCentroid: coreCount ? corePlain.map(v => v / coreCount) : null,
           corePositionOnlyStep: stepWeight ? coreStep.map(v => v / stepWeight) : null,
+          coreWorldPositionOnlyStep: stepWeight ? coreWorldStep.map(v => v / stepWeight) : null,
           coreAlphaSum: weight, coreCount, actualEmittedContinuity: dist(displacements), worstEmittedStep: worst,
           legacyRelatchAges: relatchAges.length ? dist(relatchAges) : null }
-        rows.push(row); motion.push(row)
+        rows.push(row)
       }
       lastState = { phase: s.phase, leg: s.legIndex }
-      if (targets[ti] && now >= targets[ti].clock - 1e-8) {
+      const reached = target => {
+        if (!target || now < target.clock - 1e-8) return false
+        if (target.label === 'scatter-0' || target.label === 'sequence+0ms') return s.phase === 'scatter' && s.legIndex === target.leg
+        if (target.label === 'travel-0' || target.label === 'sequence+1100ms') return s.phase === 'travel' && s.legIndex === target.leg + 1
+        return true
+      }
+      if (reached(targets[ti])) {
         const labels = []
-        while (targets[ti] && now >= targets[ti].clock - 1e-8) labels.push(targets[ti++])
+        while (reached(targets[ti])) labels.push(targets[ti++])
         return { done: false, events, rows, snapshot: capture(labels) }
       }
     }
