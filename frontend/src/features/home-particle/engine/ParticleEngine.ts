@@ -999,7 +999,7 @@ export class ParticleEngine implements ParticleEngineContract {
     this.tailGeometry.setAttribute('position', new BufferAttribute(this.scratch.emittedTail.positions, 3).setUsage(DynamicDrawUsage))
     this.tailGeometry.setAttribute('color', new BufferAttribute(this.scratch.emittedTail.colors, 4).setUsage(DynamicDrawUsage))
     this.tailMaterial = this.material.clone()
-    this.tailMaterial.size = this.palette.pointSize * 0.78
+    this.tailMaterial.size = this.palette.pointSize * 1.05
     this.tailPoints = new Points(this.tailGeometry, this.tailMaterial)
     this.tailPoints.name = 'causal-emitted-tail'
     this.tailPoints.frustumCulled = false
@@ -1115,7 +1115,7 @@ export class ParticleEngine implements ParticleEngineContract {
     this.material.opacity = this.palette.opacity
     this.material.needsUpdate = true
     this.tailMaterial.blending = this.palette.blending
-    this.tailMaterial.size = this.palette.pointSize * 0.78
+    this.tailMaterial.size = this.palette.pointSize * 1.05
     this.tailMaterial.opacity = this.palette.opacity
     this.tailMaterial.needsUpdate = true
     this.renderer.setClearColor(this.palette.background, isLightTheme ? 1 : 0)
