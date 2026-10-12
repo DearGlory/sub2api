@@ -3,7 +3,7 @@
  *
  * One beat per brand, matching HOME-PARTICLE-DESIGN.md §4 and §1 (R3-R7):
  *
- *   travel   6.5 s  the comet cruises one S-leg, extreme to extreme
+ *   travel   6.5 s  the comet flies one X/Z leg, extreme to extreme
  *   gather   1.4 s  the comet lets go and takes the glyph's shape
  *   hold     3.0 s  [user] the glyph keeps its shape while particles flow inside it
  *   scatter  1.1 s  the glyph dissipates and the comet re-forms
@@ -26,8 +26,7 @@ import {
   LEG_SECONDS,
   SCATTER_SECONDS,
 } from './constants'
-import { COALESCE_END, departureSeconds } from './flightTiming'
-import { sampleFlightPath, type FlightDerivative } from './flightPath'
+import { sampleSpaceMotion } from './spaceMotion'
 
 /** A point in subject space (x right, y up, z toward the camera). */
 export interface Point3 {
@@ -69,13 +68,8 @@ export function smootherStep(t: number): number {
 /**
  * The extreme leg `legIndex` departs from.
  *
- * Parity, not the value of `legIndex`, flips the sweep, so the comet goes right,
- * then left, then right ([user] "不断S形左右来回移动"). Without the flip every leg
- * would run the same way and the two humps of the S would stack into one arc
- * instead of mirroring.
- *
- * The `+2) % 2` normalisation keeps parity correct for negative legs, which is how
- * `sampleTrail()` reaches back before the current beat.
+ * Parity flips X direction only after the glyph coalesces; Z keeps advancing.
+ * Negative legs use the same parity when `sampleTrail()` reaches before boot.
  */
 export function legFromX(legIndex: number, amplitudeX: number): number {
   return ((legIndex % 2) + 2) % 2 === 0 ? -amplitudeX : amplitudeX
@@ -102,7 +96,7 @@ export function sampleHeadPosition(
   options: ChoreographyOptions,
   out: Point3 = { x: 0, y: 0, z: 0 }
 ): Point3 {
-  return sampleHeadCurve(legIndex, phase, phaseProgress, options, out, 0)
+  return sampleSpaceMotion(legIndex, phase, phaseProgress, options, out, 0)
 }
 
 /** Actual subject-space velocity (units/s), or acceleration (units/s²).
@@ -115,15 +109,15 @@ export function sampleHeadDerivative(
   out: Point3 = { x: 0, y: 0, z: 0 },
   order: 1 | 2 = 1
 ): Point3 {
-  return sampleHeadCurve(legIndex, phase, phaseProgress, options, out, order)
+  return sampleSpaceMotion(legIndex, phase, phaseProgress, options, out, order)
 }
 
 /**
  * Unit forward tangent of the SAME spatial curve, including at zero speed.
  * Gather/hold use the arriving tangent; scatter uses the upcoming leg's departure
  * tangent. These are orientation conventions during rest, NOT nonzero velocities.
- * Negate this vector for the emission/backward axis. Call with the same swayY that
- * was passed to setSwayY on resize. A collapsed route returns (0,0,0).
+ * Negate this vector for the emission/backward axis. Legacy sway options do not
+ * affect the X/Z route; even zero X amplitude retains its +Z pursuit direction.
  */
 export function sampleHeadDirection(
   legIndex: number,
@@ -132,39 +126,7 @@ export function sampleHeadDirection(
   options: ChoreographyOptions,
   out: Point3 = { x: 0, y: 0, z: 0 }
 ): Point3 {
-  return sampleHeadCurve(legIndex, phase, phaseProgress, options, out, 3)
-}
-
-function sampleHeadCurve(
-  legIndex: number,
-  phase: CometPhase,
-  phaseProgress: number,
-  options: ChoreographyOptions,
-  out: Point3,
-  derivative: FlightDerivative
-): Point3 {
-  const leg = Math.floor(finiteOr(legIndex, 0))
-  const amplitudeX = finiteOr(options.amplitudeX, 0)
-  const stationary = phase === 'gather' || phase === 'hold'
-  if (stationary && derivative !== 3) {
-    out.x = derivative === 0 ? -legFromX(leg, amplitudeX) : 0
-    out.y = 0
-    out.z = 0
-    return out
-  }
-  const legSeconds = positiveOr(options.legSeconds, LEG_SECONDS)
-  const scatterSeconds = positiveOr(options.scatterSeconds, SCATTER_SECONDS)
-  const duration = legSeconds + scatterSeconds * (1 - COALESCE_END)
-  return sampleFlightPath(
-    phase === 'scatter' ? leg + 1 : leg,
-    stationary ? duration : departureSeconds(phase, phaseProgress, legSeconds, scatterSeconds),
-    duration,
-    amplitudeX,
-    finiteOr(options.swayY, 0),
-    finiteOr(options.swayZ, 0),
-    out,
-    derivative
-  )
+  return sampleSpaceMotion(legIndex, phase, phaseProgress, options, out, 3)
 }
 
 /**
@@ -558,7 +520,7 @@ export function createChoreography(options: ChoreographyOptions): Choreography {
      *
      * Cross-phase replay falls out of that for free. One frame into `gather`, the
      * clock minus TAIL_SECONDS still lands inside `travel`, so the comet's tail is
-     * genuinely still stretched back along the S-leg rather than snapping to the
+     * still stretched back along the X/Z leg before converging onto the
      * glyph. From `hold` onward the replayed instant is itself a stationary phase,
      * so the tail converges onto the glyph on its own. No special cases, and no
      * seam to hide.
@@ -582,11 +544,7 @@ export function createChoreography(options: ChoreographyOptions): Choreography {
         leg,
         PHASES[index],
         phaseProgressAt(time, clock, index),
-        // `safe`, not the raw `options`: this is the same object `writeState` samples, so
-        // a runtime `setSwayY` moves the head and its trail together. Passing the raw
-        // options here was equivalent while nothing mutated them (both paths sanitise),
-        // but once the sway is retuned on resize the two would disagree and the tail
-        // would replay a path the head is no longer on.
+        // State and history share the same sanitized options and absolute anchors.
         safe,
         out
       )
@@ -602,18 +560,7 @@ export function createChoreography(options: ChoreographyOptions): Choreography {
       state.brandIndex = brandIndex
     },
 
-    /**
-     * Retune the vertical sway (see the interface for why only this one).
-     *
-     * `writeState()` is called immediately so `state.headY` reflects the new sway on the
-     * same frame. Without it the state would keep the old amplitude until the next
-     * `update()`, and the engine seeds the opening glyph and reads `state` before the
-     * first update — so a resize during boot would put the glyph on the old curve.
-     *
-     * A non-finite input is ignored rather than sanitised to 0: a 0 sway is a legitimate
-     * setting (a flat S), so silently clamping a NaN to it would turn a caller's bug
-     * into a plausible-looking layout.
-     */
+    /** Compatibility with existing resize callers; the X/Z route ignores sway. */
     setSwayY(next: number): void {
       if (!Number.isFinite(next)) return
       safe.swayY = next
