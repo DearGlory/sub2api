@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three'
+import { BufferAttribute, BufferGeometry, Points, PointsMaterial, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { createEngineScratch, paletteFor, ParticleEngine } from '../ParticleEngine'
 import { LEG_SECONDS, SCATTER_SECONDS } from '../constants'
@@ -48,7 +48,8 @@ export function renderHarness(light = false, moving = true) {
     scratch, particleCount: COUNT, choreography, geometry, tailGeometry,
     palette: paletteFor(light), light, reducedMotion: false,
     points: new Points(geometry, new PointsMaterial({ size: paletteFor(light).pointSize })), tailPoints: new Points(tailGeometry),
-    renderedPhase: 'hold', lastPhase: 'hold', holdFade: 0, tailPoint: new Float32Array(3),
+    renderedPhase: 'hold', lastPhase: 'hold', currentGlyphLeg: 0,
+    renderedHead: new Vector3(state.headX, state.headY, state.headZ), holdFade: 0, tailPoint: new Float32Array(3),
     pointer: { active: false, lastMove: 0 }, width: 1440, height: 900,
     options: {}, roster: [{ slug: 'fixture' }], currentBrandSlug: 'fixture',
     brandSource: { prefetch() {} }, quality: { iconCanvasSize: 256 }, dollySeconds: 0,
