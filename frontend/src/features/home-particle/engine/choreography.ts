@@ -26,6 +26,8 @@ import {
   LEG_SECONDS,
   SCATTER_SECONDS,
 } from './constants'
+import { COALESCE_END, departureSeconds } from './flightTiming'
+import { sampleFlightPath, type FlightDerivative } from './flightPath'
 
 /** A point in subject space (x right, y up, z toward the camera). */
 export interface Point3 {
@@ -85,14 +87,13 @@ export function legFromX(legIndex: number, amplitudeX: number): number {
 
 /**
  * Comet head at `phaseProgress` through `phase` of leg `legIndex`.
+ * Gather/hold and the first .62 of scatter stay on the glyph anchor. The remainder
+ * of scatter flies legIndex+1; its shared departure clock continues into travel.
+ * Thus travel0 (also on first open) is already in flight, not a second zero-speed
+ * start. State.fromX/toX still describe the current beat throughout scatter.
  *
- * Only `travel` moves. The other three phases pin the head to the extreme the leg
- * arrived at, so the glyph forms at the route's leftmost or rightmost point
- * ([user] "在达到路线的最左侧和最右侧时聚集成目标3D图案") and no phase change can
- * teleport the head.
- *
- * `out` is caller-owned because §6 item 2 forbids per-frame allocation: this runs
- * once per frame and once per trail sample.
+ * `out` is caller-owned: the state and historical trail use this same sampler and
+ * the same live resize options, with no per-frame allocation or history cache.
  */
 export function sampleHeadPosition(
   legIndex: number,
@@ -101,44 +102,69 @@ export function sampleHeadPosition(
   options: ChoreographyOptions,
   out: Point3 = { x: 0, y: 0, z: 0 }
 ): Point3 {
-  const amplitudeX = finiteOr(options.amplitudeX, 0)
-  const fromX = legFromX(legIndex, amplitudeX)
-  const toX = -fromX
+  return sampleHeadCurve(legIndex, phase, phaseProgress, options, out, 0)
+}
 
-  if (phase !== 'travel') {
-    // Arrived. gather/hold/scatter change the *shape* of the cloud, never where
-    // its centre sits — the glyph is built around this exact point.
-    out.x = toX
+/** Actual subject-space velocity (units/s), or acceleration (units/s²).
+ * Zero during stationary phases; never a guessed direction at zero speed. */
+export function sampleHeadDerivative(
+  legIndex: number,
+  phase: CometPhase,
+  phaseProgress: number,
+  options: ChoreographyOptions,
+  out: Point3 = { x: 0, y: 0, z: 0 },
+  order: 1 | 2 = 1
+): Point3 {
+  return sampleHeadCurve(legIndex, phase, phaseProgress, options, out, order)
+}
+
+/**
+ * Unit forward tangent of the SAME spatial curve, including at zero speed.
+ * Gather/hold use the arriving tangent; scatter uses the upcoming leg's departure
+ * tangent. These are orientation conventions during rest, NOT nonzero velocities.
+ * Negate this vector for the emission/backward axis. Call with the same swayY that
+ * was passed to setSwayY on resize. A collapsed route returns (0,0,0).
+ */
+export function sampleHeadDirection(
+  legIndex: number,
+  phase: CometPhase,
+  phaseProgress: number,
+  options: ChoreographyOptions,
+  out: Point3 = { x: 0, y: 0, z: 0 }
+): Point3 {
+  return sampleHeadCurve(legIndex, phase, phaseProgress, options, out, 3)
+}
+
+function sampleHeadCurve(
+  legIndex: number,
+  phase: CometPhase,
+  phaseProgress: number,
+  options: ChoreographyOptions,
+  out: Point3,
+  derivative: FlightDerivative
+): Point3 {
+  const leg = Math.floor(finiteOr(legIndex, 0))
+  const amplitudeX = finiteOr(options.amplitudeX, 0)
+  const stationary = phase === 'gather' || phase === 'hold'
+  if (stationary && derivative !== 3) {
+    out.x = derivative === 0 ? -legFromX(leg, amplitudeX) : 0
     out.y = 0
     out.z = 0
     return out
   }
-
-  // Lateral easing: (1 - cos(pi*p)) / 2 is 0 at p=0, 1 at p=1, and its slope
-  // vanishes at both ends. That is the "到达" feel the spec asks for: the comet
-  // decelerates into the extreme and accelerates back out, giving the glyph a
-  // beat of near-stillness to assemble in rather than slamming it together at
-  // full speed. It also means `headX` is monotone along the leg, which is what
-  // `sampleTrail()` relies on to lay the tail out without self-crossing.
-  const eased = (1 - Math.cos(Math.PI * clamp01(phaseProgress))) / 2
-
-  out.x = fromX + (toX - fromX) * eased
-
-  // The S itself. Vertical and depth run at the same frequency, a quarter period
-  // apart — that quadrature is what makes the sweep three-dimensional:
-  //   y ∝ sin(2π·e)      peaks at the quarter points
-  //   z ∝ 1 - cos(2π·e)  deepest at mid-leg, back on the glyph plane at both ends
-  // Two in-phase sines would give z = k·y, i.e. a curve lying in a plane, and the
-  // sweep would read as a flat wiggle. In quadrature the (y,z) projection traces a
-  // closed loop while x advances monotonically: a helix, a genuine S in space.
-  // Both ends still land on (0, 0), so `travel` hands over to `gather` at exactly
-  // the point the glyph is drawn around — no positional pop at the seam.
-  const dir = ((legIndex % 2) + 2) % 2 === 0 ? 1 : -1
-  const turn = 2 * Math.PI * eased
-  out.y = finiteOr(options.swayY, 0) * dir * Math.sin(turn)
-  out.z = -(finiteOr(options.swayZ, 0) / 2) * (1 - Math.cos(turn))
-
-  return out
+  const legSeconds = positiveOr(options.legSeconds, LEG_SECONDS)
+  const scatterSeconds = positiveOr(options.scatterSeconds, SCATTER_SECONDS)
+  const duration = legSeconds + scatterSeconds * (1 - COALESCE_END)
+  return sampleFlightPath(
+    phase === 'scatter' ? leg + 1 : leg,
+    stationary ? duration : departureSeconds(phase, phaseProgress, legSeconds, scatterSeconds),
+    duration,
+    amplitudeX,
+    finiteOr(options.swayY, 0),
+    finiteOr(options.swayZ, 0),
+    out,
+    derivative
+  )
 }
 
 /**

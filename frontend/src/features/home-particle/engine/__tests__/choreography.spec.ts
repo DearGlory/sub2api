@@ -13,7 +13,12 @@
  * — the caller's sampling granularity, not the clock's own error.
  */
 import { describe, expect, it } from 'vitest'
-import { createChoreography, sampleHeadPosition } from '../choreography'
+import {
+  createChoreography,
+  sampleHeadDerivative,
+  sampleHeadDirection,
+  sampleHeadPosition,
+} from '../choreography'
 import { COALESCE_END } from '../flightTiming'
 import type { Point3 } from '../choreography'
 import type { Choreography, ChoreographyOptions, CometPhase } from '../types'
@@ -145,13 +150,11 @@ describe('choreography: beat timing', () => {
       elapsed += 0.5
     }
     expect(elapsed).toBe(CYCLE_SECONDS)
-    // The 24th step starts beat 1 exactly, so legIndex has just moved to 1 — and an
-    // odd leg departs from the *right* extreme, which is where leg 0 arrived. The
-    // sweep is therefore continuous across the beat, never a jump back to the left.
+    // Beat 1 starts with 0.418 s of departure already elapsed in beat 0's scatter.
     expect(choreo.state.legIndex).toBe(1)
     expect(choreo.state.phase).toBe('travel')
     expect(choreo.state.phaseProgress).toBe(0)
-    expect(choreo.state.headX).toBe(AMPLITUDE_X)
+    expect(choreo.state.headX).toBe(sampleHeadPosition(0, 'scatter', 1, makeOptions()).x)
   })
 
   it('phase boundaries land where the design doc puts them', () => {
@@ -480,7 +483,7 @@ describe('choreography: the head reaches the extremes', () => {
     })
   })
 
-  it('headX is monotone along a leg and slows at both ends', () => {
+  it('headX is monotone along travel, enters moving, and slows into the arrival', () => {
     const choreo = createChoreography(makeOptions())
     const dt = 1 / 240
     const samples: Array<{ x: number }> = []
@@ -489,7 +492,7 @@ describe('choreography: the head reaches the extremes', () => {
       choreo.update(dt)
     }
     expect(samples.length).toBeGreaterThan(1000)
-    expect(samples[0].x).toBeCloseTo(-AMPLITUDE_X, 3)
+    expect(samples[0].x).toBeGreaterThan(-AMPLITUDE_X + 0.06)
     for (let i = 1; i < samples.length; i++) {
       expect(samples[i].x).toBeGreaterThan(samples[i - 1].x)
     }
@@ -497,91 +500,67 @@ describe('choreography: the head reaches the extremes', () => {
     const middleIndex = Math.floor(samples.length / 2)
     const middleStep = samples[middleIndex + 1].x - samples[middleIndex].x
     const lastStep = samples[samples.length - 1].x - samples[samples.length - 2].x
-    // cos easing: fastest in the middle, near-stationary at both extremes. That is
-    // the "arrival" feel, and it is what gives the glyph a still instant to form in.
-    expect(middleStep).toBeGreaterThan(firstStep * 10)
+    expect(firstStep / dt).toBeGreaterThan(0.3)
     expect(middleStep).toBeGreaterThan(lastStep * 10)
+    expect(choreo.state.headX).toBe(AMPLITUDE_X)
   })
 
-  it('holds the glyph position still through gather, hold and scatter', () => {
+  it('pins gather/hold/coalescence to the extreme, then leaves during scatter', () => {
     const dt = 1 / 240
     const choreo = createChoreography(makeOptions())
     while (choreo.state.phase === 'travel') choreo.update(dt)
     const anchor = { x: choreo.state.headX, y: choreo.state.headY, z: choreo.state.headZ }
-    // The stationary phases pin the head to the extreme exactly, so the glyph centre
-    // is `toX` to the last bit — not the eased value the last travel frame reached.
-    expect(anchor.x).toBe(AMPLITUDE_X)
-    expect(anchor.y).toBe(0)
-    expect(anchor.z).toBe(0)
-    while (choreo.state.phase !== 'travel') {
+    expect(anchor).toEqual({ x: AMPLITUDE_X, y: 0, z: 0 })
+    while (choreo.state.phase !== 'scatter' || choreo.state.phaseProgress <= COALESCE_END) {
       expect(choreo.state.headX).toBe(anchor.x)
       expect(choreo.state.headY).toBe(anchor.y)
       expect(choreo.state.headZ).toBe(anchor.z)
       choreo.update(dt)
     }
-    // And the next leg starts from that same point, so nothing teleports. It has
-    // already advanced one frame into the new leg (that is what ended the loop), so
-    // it is a frame of travel away at most — leg 1 runs +amp -> -amp.
+    while (choreo.state.legIndex === 0) choreo.update(dt)
     expect(choreo.state.legIndex).toBe(1)
     expect(choreo.state.phase).toBe('travel')
     expect(choreo.state.phaseProgress).toBeLessThan(0.01)
-    expect(choreo.state.headX).toBeLessThanOrEqual(anchor.x)
-    expect(Math.abs(choreo.state.headX - anchor.x)).toBeLessThan(0.01)
+    expect(choreo.state.headX).toBeLessThan(anchor.x - 0.06)
   })
 
-  it('travel is a genuine 3D S: depth peaks mid-leg and returns to zero at both ends', () => {
-    const choreo = createChoreography(makeOptions())
-    const dt = 1 / 240
-    let minZ = 0
-    let maxAbsY = 0
-    while (choreo.state.phase === 'travel') {
-      const { headY, headZ, phaseProgress } = choreo.state
-      minZ = Math.min(minZ, headZ)
-      maxAbsY = Math.max(maxAbsY, Math.abs(headY))
-      // Both ends sit on the glyph plane, so travel and gather meet with no pop:
-      // measured 2.5e-5 out at progress 0.999, i.e. a rounding error.
-      if (phaseProgress < 0.001 || phaseProgress > 0.999) {
-        expect(Math.abs(headY)).toBeLessThan(0.05)
-        expect(Math.abs(headZ)).toBeLessThan(0.05)
+  it('is a spatial S with full sway scales, separated lobes and an independent depth bow', () => {
+    for (let leg = 0; leg < 6; leg++) {
+      const points = Array.from({ length: 2001 }, (_, i) =>
+        sampleHeadPosition(leg, 'travel', i / 2000, makeOptions()))
+      const high = points.reduce((a, b) => a.y > b.y ? a : b)
+      const low = points.reduce((a, b) => a.y < b.y ? a : b)
+      const deep = points.reduce((a, b) => a.z < b.z ? a : b)
+      expect(high.y).toBeCloseTo(SWAY_Y, 5)
+      expect(low.y).toBeCloseTo(-SWAY_Y, 5)
+      expect(deep.z).toBeCloseTo(-SWAY_Z, 5)
+      expect(Math.abs(deep.x)).toBeLessThan(AMPLITUDE_X * 0.2)
+      // Equal y does not imply equal z: the route cannot lie in a tilted plane.
+      expect(high.z).toBeGreaterThan(deep.z + SWAY_Z * 0.15)
+      expect(low.z).toBeGreaterThan(deep.z + SWAY_Z * 0.15)
+      for (const p of points) {
+        expect(Math.abs(p.x)).toBeLessThanOrEqual(AMPLITUDE_X)
+        expect(Math.abs(p.y)).toBeLessThanOrEqual(SWAY_Y + 1e-12)
+        expect(p.z).toBeLessThanOrEqual(0)
+        expect(p.z).toBeGreaterThanOrEqual(-SWAY_Z - 1e-12)
       }
-      choreo.update(dt)
+      const end = points[points.length - 1]
+      expect(end.y).toBe(0)
+      expect(end.z).toBe(0)
     }
-    // Depth is one-sided (always toward the glyph plane) and reaches the full
-    // SWAY_Z at mid-leg, which is what separates it from the vertical sine.
-    expect(minZ).toBeCloseTo(-SWAY_Z, 2)
-    expect(maxAbsY).toBeCloseTo(SWAY_Y, 3)
-
-    // In quadrature, not in phase. The vertical sway peaks where the eased progress
-    // is exactly 1/4 — i.e. at progress 1/3 of the leg, since e = (1-cos(pi*p))/2 —
-    // and at that instant the depth is exactly half-swung. A planar curve (z = k*y)
-    // would peak both together and read as a flat wiggle rather than a helix.
-    const yPeak = choreoAt('travel', LEG_SECONDS / 3)
-    expect(yPeak.state.phaseProgress).toBeCloseTo(1 / 3, 2)
-    expect(yPeak.state.headY).toBeCloseTo(SWAY_Y, 2)
-    expect(yPeak.state.headZ).toBeCloseTo(-SWAY_Z / 2, 2)
-
-    // And the depth peak is at mid-leg, where the vertical sway is back to zero.
-    const zPeak = choreoAt('travel', LEG_SECONDS / 2)
-    expect(zPeak.state.headZ).toBeCloseTo(-SWAY_Z, 2)
-    expect(zPeak.state.headY).toBeCloseTo(0, 6)
   })
 
-  it('flips the vertical lobe on odd legs so the two halves of the S mirror', () => {
-    const dt = 1 / 240
-    const choreo = createChoreography(makeOptions())
-    const lobes: number[] = []
-    for (let leg = 0; leg < 2; leg++) {
-      // Sample just past the vertical peak at progress 1/3.
-      while (choreo.state.phase === 'travel' && choreo.state.phaseProgress < 0.34) {
-        choreo.update(dt)
-      }
-      expect(choreo.state.phaseProgress).toBeGreaterThanOrEqual(0.34)
-      lobes.push(choreo.state.headY)
-      while (choreo.state.legIndex === leg) choreo.update(dt)
+  it('alternates lobe direction without mechanically mirroring adjacent spatial arcs', () => {
+    for (let leg = 0; leg < 6; leg++) {
+      const first = sampleHeadPosition(leg, 'travel', 0.15, makeOptions())
+      const next = sampleHeadPosition(leg + 1, 'travel', 0.15, makeOptions())
+      expect(Math.sign(first.y)).toBe(leg % 2 === 0 ? 1 : -1)
+      expect(Math.sign(next.y)).toBe(-Math.sign(first.y))
+      expect(Math.abs(first.y + next.y) + Math.abs(first.z - next.z)).toBeGreaterThan(0.001)
+      expect(sampleHeadPosition(leg, 'travel', 0.15, makeOptions())).toEqual(first)
+      // The authored six-leg sequence is deterministic, including before boot.
+      expect(sampleHeadPosition(leg - 6, 'travel', 0.15, makeOptions())).toEqual(first)
     }
-    expect(lobes[0]).toBeCloseTo(SWAY_Y, 2)
-    expect(lobes[1]).toBeCloseTo(-SWAY_Y, 2)
-    expect(lobes[0]).toBeCloseTo(-lobes[1], 6)
   })
 })
 
@@ -653,10 +632,9 @@ describe('choreography: sampleTrail', () => {
     // constant rather than from a literal so that retuning the tail cannot leave a
     // stale number here quietly passing.
     const backTo = 4 - TAIL_SECONDS
-    expect(previous).toBeCloseTo(
-      -AMPLITUDE_X + (2 * AMPLITUDE_X * (1 - Math.cos(Math.PI * backTo / LEG_SECONDS))) / 2,
-      6
-    )
+    const historical = createChoreography(makeOptions())
+    historical.update(backTo)
+    expect(previous).toBeCloseTo(historical.state.headX, 9)
   })
 
   it('converges onto the glyph by the end of hold, so the tail shortens as the shape forms', () => {
@@ -961,9 +939,8 @@ describe('choreography: framerate independence', () => {
     expect(choreo.state.phase).toBe('travel')
     expect(choreo.state.phaseProgress).toBeLessThan(1e-9)
     expect(Number.isFinite(choreo.state.headX)).toBe(true)
-    // At the start of leg 15 (odd) the head is at the left extreme... which for an
-    // odd leg is +amplitude, since odd legs run +amp -> -amp.
-    expect(choreo.state.headX).toBeCloseTo(AMPLITUDE_X, 3)
+    // Leg 15 continues its departure from beat 14, without replaying the logo.
+    expect(choreo.state.headX).toBeCloseTo(sampleHeadPosition(14, 'scatter', 1, makeOptions()).x, 9)
   })
 })
 
@@ -1097,6 +1074,117 @@ describe('choreography: continuous departure (C2)', () => {
       low.sampleTrail(0.23, pastLow)
       high.sampleTrail(0.23, pastHigh)
       for (const axis of axes) expect(pastLow[axis]).toBeCloseTo(pastHigh[axis], 9)
+    }
+  })
+})
+
+describe('choreography: analytic derivatives and endpoint directions', () => {
+  const axes = ['x', 'y', 'z'] as const
+  const h = 1e-5
+
+  it('differentiates the position formula in actual seconds, including custom clocks', () => {
+    for (const overrides of [{}, { legSeconds: 1, scatterSeconds: 0.5 }, { swayY: SWAY_Y * 3.462 }]) {
+      const options = makeOptions(overrides)
+      for (const leg of [-1, 0, 1, 4]) {
+        for (const phase of PHASES) {
+          const length = phase === 'travel' ? options.legSeconds
+            : phase === 'scatter' ? options.scatterSeconds : PHASE_LENGTH[phase]
+          for (let i = 1; i < 100; i++) {
+            const p = i / 100
+            const before = sampleHeadPosition(leg, phase, p - h / length, options)
+            const after = sampleHeadPosition(leg, phase, p + h / length, options)
+            const v = sampleHeadDerivative(leg, phase, p, options)
+            const av = sampleHeadDerivative(leg, phase, p - h / length, options)
+            const bv = sampleHeadDerivative(leg, phase, p + h / length, options)
+            const a = sampleHeadDerivative(leg, phase, p, options, { x: 0, y: 0, z: 0 }, 2)
+            for (const axis of axes) {
+              expect(v[axis]).toBeCloseTo((after[axis] - before[axis]) / (2 * h), 5)
+              expect(a[axis]).toBeCloseTo((bv[axis] - av[axis]) / (2 * h), 4)
+            }
+          }
+        }
+      }
+    }
+  })
+
+  it('is C2 at both speed-ramp joins and every authored spatial spline knot', () => {
+    const options = makeOptions()
+    const lead = options.scatterSeconds * (1 - COALESCE_END)
+    const duration = options.legSeconds + lead
+    // Authored joins are sampled explicitly, not merely hoped to fall on a grid.
+    const lobes = [[0.24, 0.73], [0.27, 0.75], [0.25, 0.77], [0.23, 0.74], [0.26, 0.72], [0.25, 0.75]]
+    for (let leg = 0; leg < lobes.length; leg++) {
+      const elapsed = [0.24, duration - 1.8, ...lobes[leg].map(u => 0.12 + u * (duration - 1.02))]
+      for (const seconds of elapsed) {
+        const at = (offset: number, order: 1 | 2) => seconds < lead
+          ? sampleHeadDerivative(leg - 1, 'scatter', COALESCE_END + (seconds + offset) / options.scatterSeconds, options, undefined, order)
+          : sampleHeadDerivative(leg, 'travel', (seconds + offset - lead) / options.legSeconds, options, undefined, order)
+        for (const order of [1, 2] as const) {
+          const before = at(-h, order)
+          const after = at(h, order)
+          for (const axis of axes) expect(Math.abs(before[axis] - after[axis])).toBeLessThan(0.0001)
+        }
+      }
+    }
+  })
+
+  it('custom durations share exact scatter/travel positions and time derivatives', () => {
+    for (const [legSeconds, scatterSeconds] of [[1, 0.5], [0.2, 0.1], [12, 2]]) {
+      const options = makeOptions({ legSeconds, scatterSeconds })
+      for (const leg of [0, 1]) {
+        expect(sampleHeadPosition(leg, 'scatter', 1, options)).toEqual(sampleHeadPosition(leg + 1, 'travel', 0, options))
+        for (const order of [1, 2] as const) {
+          expect(sampleHeadDerivative(leg, 'scatter', 1, options, undefined, order))
+            .toEqual(sampleHeadDerivative(leg + 1, 'travel', 0, options, undefined, order))
+        }
+      }
+    }
+  })
+
+  it('returns a true tangent at rest without inventing velocity or an axis', () => {
+    for (const leg of [-1, 0, 1, 2, 3, 4]) {
+      for (const [phase, progress, nearbyPhase, nearbyProgress] of [
+        ['scatter', COALESCE_END, 'scatter', COALESCE_END + 1e-4],
+        ['gather', 0, 'travel', 1 - 1e-4],
+        ['hold', 0.5, 'travel', 1 - 1e-4],
+      ] as const) {
+        const options = makeOptions()
+        const v = sampleHeadDerivative(leg, phase, progress, options)
+        expect(Math.hypot(v.x, v.y, v.z)).toBe(0)
+        const tangent = sampleHeadDirection(leg, phase, progress, options)
+        const moving = sampleHeadDerivative(leg, nearbyPhase, nearbyProgress, options)
+        const length = Math.hypot(moving.x, moving.y, moving.z)
+        expect(length).toBeGreaterThan(0)
+        expect(Math.hypot(tangent.x, tangent.y, tangent.z)).toBeCloseTo(1, 12)
+        for (const axis of axes) expect(tangent[axis]).toBeCloseTo(moving[axis] / length, 5)
+      }
+    }
+    const zero = makeOptions({ amplitudeX: 0, swayY: 0, swayZ: 0 })
+    expect(sampleHeadDirection(0, 'travel', 0.5, zero)).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it('preserves B1 direction scaling and keeps depth independent of portrait sway', () => {
+    const k = 3.462
+    for (const phase of PHASES) {
+      for (const progress of [0, 0.2, 0.62, 0.8, 1]) {
+        const base = sampleHeadDirection(0, phase, progress, makeOptions())
+        const phone = sampleHeadDirection(0, phase, progress, makeOptions({ swayY: SWAY_Y * k }))
+        expect(phone.y / phone.x).toBeCloseTo(base.y / base.x * k, 10)
+        expect(phone.z / phone.x).toBeCloseTo(base.z / base.x, 10)
+      }
+    }
+  })
+
+  it('writes reusable targets and sanitises invalid sampler inputs without NaN', () => {
+    const options = makeOptions({ amplitudeX: NaN, swayY: Infinity, swayZ: NaN, legSeconds: 0, scatterSeconds: NaN })
+    const out = { x: NaN, y: NaN, z: NaN }
+    for (const sampler of [sampleHeadPosition, sampleHeadDerivative, sampleHeadDirection]) {
+      for (const phase of PHASES) {
+        for (const p of [NaN, Infinity, -Infinity, -1, 0, 0.62, 1, 2]) {
+          expect(sampler(NaN, phase, p, options, out)).toBe(out)
+          for (const axis of axes) expect(Number.isFinite(out[axis])).toBe(true)
+        }
+      }
     }
   })
 })
