@@ -19,6 +19,8 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uCameraFrame;
   uniform float uOpacity;
   uniform float uVolumeExposure;
+  uniform float uComaRadius;
+  uniform vec3 uLightDirection;
   uniform float uTime;
   uniform float uLightTheme;
   // xyz = active-birth centroid; w = transverse support half-axis, in the fixed subject frame.
@@ -35,11 +37,18 @@ const fragmentShader = /* glsl */ `
   }
   float density(vec3 p) {
     #if IS_COMA == 1
-      float radius = length((p-uCenter) / 1.53);
-      float base = pow(max(0.0, 1.0-radius*radius), 2.0) * 0.17;
-      base *= smoothstep(0.38, 0.58, radius);
-      vec3 q = (p-uCenter) * 3.6;
-      return base * (0.16 + noise(q) * noise(q*2.7) * 1.3);
+      vec3 local = (p-uCenter) / uComaRadius;
+      float support = max(0.0, 1.0-dot(local,local));
+      if (support <= 0.0) return 0.0;
+      // Filled, optically thin gas: no radial inner cutoff or displaced bright shell.
+      // All three coordinates shape the density; the finite support fits the proxy.
+      vec3 q = local * 3.4 + vec3(0.0, uTime*0.012, 0.0);
+      vec3 warp = vec3(noise(q+11.0), noise(q-7.0), noise(q+23.0))-0.5;
+      float broad = noise(q+warp*1.3);
+      float fine = noise(q*3.1+warp*2.2);
+      float wisps = smoothstep(0.22, 0.78, broad*0.68+fine*0.32);
+      float asymmetry = 0.66 + 0.34*dot(local,normalize(vec3(-0.7,0.45,0.8)));
+      return support*sqrt(support) * 0.28 * (0.22+wisps*1.1) * asymmetry;
     #else
       float base = 0.0;
       for (int j=0; j<20; j++) {
@@ -52,14 +61,16 @@ const fragmentShader = /* glsl */ `
           float s = along/uBinAxes[j].w;
           float support = max(0.0, 1.0-r2-s*s);
           if (support > 0.0) {
-            // Stretched world-space noise stays continuous across overlapping bins.
-            // A sparse fine stream sits inside a softer, wider dust layer.
-            vec3 q = p-axis*dot(p,axis)*0.91;
-            float coarse = noise(q*6.0 + vec3(0.0,uTime*0.018,0.0));
-            float fine = noise(q*17.0 + coarse*1.6);
-            float strands = smoothstep(0.32,0.76,coarse*0.7+fine*0.3);
+            // Domain-warped ribbons vary through depth and along the real born flow.
+            // Noise modulates extinction only; it never moves or widens bin support.
+            vec3 q = p-axis*dot(p,axis)*0.88;
+            vec3 warp = vec3(noise(q*2.1+13.0),noise(q*2.1-5.0),noise(q*2.1+29.0))-0.5;
+            float coarse = noise(q*5.2+warp*1.8+vec3(0.0,uTime*0.018,0.0));
+            float fine = noise(q*16.0+warp*3.4);
+            float strands = smoothstep(0.38,0.78,coarse*0.64+fine*0.36);
+            float broken = 0.48+0.52*noise(p*1.7+warp);
             float layers = exp(-r2*7.0)*0.48 + exp(-r2*2.1)*0.26;
-            base += support*support*uDensities[j]*layers*(0.12+strands*1.65);
+            base += support*support*uDensities[j]*layers*(0.08+strands*1.65)*broken;
           }
         }
       }
@@ -85,8 +96,14 @@ const fragmentShader = /* glsl */ `
       float d = density(p);
       float alpha = 1.0-exp(-d * stepLength * uOpacity * 1.45);
       float ion = noise(p*2.4+7.0);
-      vec3 tint = mix(vec3(0.36,0.39,0.43), vec3(0.43,0.58,0.69), smoothstep(0.38,0.72,ion));
-      tint = mix(tint, vec3(0.44,0.38,0.31), smoothstep(0.66,0.85,ion)*0.35);
+      vec3 tint = mix(vec3(0.31,0.29,0.26), vec3(0.34,0.39,0.42), smoothstep(0.32,0.78,ion));
+      #if IS_COMA == 1
+        // Broad directional illumination, without a limb/Fresnel brightening term.
+        vec3 local = (p-uCenter) / uComaRadius;
+        float sunlight = 0.62+0.26*dot(local,normalize(uLightDirection));
+        float scattering = 0.86+0.14*pow(max(dot(-ray,normalize(uLightDirection)),0.0),2.0);
+        tint *= sunlight*scattering;
+      #endif
       tint = mix(tint, tint*0.57, uLightTheme);
       light += (1.0-opacity)*alpha*tint;
       opacity += (1.0-opacity)*alpha;
@@ -109,8 +126,9 @@ function proxy(name: string, coma: boolean, steps: number, options: CometVisualO
     uniforms: {
       uCenter: { value: new Vector3() }, uSize: { value: new Vector3(1, 1, 1) },
       uCameraFrame: { value: new Vector3() }, uOpacity: { value: 1 }, uTime: { value: 0 },
-      // Keep the local shell legible at lower surface exposure without increasing extinction.
-      uVolumeExposure: { value: coma ? 2 : 1 },
+      // Thin gas is visible through integrated density, without an emissive bright rim.
+      uVolumeExposure: { value: 1 }, uComaRadius: { value: COMET_COMA_RADIUS },
+      ...(coma ? { uLightDirection: { value: new Vector3(-1.4, 0.95, 0.55).normalize() } } : {}),
       uLightTheme: { value: options.light ? 1 : 0 }, uBins: { value: bins },
       uBinAxes: { value: axes }, uDensities: { value: densities },
     },

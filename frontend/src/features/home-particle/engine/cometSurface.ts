@@ -22,6 +22,7 @@ const vertexShader = /* glsl */ `
   attribute float aSeed;
   uniform float uFracture;
   uniform float uExpansion;
+  uniform float uTerrainScale;
   varying vec3 vNormal;
   varying vec3 vLocal;
   varying vec3 vBarycentric;
@@ -34,7 +35,8 @@ const vertexShader = /* glsl */ `
     vec4 view = modelViewMatrix * vec4(p, 1.0);
     vView = -view.xyz;
     vNormal = normalize(normalMatrix * n);
-    vLocal = position;
+    // Keep rock/ice strata and roughness attached to the same enlarged terrain.
+    vLocal = position * uTerrainScale;
     vBarycentric = aBarycentric;
     vSeed = aSeed;
     gl_Position = projectionMatrix * view;
@@ -91,9 +93,9 @@ const fragmentShader = /* glsl */ `
     rock *= 0.76 + 0.3 * grain;
     // Low sky fill preserves the dark hemisphere without flattening sun-facing relief.
     vec3 ambient = vec3(0.085, 0.105, 0.14) + uLightTheme * vec3(0.025);
-    vec3 color = rock * (ambient + vec3(1.02, 0.94, 0.82) * diffuse * 1.65);
+    vec3 color = rock * (ambient + vec3(1.02, 0.94, 0.82) * diffuse * 1.08);
     float edge = 1.0 - smoothstep(0.01, 0.07, min(vBarycentric.x, min(vBarycentric.y, vBarycentric.z)));
-    color += vec3(0.22, 0.085, 0.024) * uEnergy * edge * step(0.76, vSeed);
+    color += vec3(0.28, 0.10, 0.026) * uEnergy * edge * step(0.76, vSeed);
     // Expose linear radiance before the display transform; preserve solid depth and alpha.
     gl_FragColor = vec4(color * uSurfaceExposure, uOpacity);
     #include <tonemapping_fragment>
@@ -170,6 +172,7 @@ export function createCometSurface(options: CometVisualOptions) {
     uniforms: {
       uLightDirection: { value: new Vector3(-1.4, 0.95, 0.55).normalize() },
       uRoughness: { value: 0.92 }, uSurfaceExposure: { value: 0.162 },
+      uTerrainScale: { value: 0.72 / COMET_SURFACE_RADIUS },
       uOpacity: { value: 1 }, uEnergy: { value: 0 },
       uFracture: { value: 0 }, uExpansion: { value: 0 }, uLightTheme: { value: options.light ? 1 : 0 },
     },

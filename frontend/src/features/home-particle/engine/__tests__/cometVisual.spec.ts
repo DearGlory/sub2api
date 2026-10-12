@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BufferGeometry, Mesh, NormalBlending, ShaderMaterial, Vector3 } from 'three'
 import { createCometVisual } from '../cometVisual'
-import { COMET_COMA_RADIUS, COMET_SURFACE_RADIUS } from '../cometVisualContract'
+import { COMET_COMA_RADIUS, COMET_SURFACE_RADIUS, COMET_VOLUME_SCALE } from '../cometVisualContract'
 import type { CometTailView, CometVisualFrame } from '../cometVisualContract'
 
 const options = { particleCount: 18000, light: false, reducedMotion: false }
@@ -42,8 +42,11 @@ describe('procedural comet surface', () => {
       }
     })
     expect(visual.geometryBytes).toBe(bytes)
-    expect(bytes).toBeLessThan(3.5 * 1024 * 1024)
-    expect(COMET_COMA_RADIUS / 1.02).toBeCloseTo(1.5)
+    expect(bytes).toBeLessThanOrEqual(3500000)
+    // Impact revision: body/coma scale 1.8; solid terrain grows .72 -> .9 on every axis.
+    expect(COMET_VOLUME_SCALE).toBe(1.8)
+    expect(COMET_COMA_RADIUS / 1.02).toBeCloseTo(1.8)
+    expect(COMET_SURFACE_RADIUS).toBe(0.9)
     visual.dispose()
   })
 
@@ -84,8 +87,7 @@ describe('procedural comet surface', () => {
     expect(shader.uniforms.uLightDirection!.value.length()).toBeCloseTo(1)
     expect(shader.fragmentShader).toContain('dot(N, L)')
     const exposure = shader.uniforms.uSurfaceExposure!.value
-    expect(exposure).toBeGreaterThan(0)
-    expect(exposure).toBeLessThan(1)
+    expect(exposure).toBe(0.162)
     for (const light of [false, true]) {
       visual.update(frame({ light }), pool())
       expect(shader.uniforms.uLightTheme!.value).toBe(light ? 1 : 0)
@@ -171,6 +173,28 @@ describe('emitted volume', () => {
     tail.age[i] = age
     tail.positions.set([x, 2, -9], i * 3)
   }
+
+  it('uses the contract radius for continuous coma support wholly inside its proxy', () => {
+    const visual = createCometVisual(options)
+    try {
+      visual.update(frame({ headZ: -12000 }), pool())
+      const coma = visual.object.getObjectByName('comet-coma-volume') as Mesh
+      const shader = material(coma)
+      expect(shader.uniforms.uComaRadius?.value).toBe(COMET_COMA_RADIUS)
+      expect(shader.fragmentShader).toContain('(p-uCenter) / uComaRadius')
+      expect(shader.fragmentShader).not.toContain('/ 1.53')
+      expect(shader.fragmentShader).not.toContain('smoothstep(0.38, 0.58, radius)')
+      expect(shader.uniforms.uVolumeExposure!.value).toBeLessThanOrEqual(1)
+      expect(shader.uniforms.uLightDirection!.value.length()).toBeCloseTo(1)
+      const center = shader.uniforms.uCenter!.value as Vector3
+      expect(center.toArray()).toEqual([2, 1, -12000])
+      const size = shader.uniforms.uSize!.value as Vector3
+      for (const axis of ['x', 'y', 'z'] as const) {
+        expect(size[axis] / 2).toBeGreaterThanOrEqual(shader.uniforms.uComaRadius!.value)
+        expect(coma.scale[axis]).toBe(size[axis])
+      }
+    } finally { visual.dispose() }
+  })
 
   it('uses only active births, never the head, uninitialized slots or a death upload', () => {
     const visual = createCometVisual(options)

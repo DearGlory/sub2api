@@ -158,16 +158,41 @@ describe('closed, rigid comet fracture geometry', () => {
     } finally { surface.dispose() }
   })
 
-  it('keeps the baseline terrain and normals byte-identical and supplies complete unit attributes', () => {
+  it('preserves the .72 terrain hashes and scales every exterior vertex to .9 with the same normals', async () => {
+    // Run the real factory once at the historical radius. Keeping the ORIGINAL hashes
+    // prevents a changed terrain function from passing by regenerating both references.
+    vi.doMock('../cometVisualContract', async () => ({
+      ...await vi.importActual<typeof import('../cometVisualContract')>('../cometVisualContract'),
+      COMET_SURFACE_RADIUS: 0.72,
+    }))
+    vi.resetModules()
+    const baseline = (await import('../cometSurface')).createCometSurface(options)
+    vi.doUnmock('../cometVisualContract')
+    vi.resetModules()
     const surface = createCometSurface(options)
     try {
       const geometry = surface.mesh.geometry
-      // Measured from the actual aa1cfe252 factory, before adding fracture walls.
       const baselineVertices = 21660
-      expect(hash((geometry.getAttribute('position').array as Float32Array).subarray(0, baselineVertices * 3)))
-        .toBe('97b29e3c6badaa0eb0cd5a1e4a8e8c39289c7cea599d00144548d096ed6b0b43')
-      expect(hash((geometry.getAttribute('normal').array as Float32Array).subarray(0, baselineVertices * 3)))
-        .toBe('6f0af534250a985526a1b4587163a57d7350b70c1dba65c380dd642c9b9c4801')
+      const oldPosition = (baseline.mesh.geometry.getAttribute('position').array as Float32Array).subarray(0, baselineVertices * 3)
+      const oldNormal = (baseline.mesh.geometry.getAttribute('normal').array as Float32Array).subarray(0, baselineVertices * 3)
+      expect(hash(oldPosition)).toBe('97b29e3c6badaa0eb0cd5a1e4a8e8c39289c7cea599d00144548d096ed6b0b43')
+      expect(hash(oldNormal)).toBe('6f0af534250a985526a1b4587163a57d7350b70c1dba65c380dd642c9b9c4801')
+      const position = geometry.getAttribute('position'), terrainNormal = geometry.getAttribute('normal')
+      const scale = COMET_SURFACE_RADIUS / 0.72
+      let maxPositionError = 0, maxNormalError = 0
+      for (let i = 0; i < baselineVertices * 3; i++) {
+        maxPositionError = Math.max(maxPositionError, Math.abs(position.array[i]! / scale - oldPosition[i]!))
+        maxNormalError = Math.max(maxNormalError, Math.abs(terrainNormal.array[i]! - oldNormal[i]!))
+      }
+      // Float32 icosahedron direction rounding is the only permitted difference.
+      expect(maxPositionError).toBeLessThan(0.000002)
+      expect(maxNormalError).toBeLessThan(0.0001)
+      baseline.mesh.geometry.computeBoundingBox()
+      geometry.computeBoundingBox()
+      const oldSpan = baseline.mesh.geometry.boundingBox!.getSize(new Vector3())
+      const span = geometry.boundingBox!.getSize(new Vector3())
+      for (const axis of ['x', 'y', 'z'] as const) expect(span[axis] / oldSpan[axis]).toBeCloseTo(1.25, 5)
+      console.info('scaled terrain preservation (CPU)', { span: span.toArray(), maxPositionError, maxNormalError })
       const count = geometry.getAttribute('position').count
       for (const attribute of Object.values(geometry.attributes)) {
         expect(attribute.count).toBe(count)
@@ -183,7 +208,7 @@ describe('closed, rigid comet fracture geometry', () => {
       expect(interior).toBeGreaterThan(0)
       console.info('fracture geometry (CPU)', { pieces: pieces(geometry).length, vertices: count, triangles: count / 3,
         bytes: Object.values(geometry.attributes).reduce((sum, a) => sum + a.array.byteLength, 0) })
-    } finally { surface.dispose() }
+    } finally { surface.dispose(); baseline.dispose() }
   })
 
   it('returns exactly to rest, disables fracture for reduced motion, and never uploads geometry during updates', () => {
