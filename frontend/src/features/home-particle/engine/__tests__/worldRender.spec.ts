@@ -5,11 +5,11 @@ import { cameraTravelAt, glyphStopZ } from '../spaceMotion'
 import { CAMERA_FOV, GATHER_SECONDS, HOLD_SECONDS, LEG_SECONDS, SCATTER_SECONDS, SUBJECT_Z } from '../constants'
 import type { BrandTargets, ChoreographyState, CometPhase } from '../types'
 
-// Explicit pre-merge fixture mode only. The default suite calls A's real API;
-// B_RENDER_FIXTURE=1 isolates the renderer while the API is still a throw stub.
+// Explicit pre-merge fixture mode. The default suite isolates the renderer while
+// the API is a throw stub; after A lands, set B_RENDER_REAL_API=1 to exercise it.
 vi.mock('../spaceMotion', async importOriginal => {
   const actual = await importOriginal<typeof import('../spaceMotion')>()
-  if (process.env.B_RENDER_FIXTURE !== '1') return actual
+  if (process.env.B_RENDER_REAL_API === '1') return actual
   return {
     ...actual,
     cameraTravelAt: (seconds: number) => 1.35 * seconds,
@@ -97,7 +97,7 @@ function harness(leg = 0, light = false) {
 
 const worldAnchor = (h: ReturnType<typeof harness>) => new Vector3(h.state.toX, 0, glyphStopZ(h.state.legIndex, timing)).applyMatrix4(h.points.matrixWorld)
 
-describe('world-space rendering (explicit fixture only when B_RENDER_FIXTURE=1)', () => {
+describe('world-space rendering (fixture unless B_RENDER_REAL_API=1)', () => {
   it.each([0, 1, 300])('holds the geometry anchor through gather, hold and early scatter on leg %s', leg => {
     const h = harness(leg)
     const anchorZ = glyphStopZ(leg, timing)

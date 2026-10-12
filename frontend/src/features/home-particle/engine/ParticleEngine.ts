@@ -90,9 +90,6 @@ import {
   POINTER_RADIUS,
   SCATTER_SECONDS,
   SUBJECT_Z,
-  SWAY_Y,
-  SWAY_Z,
-  swayAspectScale,
   TAIL_DUST_LIFE_MAX,
   TAIL_DUST_LIFE_MIN,
   TAIL_DUST_REACH_MAX,
@@ -1030,12 +1027,9 @@ export class ParticleEngine implements ParticleEngineContract {
     this.choreography = createChoreography({
       brandCount: this.roster.length,
       amplitudeX: AMPLITUDE_X,
-      // Base sway; `applyViewportSway()` stretches it for a portrait viewport right
-      // after, so the constructed value is only correct for the reference aspect.
-      // `this.width`/`this.height` are already set above (the constructor measures the
-      // container before building the scene), so this is the real viewport.
-      swayY: SWAY_Y * swayAspectScale(this.width / this.height),
-      swayZ: SWAY_Z,
+      // Space motion keeps the centre on Y=0 in every viewport.
+      swayY: 0,
+      swayZ: 0,
       legSeconds: LEG_SECONDS,
       gatherSeconds: GATHER_SECONDS,
       holdSeconds: HOLD_SECONDS,
@@ -1163,59 +1157,9 @@ export class ParticleEngine implements ParticleEngineContract {
     this.applyViewportSway()
   }
 
-  /**
-   * Aim the plume along the screen's long axis on a portrait viewport.
-   *
-   * `SWAY_Y` is authored for 16:10 and the projection is not isotropic, so the same
-   * world sway reads steeper on a wide screen than on a narrow one — and on a phone the
-   * plume (whose length is ~17 world units against a ~6-unit-wide visible world) is
-   * what decides whether the tail fits at all. Stretching the vertical sway and leaving
-   * `SWAY_Z` alone rotates the emission axis toward the screen's vertical, which is the
-   * long axis in portrait; see `SWAY_ASPECT_REFERENCE` for why only this term and why
-   * landscape is untouched.
-   *
-   * MEASURED LIMIT, stated rather than smoothed over: this does NOT make the whole
-   * plume fit on 390x844. At the shipped camera gap that viewport's visible world is
-   * 6.11 x 13.23 units, whose DIAGONAL is 14.57 against a tail of 16.99 — no rotation
-   * can fit a 16.99-unit segment into that box, so B1 buys real but partial relief
-   * rather than a fix.
-   *
-   * A/B measured on two dev servers differing only in this constant (the same 12 travel
-   * samples per viewport, total overhang = the tail end's x overshoot + its y overshoot):
-   *
-   *     390x844   median overhang  739 px -> 530 px   (-28%)
-   *     900x1400  median overhang 1172 px -> 1005 px  (-14%)
-   *     1440x900  median overhang  350 px -> 399 px   (landscape, +49 px of noise)
-   *     1920x1080 median overhang  573 px -> 522 px   (-9%)
-   *
-   * The portrait win comes from the axis angle, which is what this method moves: the
-   * median goes 14.5 -> 61.3 deg on 390x844 and 14.0 -> 41.7 deg on 900x1400, i.e. the
-   * plume swings onto the long axis. The horizontal overhang drops hard (703 -> 288 px)
-   * and is replaced by a smaller vertical one (0 -> 149 px), which is the trade this
-   * approach makes and the reason it cannot reach zero.
-   *
-   * An earlier version of this comment claimed ~73%, from sweeping the tilt in closed
-   * form. That figure is the best case for a tail pinned at one ideal angle; the real
-   * sway sweeps 0..~85 deg, so it spends most of its time well off the diagonal and
-   * averages far less. The numbers above replace it.
-   *
-   * Landscape is meant to be untouched, and in the code it is: `swayAspectScale` returns
-   * exactly 1 at 16:10 and the `Math.max(1, ...)` floor holds every wide viewport there
-   * too, so both landscape rows compute the identical `SWAY_Y` — checked directly,
-   * `swayAspectScale(1.6) === 1`.
-   *
-   * Do not read the landscape rows of that table as a measured difference in the sway.
-   * The reading is a discrete walk of 0.05 s steps that does not land exactly on the
-   * sine's crest, so successive runs report raw peaks a few units in the fifth decimal
-   * apart (0.4550955... in one run, a value formatting to 0.4550 in another) purely from
-   * where the walk happened to start. The constant is the same; the sampling grid is not.
-   */
+  /** Resize changes camera framing, never the world route or its historical tail. */
   private applyViewportSway(): void {
-    const aspect = this.width / this.height
-    this.choreography.setSwayY(SWAY_Y * swayAspectScale(aspect))
-    // The emission table caches the axis it derived from the head's velocity, so a sway
-    // change is invisible until it is refilled. `fillEmissionTable` is what
-    // `writeTailParticlePosition` reads.
+    this.choreography.setSwayY(0)
     fillEmissionTable(this.scratch.tailTable, this.choreography, this.scratch.probePoint)
   }
 
