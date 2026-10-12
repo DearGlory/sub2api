@@ -70,6 +70,8 @@ export function judgeImpact(data,baseline) {
   add('baseline-artifacts',baseline.verified===true,baseline.provenance,'instrument-invalid')
   add('frozen-original-motion',data.motion?.status==='pass',data.motion,'instrument-invalid')
   add('sources-stable',data.sourceStable===true,data.sourceStable,'instrument-invalid')
+  const loaded=data.sources?.filter(s=>s.module&&!s.erased).map(s=>({name:s.name,original:s.originalSha256,matches:data.loaded?.filter(l=>new URL(l.url).pathname.endsWith('/'+s.name+'.ts')).every(l=>l.originalSha256===s.originalSha256),count:data.loaded?.filter(l=>new URL(l.url).pathname.endsWith('/'+s.name+'.ts')).length}))
+  add('actual-loaded-original-sources',loaded?.length>0&&loaded.every(s=>s.original&&s.matches&&s.count>0),loaded,'instrument-invalid')
   add('requested-theme',data.actualTheme?.engineLight===(data.theme==='light'),data.actualTheme,'instrument-invalid')
   add('travel-coverage',data.travel?.length===4,data.travel?.map(r=>r.label),'instrument-invalid')
   for(const row of data.travel||[]){
@@ -84,7 +86,7 @@ export function judgeImpact(data,baseline) {
   }
   const rows=[...(data.travel||[]),...(data.phases||[])]
   for(const kind of ['gather','scatter'])add(kind+'-phase-matrix',PHASES[kind].every(q=>data.phases?.some(r=>r.kind===kind&&r.q===q)),PHASES[kind],'instrument-invalid')
-  for(const row of rows){checks.push(...eventChecks(row));add(row.label+'-budget',row.drawCalls<=IMPACT.drawCalls&&row.geometryBytes<=IMPACT.geometryBytes,{drawCalls:row.drawCalls,geometryBytes:row.geometryBytes});add(row.label+'-frozen-restored',row.frozen===true,row.frozen,'instrument-invalid')}
+  for(const row of rows){checks.push(...eventChecks(row));add(row.label+'-budget',row.drawCalls<=IMPACT.drawCalls&&row.geometryBytes<=IMPACT.geometryBytes,{drawCalls:row.drawCalls,geometryBytes:row.geometryBytes});add(row.label+'-frozen-restored',row.frozen===true,row.frozen,'instrument-invalid');add(row.label+'-page-repeat-stable',row.pageStability?.count===0,row.pageStability,'instrument-invalid');const unknown=row.inventory.filter(o=>o.isMesh&&!o.materials.some(m=>m.uniforms?.uLightDirection||'uEventMode' in (m.uniforms||{})||/#define IS_COMA [01]\b/.test(m.fragment||'')));add(row.label+'-unclassified-meshes',unknown.length===0,unknown.map(o=>({uuid:o.uuid,name:o.name})),'instrument-invalid')}
   for(const kind of ['gather','scatter'])add(kind+'-depth-observed',data.phases?.some(r=>r.kind===kind&&r.depth?.status==='observed'),{kind},'instrument-invalid')
   add('console-webgl-errors',data.errors?.length===0,data.errors,'instrument-invalid')
   add('normal-raf-36s',data.normalRAF?.status==='pass',data.normalRAF||'separate recording not requested',data.normalRAF?.status||'skip')

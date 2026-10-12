@@ -25,11 +25,12 @@ export function createCapture({ev,cdp,out}) {
   }
   async function capture(label,kind,q,{depthTest=false}={}){
     const sample=await ev('__IMPACT_PROBE.sample()'),inventory=await ev('__IMPACT_PROBE.inventory()'),objects=eventObjects(inventory),ids=objects.map(o=>o.uuid)
-    const page=await shot(label+'-page');await ev('__IMPACT_PROBE.hideEvents(true)');let without
-    try{without=await shot(label+'-page-noevent')}finally{await ev('__IMPACT_PROBE.hideEvents(false)')}
+    await ev('document.getAnimations().forEach(a=>a.pause())')
+    const page=await shot(label+'-page');await ev('__IMPACT_PROBE.hideEvents(true)');let without,repeat
+    try{without=await shot(label+'-page-noevent');repeat=await shot(label+'-page-noevent-repeat')}finally{await ev('__IMPACT_PROBE.hideEvents(false)')}
     const empty=await isolated(label+'-empty',[]),event=await isolated(label+'-event',ids),subjects=inventory.filter(o=>o.body||o.tail||o.isMesh),bodyIds=subjects.filter(o=>o.body||o.isMesh&&o.materials.some(m=>/#define IS_COMA 1\b/.test(m.fragment||'')||m.uniforms.uLightDirection)).map(o=>o.uuid)
     const all=await isolated(label+'-subjects',subjects.map(o=>o.uuid)),body=await isolated(label+'-body',bodyIds)
-    const row={label,kind,q,...sample,inventory,files:[page,without,empty,event,all,body].map(entry),bodyIds,bodyPixels:pixels(body.png,empty.png),eventPixels:pixels(event.png,empty.png),pageDelta:pixels(page.png,without.png),shadow:signedDelta(page.png,without.png),subjectPixels:pixels(all.png,empty.png)}
+    const row={label,kind,q,...sample,inventory,files:[page,without,repeat,empty,event,all,body].map(entry),pageStability:pixels(without.png,repeat.png),bodyIds,bodyPixels:pixels(body.png,empty.png),eventPixels:pixels(event.png,empty.png),pageDelta:pixels(page.png,without.png),shadow:signedDelta(page.png,without.png),subjectPixels:pixels(all.png,empty.png)}
     if(objects.length===1)row.eventGPU=await ev('__IMPACT_PROBE.diagnosticGPU('+JSON.stringify(objects[0].uuid)+')')
     if(depthTest&&objects.length===1&&objects[0].visible)row.depth=await depth(label,objects[0],event,empty)
     const after=await ev('__MATERIAL_PROBE.pose()');row.frozen=after.t===sample.pose.t&&same(after.head,sample.pose.head)&&same(after.camera,sample.pose.camera)
