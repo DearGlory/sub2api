@@ -73,7 +73,10 @@ import {
 
 import { createBrandTargetSource } from './brandTargets'
 import { EmittedTail, createCometBody } from './emittedTail'
-import { createChoreography, staggeredGlyphMix, type Point3 } from './choreography'
+import { createChoreography, type Point3 } from './choreography'
+import { createCometVisual } from './cometVisual'
+import type { CometVisual, CometVisualFrame } from './cometVisualContract'
+import { transitionGlyphMix, writeCometTransition } from './cometTransition'
 import {
   AMPLITUDE_X,
   BRANDS,
@@ -289,6 +292,8 @@ interface EngineScratch {
   tailReady: Uint8Array
   shapeFrom: Float32Array
   shapeAlpha: Float32Array
+  /** Reused transition result: XYZ, alpha, glyph commitment, fragment warmth. */
+  transitionOut: Float64Array
   pointerOffset: Float32Array
   /**
    * Seconds since each tail particle was born, and how long it gets to live.
@@ -512,6 +517,7 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
     tailReady: new Uint8Array(count),
     shapeFrom: new Float32Array(count * 3),
     shapeAlpha: new Float32Array(count),
+    transitionOut: new Float64Array(6),
     pointerOffset: new Float32Array(count * 3),
     tailLife,
     tailAge,
@@ -883,6 +889,13 @@ export class ParticleEngine implements ParticleEngineContract {
   readonly tailPoints: Points
   private readonly tailGeometry: BufferGeometry
   private readonly tailMaterial: PointsMaterial
+  readonly cometVisual: CometVisual
+  private readonly cometVisualFrame: CometVisualFrame = {
+    phase: 'travel', progress: 0, time: 0, delta: 0,
+    headX: 0, headY: 0, headZ: 0, glyphMix: 0, departure: 0,
+    light: false, reducedMotion: false,
+  }
+  private hasIntegrated = false
 
   private readonly choreography: Choreography
   private readonly starfield: Starfield
@@ -936,17 +949,30 @@ export class ParticleEngine implements ParticleEngineContract {
     this.quality = createQualityProfile({ ...probed, ...options.quality })
     this.particleCount = Math.max(1, Math.floor(this.quality.particleCount))
     this.tailSampleCount = Math.max(8, Math.floor(this.quality.tailSampleCount))
+    // Required production API. Fail before allocating WebGL resources if absent.
+    this.cometVisual = createCometVisual({
+      particleCount: this.particleCount, light: this.light, reducedMotion: this.reducedMotion,
+    })
+    this.cometVisual.object.position.set(0, 0, SUBJECT_Z)
+    this.scene.add(this.cometVisual.object)
 
     const rect = this.container.getBoundingClientRect()
     this.width = Math.max(1, Math.floor(rect.width || this.container.clientWidth || 1))
     this.height = Math.max(1, Math.floor(rect.height || this.container.clientHeight || 1))
 
-    // Throws when there is no context to be had; the caller degrades.
-    this.renderer = new WebGLRenderer({
-      antialias: this.quality.antialias,
-      alpha: true,
-      powerPreference: 'high-performance',
-    })
+    // If WebGL is unavailable, release the already-created model before the
+    // caller shows its fallback. Factory/update failures remain visible errors.
+    try {
+      this.renderer = new WebGLRenderer({
+        antialias: this.quality.antialias,
+        alpha: true,
+        powerPreference: 'high-performance',
+      })
+    } catch (error) {
+      this.scene.remove(this.cometVisual.object)
+      this.cometVisual.dispose()
+      throw error
+    }
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.maxDpr))
     this.renderer.setSize(this.width, this.height, true)
     this.renderer.setClearColor(this.palette.background, this.light ? 1 : 0)
@@ -1003,6 +1029,9 @@ export class ParticleEngine implements ParticleEngineContract {
     this.tailGeometry.setAttribute('position', new BufferAttribute(this.scratch.emittedTail.positions, 3).setUsage(DynamicDrawUsage))
     this.tailGeometry.setAttribute('color', new BufferAttribute(this.scratch.emittedTail.colors, 4).setUsage(DynamicDrawUsage))
     this.tailMaterial = this.material.clone()
+    // Keep this draw and its pos3/color4 uploads for GPU causal auditing. The
+    // independently emitted volume is the sole visible tail.
+    this.tailMaterial.opacity = 0
     this.tailMaterial.size = this.palette.pointSize * (this.light ? 1.05 : 3.6)
     // Only the body uses per-point coverage; the tail keeps its own material.
     this.material.onBeforeCompile = shader => {
@@ -1125,7 +1154,7 @@ export class ParticleEngine implements ParticleEngineContract {
     this.material.needsUpdate = true
     this.tailMaterial.blending = this.palette.blending
     this.tailMaterial.size = this.palette.pointSize * (this.light ? 1.05 : 3.6)
-    this.tailMaterial.opacity = this.palette.opacity
+    this.tailMaterial.opacity = 0
     this.tailMaterial.needsUpdate = true
     this.renderer.setClearColor(this.palette.background, isLightTheme ? 1 : 0)
     this.starfield.setTheme(isLightTheme)
@@ -1176,6 +1205,8 @@ export class ParticleEngine implements ParticleEngineContract {
 
     this.scene.remove(this.points)
     this.scene.remove(this.tailPoints)
+    this.scene.remove(this.cometVisual.object)
+    this.cometVisual.dispose()
     this.tailGeometry.dispose()
     this.tailMaterial.dispose()
     this.scene.remove(this.starfield.object)
@@ -1473,6 +1504,16 @@ export class ParticleEngine implements ParticleEngineContract {
     const state = this.choreography.state
     const palette = this.palette
     const phase = state.phase
+    if (this.reducedMotion && this.hasIntegrated) {
+      // Freeze the uploaded pose and visual rotation at their current epoch.
+      const frame = this.cometVisualFrame
+      frame.delta = 0
+      frame.light = this.light
+      frame.reducedMotion = true
+      this.cometVisual.update(frame, s.emittedTail)
+      return
+    }
+    if (this.reducedMotion) time = 0
     if (phase !== this.renderedPhase) {
       if (phase === 'gather' || phase === 'scatter') {
         s.shapeFrom.set(positions)
@@ -1500,10 +1541,7 @@ export class ParticleEngine implements ParticleEngineContract {
     // settled logo. Everything that only makes sense on a glyph is gated by it, so
     // the two shapes can never bleed into each other.
     const shapeProgress = phase === 'scatter' ? clamp01(state.phaseProgress / COALESCE_END) : state.phaseProgress
-    let glyphMix = glyphMixFor(phase, shapeProgress)
-    // Reduced motion snaps the blend instead of animating it: the shape change is
-    // the part of this that a motion-sensitive visitor asked us not to animate.
-    if (this.reducedMotion) glyphMix = glyphMix > 0.5 ? 1 : 0
+    const glyphMix = transitionGlyphMix(phase, shapeProgress)
 
     // The internal flow the user asked for: the glyph holds its outline while the
     // particles inside it keep drifting. Gated by the same mix, so it fades in and
@@ -1586,27 +1624,27 @@ export class ParticleEngine implements ParticleEngineContract {
       const cometX = state.headX + s.body.offsets[idx]
       const cometY = state.headY + s.body.offsets[idx + 1]
       const cometZ = state.headZ + s.body.offsets[idx + 2]
-      const emit = s.body.alpha[i] * (this.light ? 1.7 : 1)
+      // Surface lighting belongs to the mesh; these are sparse coma/dust flecks.
+      const emit = s.body.alpha[i] * (this.light ? 0.14 : 0.08)
 
       // --- glyph target: the anchor plus its bounded internal drift -----------
       let tx = cometX
       let ty = cometY
       let tz = cometZ
-      const mix = this.reducedMotion ? glyphMix : staggeredGlyphMix(phase, shapeProgress, i)
       let alpha = emit
-      if (phase === 'gather') {
-        tx = s.shapeFrom[idx] + (glyph[idx] + s.iconOrbitOffsets[idx] - s.shapeFrom[idx]) * mix
-        ty = s.shapeFrom[idx + 1] + (glyph[idx + 1] + s.iconOrbitOffsets[idx + 1] - s.shapeFrom[idx + 1]) * mix
-        tz = s.shapeFrom[idx + 2] + (glyph[idx + 2] + s.iconOrbitOffsets[idx + 2] - s.shapeFrom[idx + 2]) * mix
-        alpha = s.shapeAlpha[i] + (1 - s.shapeAlpha[i]) * mix
-      } else if (phase === 'scatter') {
-        const bend = Math.sin(Math.PI * mix) * (s.tailSeed[i] - 0.5) * 0.16
-        tx += (s.shapeFrom[idx] - cometX) * mix - (s.shapeFrom[idx + 1] - cometY) * bend
-        ty += (s.shapeFrom[idx + 1] - cometY) * mix + (s.shapeFrom[idx] - cometX) * bend
-        tz += (s.shapeFrom[idx + 2] - cometZ) * mix + Math.sin(Math.PI * mix) * (s.tailSeed[i] - 0.5) * 0.22
-        // Projected area falls roughly quadratically while the logo concentrates.
-        // Normalize the in-flight glyph light before its points overlap at the core.
-        alpha = emit + (s.shapeAlpha[i] - emit) * mix * mix
+      let fragmentWarmth = 0
+      if (phase === 'gather' || phase === 'scatter') {
+        writeCometTransition(s.transitionOut, phase, shapeProgress,
+          s.shapeFrom[idx], s.shapeFrom[idx + 1], s.shapeFrom[idx + 2],
+          glyph[idx] + s.iconOrbitOffsets[idx], glyph[idx + 1] + s.iconOrbitOffsets[idx + 1],
+          glyph[idx + 2] + s.iconOrbitOffsets[idx + 2],
+          cometX, cometY, cometZ, state.headX, state.headY, state.headZ,
+          s.tailSeed[i], s.shapeAlpha[i], emit)
+        tx = s.transitionOut[0]
+        ty = s.transitionOut[1]
+        tz = s.transitionOut[2]
+        alpha = s.transitionOut[3]
+        fragmentWarmth = s.transitionOut[5]
       } else if (phase === 'hold') {
         tx = glyph[idx] + s.iconOrbitOffsets[idx]
         ty = glyph[idx + 1] + s.iconOrbitOffsets[idx + 1]
@@ -1659,15 +1697,8 @@ export class ParticleEngine implements ParticleEngineContract {
       positions[idx + 2] = nz
 
       // --- colour -----------------------------------------------------------
-      // Dark theme is a white-hot head cooling down the tail, with the site's
-      // single warm accent mixed in at the head only — a comet reads as white-hot,
-      // and a saturated head would fight the glyph it forms.
-      //
-      // `emit` is the lifetime fade, and it is what the user asked for by name:
-      // "达到一定距离后渐变消失". A particle's brightness falls to exactly zero as its
-      // life runs out, so the far end of the plume dissolves instead of being cut off.
-      // The head's own luminance is left where it was; nothing here shrinks the comet.
-      const warm = glyphMix * 0.26 + cometMix * 0.045
+      // Preserve the hold palette; only ejected fragments gain transient warmth.
+      const warm = glyphMix * 0.26 + cometMix * 0.045 + fragmentWarmth
       const depth = Math.max(-1, Math.min(1, (nz - state.headZ) / 1.4)) * this.holdFade
       const shimmer = 0.86 + Math.sin(time * 2.1 + s.tailSeed[i] * 43.0) * 0.05 + depth * 0.08
       // The ion population is tinted toward the accent and the dust toward the cool
@@ -1703,6 +1734,25 @@ export class ParticleEngine implements ParticleEngineContract {
       colors[colorIndex + 3] = alpha / (spriteScale * spriteScale)
     }
     this.renderedHead.set(state.headX, state.headY, state.headZ)
+    this.hasIntegrated = true
+    this.updateCometVisual(time, this.reducedMotion ? 0 : delta, glyphMix)
+  }
+
+  private updateCometVisual(time: number, delta: number, glyphMix: number): void {
+    const state = this.choreography.state
+    const frame = this.cometVisualFrame
+    frame.phase = state.phase
+    frame.progress = state.phaseProgress
+    frame.time = time
+    frame.delta = delta
+    frame.headX = state.headX
+    frame.headY = state.headY
+    frame.headZ = state.headZ
+    frame.glyphMix = glyphMix
+    frame.departure = departureSeconds(state.phase, state.phaseProgress, LEG_SECONDS, SCATTER_SECONDS)
+    frame.light = this.light
+    frame.reducedMotion = this.reducedMotion
+    this.cometVisual.update(frame, this.scratch.emittedTail)
   }
 
   private upload(): void {
@@ -1749,7 +1799,8 @@ export class ParticleEngine implements ParticleEngineContract {
       this.geometry.getAttribute('color').array.byteLength +
       this.geometry.getAttribute('cometScale').array.byteLength +
       this.tailGeometry.getAttribute('position').array.byteLength +
-      this.tailGeometry.getAttribute('color').array.byteLength
+      this.tailGeometry.getAttribute('color').array.byteLength +
+      this.cometVisual.geometryBytes
 
     if (typeof window !== 'undefined') {
       // The external acceptance harness reads this. It is the same object every
