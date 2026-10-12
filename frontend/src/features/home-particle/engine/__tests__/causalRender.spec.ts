@@ -87,6 +87,26 @@ function extent(positions: ArrayLike<number>, colors: ArrayLike<number>, x: numb
 }
 
 describe('causal render: separate body and emitted tail', () => {
+  it.each([false, true])('preserves light through gather and restores glyph coverage (light=%s)', light => {
+    const h = renderHarness(light)
+    h.update('travel', 0.4)
+    const scale = h.geometry.getAttribute('cometScale')
+    const before = Array.from(h.scratch.colors.filter((_, i) => i % 4 === 3),
+      (alpha, i) => alpha * scale.getX(i) ** 2)
+    const version = scale.version
+    expect(Math.min(...h.scratch.body.spriteScale)).toBeGreaterThan(1)
+    h.update('gather', 0)
+    expect(scale.version).toBeGreaterThan(version)
+    for (let i = 0; i < COUNT; i++) {
+      expect(h.scratch.colors[i * 4 + 3] * scale.getX(i) ** 2).toBeCloseTo(before[i], 6)
+    }
+    h.update('gather', 1)
+    h.update('hold', 0)
+    expect(h.scratch.body.spriteScale.every(size => size === 1)).toBe(true)
+    expect(h.scratch.colors.filter((_, i) => i % 4 === 3).every(alpha => alpha === 1)).toBe(true)
+    expect(h.geometry.getAttribute('position').count).toBe(COUNT)
+  })
+
   it.each([0.62, 0.85, 1])('coalesces every visible logo particle into the nucleus/coma by scatter %s', (p) => {
     const h = renderHarness(false, false)
     h.update('scatter', 0)
