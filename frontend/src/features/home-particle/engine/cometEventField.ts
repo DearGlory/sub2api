@@ -30,7 +30,7 @@ const fragmentShader = /* glsl */ `
   // Neither the density coordinates nor the tilt depend on a projected screen point.
   vec3 tilted(vec3 p) {
     p.xy = mat2(0.94,-0.342,0.342,0.94)*p.xy;
-    p.yz = mat2(0.68,-0.7332,0.7332,0.68)*p.yz;
+    p.yz = mat2(0.38,-0.92499,0.92499,0.38)*p.yz;
     return p;
   }
   void main() {
@@ -54,41 +54,54 @@ const fragmentShader = /* glsl */ `
       float r=length(p);
       float dust=0.0, dark=0.0, heat=0.0;
       if(uEventMode<1.5) {
-        // The wave starts inside the rock. Angular lobes and advected 3D gas break
-        // the front into pressure pockets; its physical thickness decays outward.
+        // Radial fissures cut through the entire front and wake. Opposed,
+        // irregular pressure vents expose the rock instead of filling its centre.
         float front=0.18+6.5*(1.0-exp(-q*3.8));
         vec3 direction=p/max(r,0.001);
         float lobe=noise(direction*3.1+vec3(1.2,4.7,0.3));
-        float wave=front*(0.65+0.47*lobe);
-        float thickness=mix(0.24,0.09,smoothstep(0.03,0.5,q));
-        float shell=exp(-pow((r-wave)/thickness,2.0));
-        float gas=noise(p*3.3-direction*q*4.5);
-        float openings=smoothstep(0.34,0.68,noise(direction*6.2+2.7));
-        float pockets=smoothstep(0.3,0.76,gas*0.65+lobe*0.35)*openings;
-        float wake=exp(-pow((r-wave*0.82)/(thickness*2.3),2.0))*0.16;
-        dust=(shell+wake)*pockets*1.15;
-        heat=shell*smoothstep(0.58,0.85,gas)*0.45;
+        float fracture=noise(direction*5.4+vec3(4.1,0.8,2.7));
+        float openings=smoothstep(0.43,0.64,fracture+0.14*(lobe-0.5));
+        float vent=abs(dot(direction,normalize(vec3(0.18,-0.12,1.0))));
+        openings*=1.0-smoothstep(0.38+0.18*lobe,0.78+0.12*lobe,vent);
+        float wave=front*(0.62+0.55*lobe+0.12*(fracture-0.5));
+        float thickness=mix(0.13,0.055,smoothstep(0.03,0.5,q));
+        // Integrate sub-step sheets without widening the world-space front.
+        float filtered=sqrt(thickness*thickness+stepLength*stepLength*0.16);
+        float shell=exp(-pow((r-wave)/filtered,2.0))*thickness/filtered;
+        float gas=noise(p*4.8-direction*q*4.5);
+        float wake=exp(-pow((r-wave*0.87)/(filtered*1.4),2.0))*0.12;
+        float wings=smoothstep(0.52,0.73,lobe)*smoothstep(0.40,0.7,gas);
+        dust=(shell*(0.45+0.8*gas)+wake*wings)*openings*1.6;
+        heat=shell*openings*smoothstep(0.63,0.85,gas)*0.55;
       } else {
         vec3 d=tilted(p);
         float radial=length(d.xy);
         float radius=uRadius*0.84;
         float inward=q*q*(2.0+q*2.5);
-        float angle=atan(d.y,d.x)-inward-1.75*log(0.25+radial);
-        // Warped, nonuniform accretion strata occupy distinct depths. Their
-        // spiral phase advects inward while angular speed grows toward the core.
-        float warp=sin(angle*2.0+radial*0.7)*0.16*radial;
+        float angle=atan(d.y,d.x)-inward-1.35*log(0.25+radial);
+        vec2 orbit=vec2(cos(angle),sin(angle));
+        // Continuous, aperiodic strata: angular noise changes both the outer
+        // extent and the density. There is no repeated arm or luminous ring.
+        float sector=noise(vec3(orbit*1.7,radial*0.22)+vec3(3.7,1.4,5.2));
+        vec3 flow=vec3(orbit*radial,d.z);
+        float eddy=noise(flow*1.65+vec3(0.7,4.2,1.8));
+        float grit=noise(flow*6.2+vec3(2.3,0.4,7.1));
+        float warp=radial*0.045*(sector-0.5)+0.055*(eddy-0.5);
         float height=d.z-warp;
-        float thickness=0.12+radial*0.09;
+        float thickness=0.075+radial*(0.025+0.02*sector);
         float layer=exp(-pow(height/thickness,2.0));
-        float backLayer=exp(-pow((height+0.36+radial*0.12)/(thickness*0.65),2.0))*0.32;
-        float arms=pow(0.5+0.5*sin(angle*3.0+sin(radial*1.7)*0.65),8.0);
-        float grit=noise(vec3(cos(angle)*radial,sin(angle)*radial,height)*4.5);
-        float support=(1.0-smoothstep(radius*0.68,radius,radial))*smoothstep(0.25,0.65,radial);
-        dust=(layer+backLayer)*support*(0.16+arms*1.45)*(0.35+grit*0.9);
-        heat=arms*layer*exp(-pow((radial-0.72)/0.38,2.0))*0.6;
-        // A volume of extinction, not a black disc: foreground strands occlude it
-        // and rear strands are attenuated by front-to-back transmittance.
-        dark=exp(-dot(d,d)/0.22)*2.8;
+        float lower=exp(-pow((height+thickness*1.6)/(thickness*0.8),2.0));
+        float edge=radius*(0.76+0.24*sector);
+        float support=(1.0-smoothstep(edge*0.68,edge,radial))*smoothstep(0.34,0.75,radial);
+        float filaments=smoothstep(0.37,0.75,eddy*0.72+grit*0.28+sector*0.12);
+        dust=(layer+lower*0.38)*support*(0.65+2.2*filaments)*(0.7+0.55*grit);
+        // A cooler lower stratum has actual optical thickness. Along oblique
+        // rays the nearer rim absorbs the back strata before they reach the eye.
+        float rim=exp(-pow((height+thickness*0.8)/(thickness*1.15),2.0));
+        float core=exp(-dot(d,d)/0.19)*3.2;
+        dark=core+rim*support*(0.6+0.7*eddy);
+        heat=(1.0-smoothstep(0.65,1.8,radial))*smoothstep(0.56,0.79,grit)
+          *smoothstep(0.42,0.68,eddy)*0.95;
       }
       float extinction=(dust+dark)*uEventStrength;
       float alpha=1.0-exp(-extinction*stepLength);

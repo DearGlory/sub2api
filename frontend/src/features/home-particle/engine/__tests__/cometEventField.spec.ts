@@ -76,7 +76,8 @@ describe('production event field graph', () => {
     const u = mobile.mesh.material.uniforms
     const head = u.uHead.value, camera = u.uCameraFrame.value
     expect(mobile.mesh.visible).toBe(false)
-    expect(mobile.mesh.material.defines.MARCH_STEPS).toBeLessThan(desktop.mesh.material.defines.MARCH_STEPS)
+    expect(mobile.mesh.material.defines.MARCH_STEPS).toBe(24)
+    expect(desktop.mesh.material.defines.MARCH_STEPS).toBe(40)
     try {
       for (const phase of ['gather', 'scatter'] as const) {
         for (const progress of [-1, 0, 0.1, 0.4, 0.62, 1, 2, NaN, Infinity]) {
