@@ -105,9 +105,25 @@ describe('world-space pursuit contract', () => {
       const arrivalTime = leg * cycle + options.legSeconds
       expect(fitGap + cameraTravelAt(arrivalTime) - sample(leg, 'travel', 1).z).toBeCloseTo(fitGap, 12)
     }
+    // The capture minimum occurs when the decelerating head matches camera speed.
+    let lo = duration - 0.12
+    let hi = duration
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2
+      if (flight(0, mid, 1).z > SPACE_CAMERA_SPEED) lo = mid
+      else hi = mid
+    }
+    const minimumTime = (lo + hi) / 2
+    const exactMinGap = fitGap + SPACE_CAMERA_SPEED * (minimumTime - lead) - flight(0, minimumTime).z
+    expect(flight(0, minimumTime, 1).z).toBeCloseTo(SPACE_CAMERA_SPEED, 10)
+    expect(exactMinGap).toBeLessThanOrEqual(minGap + 1e-12)
+    expect(exactMinGap).toBeGreaterThanOrEqual(fitGap - SPACE_CAPTURE_TOLERANCE)
     expect(minGap).toBeLessThan(fitGap)
-    expect(minGap).toBeGreaterThanOrEqual(fitGap - SPACE_CAPTURE_TOLERANCE)
-    console.info('capture metrics', { fitGap, minGap, undershoot: fitGap - minGap, minElapsed, duration })
+    console.info('capture metrics', {
+      fitGap, minGap, minElapsed, exactMinGap, undershoot: fitGap - exactMinGap,
+      minimumTime, secondsBeforeStop: duration - minimumTime, duration,
+      departureGap: fitGap + SPACE_CAMERA_SPEED * (cycle - duration),
+    })
   })
 
   it('camera starts at zero and grows linearly across 150/152.2 and many cycles', () => {

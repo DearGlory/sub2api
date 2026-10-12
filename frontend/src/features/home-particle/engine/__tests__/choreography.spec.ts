@@ -20,6 +20,7 @@ import {
   sampleHeadPosition,
 } from '../choreography'
 import { COALESCE_END } from '../flightTiming'
+import { SPACE_CAMERA_SPEED } from '../spaceMotionContract'
 import type { Point3 } from '../choreography'
 import type { Choreography, ChoreographyOptions, CometPhase } from '../types'
 import {
@@ -362,95 +363,33 @@ describe('choreography: brand and leg advance', () => {
   })
 })
 
-describe('choreography: setSwayY retunes the vertical sway at runtime', () => {
-  /** Peak |headY| over one full travel leg, sampled finely. */
-  function peakHeadY(choreo: Choreography, seconds: number): number {
-    let peak = 0
-    const dt = 0.001
-    for (let t = 0; t < seconds; t += dt) {
-      peak = Math.max(peak, Math.abs(choreo.state.headY))
-      choreo.update(dt)
-    }
-    return peak
-  }
-
-  it('scales the peak sway in proportion to the requested value', () => {
-    // The whole point of B1: a portrait viewport multiplies SWAY_Y and the plume must
-    // follow. Proportionality is the design claim, so it is what gets asserted —
-    // an absolute threshold would pass for a sway that ignored the argument.
+describe('choreography: legacy sway compatibility', () => {
+  it('keeps the route flat and unchanged for constructor sway options', () => {
     const base = createChoreography(makeOptions())
-    const k = 3.462
-    const doubled = createChoreography(makeOptions({ swayY: SWAY_Y * k }))
-    const a = peakHeadY(base, CYCLE_SECONDS)
-    const b = peakHeadY(doubled, CYCLE_SECONDS)
-    expect(b / a).toBeCloseTo(k, 2)
-  })
-
-  it('reaches the new amplitude without a restart, measured after the retune', () => {
-    const k = 3.462
-    const choreo = createChoreography(makeOptions())
-    // Establish the un-scaled baseline first, then retune mid-flight — the case a
-    // resize actually produces.
-    const before = peakHeadY(choreo, CYCLE_SECONDS)
-    choreo.setSwayY(SWAY_Y * k)
-    const after = peakHeadY(choreo, CYCLE_SECONDS)
-    expect(after / before).toBeCloseTo(k, 2)
-  })
-
-  it('publishes the new amplitude on the same frame, not on the next update', () => {
-    // The engine seeds the opening glyph from `state` before the first `update()`, so a
-    // resize during boot would place the glyph on the stale curve if this lagged.
-    const choreo = createChoreography(makeOptions())
-    choreo.update(0.5)
-    const headYBefore = choreo.state.headY
-    choreo.setSwayY(SWAY_Y * 3)
-    expect(choreo.state.headY).not.toBe(headYBefore)
-  })
-
-  it('moves the head and its trail together', () => {
-    // `sampleTrail` and `writeState` must read the same sway, or the tail replays a
-    // path the head is no longer on. Comparing them across many phases is what catches
-    // a `setSwayY` that reached only one of the two code paths — an instantaneous check
-    // at a single phase can pass by coincidence where the S-curve crosses zero.
-    const choreo = createChoreography(makeOptions())
-    choreo.setSwayY(SWAY_Y * 3.462)
-    let peak = 0
-    const here: Point3 = { x: 0, y: 0, z: 0 }
-    for (let t = 0; t < CYCLE_SECONDS; t += 0.05) {
-      choreo.update(0.05)
-      // `sampleTrail(0)` is by definition the head's position now.
-      choreo.sampleTrail(0, here)
-      expect(here.x).toBeCloseTo(choreo.state.headX, 9)
-      expect(here.y).toBeCloseTo(choreo.state.headY, 9)
-      expect(here.z).toBeCloseTo(choreo.state.headZ, 9)
-      peak = Math.max(peak, Math.abs(here.y))
+    const resized = createChoreography(makeOptions({ swayY: SWAY_Y * 3.462, swayZ: SWAY_Z * 2 }))
+    for (let frame = 0; frame < 1440; frame++) {
+      expect(resized.state).toEqual(base.state)
+      expect(base.state.headY).toBe(0)
+      base.update(1 / 60)
+      resized.update(1 / 60)
     }
-    // And the retuned amplitude is really in that shared value. The S-curve passes
-    // through zero, so only the peak is comparable against the constant.
-    expect(peak).toBeGreaterThan(SWAY_Y * 3)
   })
 
-  it('ignores a non-finite sway instead of collapsing it to zero', () => {
-    // A zero sway is legitimate (a flat S), so a NaN clamped to 0 would silently turn
-    // a caller's bug into a plausible-looking layout.
-    const choreo = createChoreography(makeOptions())
-    choreo.update(0.5)
-    const headY = choreo.state.headY
-    choreo.setSwayY(Number.NaN)
-    expect(choreo.state.headY).toBe(headY)
-    choreo.setSwayY(Number.POSITIVE_INFINITY)
-    expect(choreo.state.headY).toBe(headY)
-  })
-
-  it('accepts a zero sway, because a flat S is a real setting', () => {
-    const choreo = createChoreography(makeOptions())
-    choreo.setSwayY(0)
-    const dt = 0.001
-    for (let t = 0; t < CYCLE_SECONDS; t += dt) {
-      // `toBe(0)` would reject a legitimate `-0` (sin crosses zero from below), and
-      // `-0` is a perfectly flat S. The claim is "no vertical motion", so assert that.
-      expect(choreo.state.headY === 0).toBe(true)
-      choreo.update(dt)
+  it('accepts resize updates without moving the head or rewriting its world history', () => {
+    for (const phase of PHASES) {
+      const choreo = choreoAt(phase, 0.5)
+      const before = { ...choreo.state }
+      const past = { x: 0, y: 0, z: 0 }
+      choreo.sampleTrail(1, past)
+      for (const sway of [SWAY_Y * 3.462, 0, -2, NaN, Infinity]) {
+        choreo.setSwayY(sway)
+        expect(choreo.state).toEqual(before)
+        const out = { x: NaN, y: NaN, z: NaN }
+        choreo.sampleTrail(1, out)
+        expect(out).toEqual(past)
+        choreo.sampleTrail(0, out)
+        expect(out).toEqual({ x: before.headX, y: 0, z: before.headZ })
+      }
     }
   })
 })
@@ -510,7 +449,7 @@ describe('choreography: the head reaches the extremes', () => {
     const choreo = createChoreography(makeOptions())
     while (choreo.state.phase === 'travel') choreo.update(dt)
     const anchor = { x: choreo.state.headX, y: choreo.state.headY, z: choreo.state.headZ }
-    expect(anchor).toEqual({ x: AMPLITUDE_X, y: 0, z: 0 })
+    expect(anchor).toEqual({ x: AMPLITUDE_X, y: 0, z: SPACE_CAMERA_SPEED * LEG_SECONDS })
     while (choreo.state.phase !== 'scatter' || choreo.state.phaseProgress <= COALESCE_END) {
       expect(choreo.state.headX).toBe(anchor.x)
       expect(choreo.state.headY).toBe(anchor.y)
@@ -524,42 +463,32 @@ describe('choreography: the head reaches the extremes', () => {
     expect(choreo.state.headX).toBeLessThan(anchor.x - 0.06)
   })
 
-  it('is a spatial S with full sway scales, separated lobes and an independent depth bow', () => {
-    for (let leg = 0; leg < 6; leg++) {
-      const points = Array.from({ length: 2001 }, (_, i) =>
-        sampleHeadPosition(leg, 'travel', i / 2000, makeOptions()))
-      const high = points.reduce((a, b) => a.y > b.y ? a : b)
-      const low = points.reduce((a, b) => a.y < b.y ? a : b)
-      const deep = points.reduce((a, b) => a.z < b.z ? a : b)
-      expect(high.y).toBeCloseTo(SWAY_Y, 5)
-      expect(low.y).toBeCloseTo(-SWAY_Y, 5)
-      expect(deep.z).toBeCloseTo(-SWAY_Z, 5)
-      expect(Math.abs(deep.x)).toBeLessThan(AMPLITUDE_X * 0.2)
-      // Equal y does not imply equal z: the route cannot lie in a tilted plane.
-      expect(high.z).toBeGreaterThan(deep.z + SWAY_Z * 0.15)
-      expect(low.z).toBeGreaterThan(deep.z + SWAY_Z * 0.15)
-      for (const p of points) {
+  it('stays in the XZ plane between cumulative world anchors', () => {
+    for (let leg = -2; leg < 6; leg++) {
+      const startZ = SPACE_CAMERA_SPEED * ((leg - 1) * CYCLE_SECONDS + LEG_SECONDS)
+      const endZ = SPACE_CAMERA_SPEED * (leg * CYCLE_SECONDS + LEG_SECONDS)
+      for (let i = 0; i <= 1000; i++) {
+        const p = sampleHeadPosition(leg, 'travel', i / 1000, makeOptions())
         expect(Math.abs(p.x)).toBeLessThanOrEqual(AMPLITUDE_X)
-        expect(Math.abs(p.y)).toBeLessThanOrEqual(SWAY_Y + 1e-12)
-        expect(p.z).toBeLessThanOrEqual(0)
-        expect(p.z).toBeGreaterThanOrEqual(-SWAY_Z - 1e-12)
+        expect(p.y).toBe(0)
+        expect(p.z).toBeGreaterThanOrEqual(startZ)
+        expect(p.z).toBeLessThanOrEqual(endZ)
       }
-      const end = points[points.length - 1]
-      expect(end.y).toBe(0)
-      expect(end.z).toBe(0)
+      expect(sampleHeadPosition(leg, 'travel', 1, makeOptions()).z).toBe(endZ)
     }
   })
 
-  it('alternates lobe direction without mechanically mirroring adjacent spatial arcs', () => {
+  it('alternates X direction while equal progress keeps advancing in world Z', () => {
     for (let leg = 0; leg < 6; leg++) {
       const first = sampleHeadPosition(leg, 'travel', 0.15, makeOptions())
       const next = sampleHeadPosition(leg + 1, 'travel', 0.15, makeOptions())
-      expect(Math.sign(first.y)).toBe(leg % 2 === 0 ? 1 : -1)
-      expect(Math.sign(next.y)).toBe(-Math.sign(first.y))
-      expect(Math.abs(first.y + next.y) + Math.abs(first.z - next.z)).toBeGreaterThan(0.001)
+      expect(next.x).toBe(-first.x)
+      expect(next.y).toBe(0)
+      expect(next.z - first.z).toBeCloseTo(SPACE_CAMERA_SPEED * CYCLE_SECONDS, 12)
       expect(sampleHeadPosition(leg, 'travel', 0.15, makeOptions())).toEqual(first)
-      // The authored six-leg sequence is deterministic, including before boot.
-      expect(sampleHeadPosition(leg - 6, 'travel', 0.15, makeOptions())).toEqual(first)
+      const historical = sampleHeadPosition(leg - 6, 'travel', 0.15, makeOptions())
+      expect(historical.x).toBe(first.x)
+      expect(first.z - historical.z).toBeCloseTo(6 * SPACE_CAMERA_SPEED * CYCLE_SECONDS, 12)
     }
   })
 })
@@ -585,8 +514,9 @@ describe('choreography: sampleTrail', () => {
           expect(Number.isFinite(out.z), `${label} z=${out.z}`).toBe(true)
           // And inside the envelope the particles are actually drawn in.
           expect(Math.abs(out.x), label).toBeLessThanOrEqual(AMPLITUDE_X + 1e-9)
-          expect(Math.abs(out.y), label).toBeLessThanOrEqual(SWAY_Y + 1e-9)
-          expect(Math.abs(out.z), label).toBeLessThanOrEqual(SWAY_Z + 1e-9)
+          expect(out.y, label).toBe(0)
+          expect(out.z, label).toBeLessThanOrEqual(choreo.state.headZ + 1e-9)
+          expect(out.z, label).toBeGreaterThanOrEqual(SPACE_CAMERA_SPEED * (LEG_SECONDS - CYCLE_SECONDS))
           samples += 1
         }
       }
@@ -607,7 +537,7 @@ describe('choreography: sampleTrail', () => {
     }
   })
 
-  it('replays backwards along the S-curve during travel without jumping', () => {
+  it('replays backwards along the X/Z flight during travel without jumping', () => {
     const choreo = createChoreography(makeOptions())
     for (let i = 0; i < 240; i++) choreo.update(1 / 60) // 4 s in: whole tail in the leg
     expect(choreo.state.phase).toBe('travel')
@@ -793,8 +723,16 @@ describe('choreography: sampleTrail', () => {
       choreo.sampleTrail(delay, out)
       expect(Number.isFinite(out.x), `delay=${delay}`).toBe(true)
       expect(Math.abs(out.x), `delay=${delay}`).toBeLessThanOrEqual(AMPLITUDE_X + 1e-9)
-      expect(Math.abs(out.y), `delay=${delay}`).toBeLessThanOrEqual(SWAY_Y + 1e-9)
-      expect(Math.abs(out.z), `delay=${delay}`).toBeLessThanOrEqual(SWAY_Z + 1e-9)
+      expect(out.y, `delay=${delay}`).toBe(0)
+      const historicalLeg = Math.floor((9 - delay) / CYCLE_SECONDS)
+      expect(out.z).toBeGreaterThanOrEqual(SPACE_CAMERA_SPEED * ((historicalLeg - 1) * CYCLE_SECONDS + LEG_SECONDS))
+      expect(out.z).toBeLessThanOrEqual(SPACE_CAMERA_SPEED * ((historicalLeg + 1) * CYCLE_SECONDS + LEG_SECONDS))
+      const later = { x: 0, y: 0, z: 0 }
+      choreo.sampleTrail(delay - 2 * CYCLE_SECONDS, later)
+      if (delay >= 2 * CYCLE_SECONDS) {
+        expect(later.x).toBeCloseTo(out.x, 10)
+        expect(later.z - out.z).toBeCloseTo(2 * SPACE_CAMERA_SPEED * CYCLE_SECONDS, 10)
+      }
     }
   })
 })
@@ -1052,7 +990,7 @@ describe('choreography: continuous departure (C2)', () => {
       for (let frame = 0; frame < history.length; frame++) {
         choreo.sampleTrail(25 - frame / fps, out)
         expect(out.x).toBeCloseTo(history[frame].x, 9)
-        expect(out.y).toBeCloseTo(history[frame].y * scale, 9)
+        expect(out.y).toBe(history[frame].y)
         expect(out.z).toBeCloseTo(history[frame].z, 9)
       }
     }
@@ -1107,14 +1045,13 @@ describe('choreography: analytic derivatives and endpoint directions', () => {
     }
   })
 
-  it('is C2 at both speed-ramp joins and every authored spatial spline knot', () => {
+  it('is C2 at both speed-ramp joins', () => {
     const options = makeOptions()
     const lead = options.scatterSeconds * (1 - COALESCE_END)
     const duration = options.legSeconds + lead
-    // Authored joins are sampled explicitly, not merely hoped to fall on a grid.
-    const lobes = [[0.24, 0.73], [0.27, 0.75], [0.25, 0.77], [0.23, 0.74], [0.26, 0.72], [0.25, 0.75]]
-    for (let leg = 0; leg < lobes.length; leg++) {
-      const elapsed = [0.24, duration - 1.8, ...lobes[leg].map(u => 0.12 + u * (duration - 1.02))]
+    // Sample the actual launch/cruise and cruise/capture boundaries explicitly.
+    for (let leg = 0; leg < 6; leg++) {
+      const elapsed = [0.42, duration - 0.12]
       for (const seconds of elapsed) {
         const at = (offset: number, order: 1 | 2) => seconds < lead
           ? sampleHeadDerivative(leg - 1, 'scatter', COALESCE_END + (seconds + offset) / options.scatterSeconds, options, undefined, order)
@@ -1160,17 +1097,19 @@ describe('choreography: analytic derivatives and endpoint directions', () => {
       }
     }
     const zero = makeOptions({ amplitudeX: 0, swayY: 0, swayZ: 0 })
-    expect(sampleHeadDirection(0, 'travel', 0.5, zero)).toEqual({ x: 0, y: 0, z: 0 })
+    // Zero X amplitude still has a real +Z pursuit route.
+    expect(sampleHeadDirection(0, 'travel', 0.5, zero)).toEqual({ x: 0, y: 0, z: 1 })
   })
 
-  it('preserves B1 direction scaling and keeps depth independent of portrait sway', () => {
+  it('keeps the X/Z tangent unchanged under legacy portrait sway options', () => {
     const k = 3.462
     for (const phase of PHASES) {
       for (const progress of [0, 0.2, 0.62, 0.8, 1]) {
         const base = sampleHeadDirection(0, phase, progress, makeOptions())
         const phone = sampleHeadDirection(0, phase, progress, makeOptions({ swayY: SWAY_Y * k }))
-        expect(phone.y / phone.x).toBeCloseTo(base.y / base.x * k, 10)
-        expect(phone.z / phone.x).toBeCloseTo(base.z / base.x, 10)
+        expect(phone).toEqual(base)
+        expect(phone.y).toBe(0)
+        expect(phone.z).toBeGreaterThan(0)
       }
     }
   })
@@ -1240,8 +1179,12 @@ describe('choreography: option handling', () => {
       choreo.sampleTrail((i / 50) * 0.9, out)
       expect(Number.isFinite(out.x)).toBe(true)
       expect(Math.abs(out.x)).toBeLessThanOrEqual(4 + 1e-9)
-      expect(Math.abs(out.y)).toBeLessThanOrEqual(1 + 1e-9)
-      expect(Math.abs(out.z)).toBeLessThanOrEqual(1 + 1e-9)
+      expect(out.y).toBe(0)
+      expect(out.z).toBeGreaterThanOrEqual(SPACE_CAMERA_SPEED * custom.legSeconds)
+      expect(out.z).toBeLessThanOrEqual(choreo.state.headZ)
+      const historical = createChoreography(custom)
+      historical.update(elapsed - (i / 50) * 0.9)
+      expect(out.z).toBeCloseTo(historical.state.headZ, 9)
     }
   })
 
@@ -1260,11 +1203,11 @@ describe('choreography: option handling', () => {
     const choreo = createChoreography(makeOptions())
     choreo.update(3)
     expect(choreo.state.headX).not.toBe(0)
-    // Expressed as a share of the sweep rather than as a literal: the head sits at
-    // ~12% of `AMPLITUDE_X` here, so an absolute threshold would be a statement about
-    // the amplitude, not about the bug this guards. A tenth of the sweep is still far
-    // above zero and cannot be hit by a state object whose head never moved.
-    expect(Math.abs(choreo.state.headX)).toBeGreaterThan(AMPLITUDE_X * 0.1)
+    const expected = sampleHeadPosition(0, 'travel', 3 / LEG_SECONDS, makeOptions())
+    expect(choreo.state.headX).toBe(expected.x)
+    expect(choreo.state.headY).toBe(0)
+    expect(choreo.state.headZ).toBe(expected.z)
+    expect(choreo.state.headZ).not.toBe(0)
     expect(choreo.state).not.toHaveProperty('x')
   })
 })
