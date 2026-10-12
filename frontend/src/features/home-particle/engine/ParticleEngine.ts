@@ -1719,9 +1719,22 @@ export class ParticleEngine implements ParticleEngineContract {
       const w = warm
       const lum = (glyphMix * 1.14 + cometMix * s.body.tone[i] + Math.abs(depth) * 0.06) * shimmer * palette.gain
 
-      const cr = (palette.core.r + (palette.accent.r - palette.core.r) * w) * lum
-      const cg = (palette.core.g + (palette.accent.g - palette.core.g) * w) * lum
-      const cb = (palette.core.b + (palette.accent.b - palette.core.b) * w) * lum
+      let cr = (palette.core.r + (palette.accent.r - palette.core.r) * w) * lum
+      let cg = (palette.core.g + (palette.accent.g - palette.core.g) * w) * lum
+      let cb = (palette.core.b + (palette.accent.b - palette.core.b) * w) * lum
+      // A warm compact nucleus sits inside a cool gas envelope. Preserve the
+      // original brand palette exactly as the body resolves into a glyph.
+      const nucleus = s.body.spriteSize[i] < 3
+      if (this.light) {
+        const ink = nucleus ? 1 - cometMix * 0.72 : 1
+        cr *= ink
+        cg *= ink
+        cb *= ink
+      } else {
+        cr *= 1 + cometMix * (nucleus ? 0.04 : -0.72)
+        cg *= 1 + cometMix * (nucleus ? 0 : -0.18)
+        cb *= 1 + cometMix * (nucleus ? -0.12 : 0.18)
+      }
 
       const cap = this.light ? 0.82 : 1.4
       const colorIndex = i * 4

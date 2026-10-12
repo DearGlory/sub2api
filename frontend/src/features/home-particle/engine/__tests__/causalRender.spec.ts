@@ -87,6 +87,27 @@ function extent(positions: ArrayLike<number>, colors: ArrayLike<number>, x: numb
 }
 
 describe('causal render: separate body and emitted tail', () => {
+  it.each([false, true])('separates nucleus and coma tones while preserving glyph colour (light=%s)', light => {
+    const h = renderHarness(light)
+    h.update('travel', 0.4)
+    const average = (nucleus: boolean) => {
+      const sum = [0, 0, 0]
+      let count = 0
+      for (let i = 0; i < COUNT; i++) {
+        if ((h.scratch.body.spriteSize[i] < 3) !== nucleus) continue
+        count++
+        for (let c = 0; c < 3; c++) sum[c]! += h.scratch.colors[i * 4 + c]!
+      }
+      return sum.map(v => v / count)
+    }
+    const nucleus = average(true), coma = average(false)
+    if (light) expect(nucleus[0]! + nucleus[1]! + nucleus[2]!).toBeLessThan((coma[0]! + coma[1]! + coma[2]!) * 0.7)
+    else expect(nucleus[0]! / nucleus[2]!).toBeGreaterThan(coma[0]! / coma[2]! + 0.12)
+    h.update('gather', 1)
+    h.update('hold', 0)
+    const nucleusGlyph = average(true), comaGlyph = average(false)
+    expect(nucleusGlyph[0]! / nucleusGlyph[2]!).toBeCloseTo(comaGlyph[0]! / comaGlyph[2]!, 5)
+  })
   it.each([false, true])('preserves light through gather and restores glyph coverage (light=%s)', light => {
     const h = renderHarness(light)
     h.update('travel', 0.4)
