@@ -54,11 +54,109 @@ export function installCausalProbe(cfg) {
     if (!o?.traverse) fail('background path ' + path)
     o.traverse(x => background.add(x))
   }
+  // Fail-closed exception: reviewed PointSize hook only; never write measured geometry.
+  const shaderAudits = new Map()
+  meta.shaderAudit = []
+  meta.alphaBoundary = 'actual color.w * opacity >= 0.01 unchanged. CPU area compensation divides alpha by cometScale^2; large faint sprites can fall below this proxy despite screen coverage. No reconstructed alpha. pointSizeBeforeAttenuation = material.size * actual cometScale, not raster pixel diameter.'
+  const canonicalHook = fn => Function.prototype.toString.call(fn).replace(/\\n/g, '').replace(/\s/g, '').replace(/"/g, "'").replace(/;/g, '')
+  const sizeHook = shader => {
+    shader.vertexShader = `attribute float cometScale;\n${shader.vertexShader}`.replace(
+      'gl_PointSize = size;', 'gl_PointSize = size * cometScale;'
+    )
+  }
+  const sentinelVertex = `precision highp float;
+attribute vec3 position;
+attribute vec4 color;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform float size;
+varying vec4 vColor;
+void main() {
+  vColor = color;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  gl_PointSize = size;
+}`
+  const sentinelFragment = `precision highp float;
+uniform float opacity;
+varying vec4 vColor;
+void main() {
+  gl_FragColor = vec4(vColor.rgb, vColor.a * opacity);
+}`
+  function scaleAttribute(o) {
+    const a = o.geometry.getAttribute('cometScale'), pos = o.geometry.getAttribute('position')
+    if (!a?.isBufferAttribute || a.itemSize !== 1 || a.count !== pos.count || a.normalized || !(a.array instanceof Float32Array) || a.array.length !== pos.count) fail('cometScale missing/count/itemSize/type invalid')
+    for (const v of a.array) if (!Number.isFinite(v) || v <= 0) fail('cometScale must be finite positive')
+    return a
+  }
+  function auditMaterial(o) {
+    if (shaderAudits.has(o)) return shaderAudits.get(o)
+    const m = o.material
+    if (!m?.isPointsMaterial) fail('requires PointsMaterial')
+    const stock = new m.constructor(), source = Function.prototype.toString.call(m.onBeforeCompile)
+    const isStock = source === Function.prototype.toString.call(stock.onBeforeCompile)
+    const sized = canonicalHook(m.onBeforeCompile) === canonicalHook(sizeHook) || canonicalHook(m.onBeforeCompile) === canonicalHook(sizeHook).replace('shader=>', '(shader)=>')
+    stock.dispose()
+    if (!isStock && !sized) fail('unknown onBeforeCompile; only exact audited PointSize hook accepted')
+    if (sized && (canonicalHook(m.customProgramCacheKey) !== "()=>'comet-body-coverage-v1'" || m.customProgramCacheKey() !== 'comet-body-coverage-v1')) fail('unknown size-hook cache key')
+    const shader = { vertexShader: sentinelVertex, fragmentShader: sentinelFragment, uniforms: Object.freeze({}) }, uniforms = shader.uniforms
+    m.onBeforeCompile(shader, e.renderer)
+    const expected = sized ? 'attribute float cometScale;\n' + sentinelVertex.replace('gl_PointSize = size;', 'gl_PointSize = size * cometScale;') : sentinelVertex
+    if (shader.vertexShader !== expected || shader.fragmentShader !== sentinelFragment || shader.uniforms !== uniforms || Object.keys(shader).sort().join() !== 'fragmentShader,uniforms,vertexShader') fail('hook changes more than PointSize')
+    const a = sized ? scaleAttribute(o) : null
+    if (sized && !/getAttribute\(["']cometScale["']\)\.needsUpdate\s*=\s*true/.test(String(e.upload))) fail('upload does not mark cometScale needsUpdate')
+    const audit = { object: o.uuid, kind: sized ? 'comet-body-coverage-v1' : 'stock-PointsMaterial', hookSource: source,
+      customProgramCacheKey: m.customProgramCacheKey(), sentinel: { vertex: sentinelVertex, fragment: sentinelFragment, finalVertex: shader.vertexShader, finalFragment: shader.fragmentShader, uniquePointSizeOnly: true },
+      attribute: a ? { itemSize: a.itemSize, count: a.count, version: a.version, finitePositive: true } : null }
+    shaderAudits.set(o, { sized, hook: m.onBeforeCompile, audit })
+    meta.shaderAudit.push(audit)
+    return shaderAudits.get(o)
+  }
+  function auditGPU(o) {
+    const entry = shaderAudits.get(o)
+    if (!entry.sized) return null
+    if (o.material.onBeforeCompile !== entry.hook) fail('hook changed during run')
+    const a = scaleAttribute(o), renderer = e.renderer, gl = renderer?.getContext()
+    if (!gl?.getBufferSubData || !renderer.properties) fail('WebGL2 final shader/GPU readback unavailable')
+    // Clone-only control: original geometry/material/state are not assigned to.
+    const reference = o.material.clone(), scene = e.scene.clone(false), point = o.clone(false)
+    point.material = reference; scene.add(point)
+    const sources = material => {
+      const program = renderer.properties.get(material).currentProgram
+      if (!program?.program || !gl.getProgramParameter(program.program, gl.LINK_STATUS)) fail('missing/failed linked Points program')
+      return { program, vertex: gl.getShaderSource(program.vertexShader), fragment: gl.getShaderSource(program.fragmentShader) }
+    }
+    let gpu
+    try {
+      renderer.render(scene, e.camera)
+      const baseline = sources(reference)
+      point.material = o.material
+      renderer.render(scene, e.camera)
+      const actual = sources(o.material)
+      const declaration = 'attribute float cometScale;\n', size = 'gl_PointSize = size * cometScale;'
+      if (actual.vertex.split(declaration).length !== 2 || actual.vertex.split(size).length !== 2 || actual.vertex.replace(declaration, '').replace(size, 'gl_PointSize = size;') !== baseline.vertex || actual.fragment !== baseline.fragment) fail('final GPU shader differs beyond PointSize declaration/multiplication')
+      const location = gl.getAttribLocation(actual.program.program, 'cometScale')
+      if (location < 0 || !gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_ENABLED) || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_SIZE) !== 1 || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_TYPE) !== gl.FLOAT || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_NORMALIZED) || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_STRIDE) !== 0 || gl.getVertexAttribOffset(location, gl.VERTEX_ATTRIB_ARRAY_POINTER) !== 0) fail('GPU cometScale attribute binding invalid')
+      const buffer = gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING), previous = gl.getParameter(gl.COPY_READ_BUFFER_BINDING), values = new Float32Array(a.count)
+      let bytes
+      try {
+        gl.bindBuffer(gl.COPY_READ_BUFFER, buffer)
+        bytes = gl.getBufferParameter(gl.COPY_READ_BUFFER, gl.BUFFER_SIZE)
+        if (bytes !== a.array.byteLength) fail('GPU cometScale buffer count invalid')
+        gl.getBufferSubData(gl.COPY_READ_BUFFER, 0, values)
+      } finally { gl.bindBuffer(gl.COPY_READ_BUFFER, previous) }
+      for (let i = 0; i < values.length; i++) if (!Number.isFinite(values[i]) || values[i] <= 0 || values[i] !== a.array[i]) fail('GPU cometScale differs from actual geometry')
+      gpu = { count: values.length, itemSize: 1, bytes, version: a.version, location, finitePositive: true, exactGeometryMatch: true, scale: dist(Array.from(values)) }
+      entry.audit.finalShader = { actualVertex: actual.vertex, actualFragment: actual.fragment, stockVertex: baseline.vertex, stockFragment: baseline.fragment, uniquePointSizeOnly: true, fragmentUnchanged: true }
+      entry.audit.gpu = gpu
+    } finally { reference.dispose(); renderer.render(e.scene, e.camera) }
+    return gpu
+  }
   const covered = new Map(), pools = []
   for (const p of contract.pools || []) {
     const o = get(p.points), geometry = o?.geometry, pos = geometry?.getAttribute('position'), color = geometry?.getAttribute('color')
     if (!o?.isPoints || !allPoints.includes(o) || !pos || pos.itemSize !== 3 || !color || color.itemSize !== 4 || pos.count !== color.count || geometry.index) fail('Points requires nonindexed actual position3/color4: ' + p.points)
-    if (!o.material?.isPointsMaterial || o.material.onBeforeCompile?.toString().includes('shader.vertexShader')) fail('custom shader displacement/alpha requires dedicated audited adapter')
+    const shaderAudit = auditMaterial(o)
     const end = p.end === 'all' ? pos.count : p.end
     if (!Number.isInteger(p.start) || !Number.isInteger(end) || p.start < 0 || end <= p.start || end > pos.count) fail('pool range ' + p.id)
     const mask = covered.get(o) || new Uint8Array(pos.count)
@@ -73,7 +171,7 @@ export function installCausalProbe(cfg) {
     }
     if (p.bornAt && !['clock', 'integrate', 'departure'].includes(p.timeBasis)) fail('bornAt requires timeBasis')
     if (p.core && (!Number.isInteger(p.core[0]) || !Number.isInteger(p.core[1]) || p.core[0] < p.start || p.core[1] > end || p.core[1] <= p.core[0])) fail('core range invalid')
-    pools.push({ ...p, end, o, pos, color, age, life, activeArray: p.active ? get(p.active) : null,
+    pools.push({ ...p, end, o, pos, color, shaderAudit, age, life, activeArray: p.active ? get(p.active) : null,
       genArray: p.generation ? get(p.generation) : null, bornArray: p.bornAt ? get(p.bornAt) : null,
       birthPosArray: p.birthPosition ? get(p.birthPosition) : null, prev: new Array(end),
       actualBorn: new Float64Array(end).fill(NaN), generationObserved: new Uint32Array(end), matrix: null })
@@ -94,6 +192,7 @@ export function installCausalProbe(cfg) {
   if (!head().every(Number.isFinite) || !stateHead().every(Number.isFinite)) fail('actual/state head source missing')
   for (const k of ['stop', 'advanceClock', 'writeEmissionTable', 'integrate', 'upload', 'advanceCamera']) if (typeof e[k] !== 'function') fail('missing true update method ' + k)
   if (e.reducedMotion) fail('reduced motion active; normal motion probe cannot certify')
+  for (const o of shaderAudits.keys()) auditGPU(o)
   const visible = o => { for (let a = o; a; a = a.parent) if (!a.visible) return false; return true }
   function transform(p, xyz) {
     if (!p.matrix) return xyz
@@ -106,7 +205,10 @@ export function installCausalProbe(cfg) {
     const a = p.color.getW(i) * p.o.material.opacity * (drawn && visible(p.o) ? 1 : 0)
     if (![...xyz, a].every(Number.isFinite)) fail('nonfinite final geometry')
     const life = p.life?.[i] ?? 0, age = p.age?.[i] ?? null
-    return { xyz, a, rawAlpha: p.color.getW(i), age, active: life > 0 && (p.activeArray ? !!p.activeArray[i] : age >= 0 && age < life),
+    const cometScale = p.shaderAudit.sized ? p.o.geometry.getAttribute('cometScale')?.getX(i) : 1
+    const pointSizeBeforeAttenuation = p.o.material.size * cometScale
+    if (!Number.isFinite(cometScale) || cometScale <= 0 || !Number.isFinite(pointSizeBeforeAttenuation) || pointSizeBeforeAttenuation <= 0) fail('nonfinite/nonpositive actual point size')
+    return { xyz, a, cometScale, pointSizeBeforeAttenuation, rawAlpha: p.color.getW(i), age, active: life > 0 && (p.activeArray ? !!p.activeArray[i] : age >= 0 && age < life),
       gen: p.genArray?.[i] ?? null, stamp: p.bornArray?.[i] ?? null }
   }
   function matrices() {
@@ -187,11 +289,12 @@ export function installCausalProbe(cfg) {
   function capture(labels) {
     const s = state(), h = head(), all = [], retained = [], tail = [], summaries = [], raw = []
     for (const p of pools) {
-      const distances = [], ages = [], xyz = [], rgba = [], born = [], active = [], gen = []
+      const distances = [], ages = [], xyz = [], rgba = [], born = [], active = [], gen = [], scales = [], sizes = []
       for (let i = p.start; i < p.end; i++) {
         const r = read(p, i), d = Math.hypot(...r.xyz.map((v, j) => v - h[j]))
         const certified = Number.isFinite(p.actualBorn[i]) && p.actualBorn[i] >= currentDeparture() - L.dt
         xyz.push(...r.xyz); rgba.push(p.color.getX(i), p.color.getY(i), p.color.getZ(i), r.rawAlpha)
+        scales.push(r.cometScale); sizes.push(r.pointSizeBeforeAttenuation)
         born.push(Number.isFinite(p.actualBorn[i]) ? p.actualBorn[i] : null); active.push(+r.active); gen.push(p.generationObserved[i])
         if (r.age !== null) ages.push(r.age)
         if (r.a >= L.alpha) {
@@ -203,6 +306,7 @@ export function installCausalProbe(cfg) {
       summaries.push({ id: p.id, visible: { ...dist(distances), far3: distances.filter(v => v > L.far).length },
         tailAge: dist([...ages]), agesFrozenDiagnostic: p.mode === 'legacy-frozen', objectMatrixWorld: Array.from(p.o.matrixWorld.elements), materialOpacity: p.o.material.opacity })
       raw.push({ id: p.id, start: p.start, end: p.end, actualPositionsMainLocal: xyz, actualColorsRGBA: rgba,
+        actualCometScale: scales, actualPointSizeBeforeAttenuation: sizes,
         tailAge: ages, observedBirthClock: born, active, observedGeneration: gen })
     }
     const summary = { clock: clock(), phase: s.phase, progress: s.phaseProgress, leg: s.legIndex, labels,
@@ -218,8 +322,9 @@ export function installCausalProbe(cfg) {
     if ((s.phase === 'scatter' && s.phaseProgress >= L.coalesce) || (s.phase === 'travel' && s.phaseProgress <= .1)) {
       checks.push({ criterion: 'C1-retained-morph-after-coalesce', ...summary.retainedMorph, clock: summary.clock, leg: s.legIndex })
     }
+    const gpuAttributes = [...shaderAudits.keys()].map(o => ({ object: o.uuid, gpu: auditGPU(o) }))
     e.renderer.render(e.scene, e.camera)
-    return { summary, raw }
+    return { summary, raw, gpuAttributes }
   }
   function stepBatch(maxSteps = 60) {
     if (!begun) fail('call begin first')
@@ -231,8 +336,10 @@ export function installCausalProbe(cfg) {
         return { done: false, events, rows, snapshot: capture(labels) }
       }
       const oldMainMatrix = main.matrixWorld.clone()
+      const scaleVersions = [...shaderAudits].filter(([, a]) => a.sized).map(([o]) => [o, o.geometry.getAttribute('cometScale')?.version])
       const before = clock(); integrateTime += L.dt
       e.advanceClock(L.dt); e.writeEmissionTable(); e.integrate(L.dt * 60, integrateTime); e.upload(); e.advanceCamera(); matrices(); n++
+      for (const [o, version] of scaleVersions) if (!(scaleAttribute(o).version > version)) fail('cometScale upload version did not advance')
       const s = state(), now = clock(), h = head(), inScope = s.legIndex >= firstLeg
       if (Math.abs(now - before - L.dt) > 1e-7) fail('clock timing differs from frozen timing contract')
       if (window.__SUB2API_PARTICLE_ENGINE__ !== e || e.running) fail('HMR/remount or rAF restarted during deterministic sampling')
