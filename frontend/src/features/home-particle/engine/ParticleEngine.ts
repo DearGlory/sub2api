@@ -1112,10 +1112,14 @@ export class ParticleEngine implements ParticleEngineContract {
    *
    * Landscape is meant to be untouched, and in the code it is: `swayAspectScale` returns
    * exactly 1 at 16:10 and the `Math.max(1, ...)` floor holds every wide viewport there
-   * too, so both landscape rows compute the identical `SWAY_Y`. The small A/B differences
-   * in those rows are the sweep catching the animation at a different phase, and the
-   * report shows `0.4550` against `0.4551` only because the check formats to 4 decimal
-   * places — the underlying product is the same float.
+   * too, so both landscape rows compute the identical `SWAY_Y` — checked directly,
+   * `swayAspectScale(1.6) === 1`.
+   *
+   * Do not read the landscape rows of that table as a measured difference in the sway.
+   * The reading is a discrete walk of 0.05 s steps that does not land exactly on the
+   * sine's crest, so successive runs report raw peaks a few units in the fifth decimal
+   * apart (0.4550955... in one run, a value formatting to 0.4550 in another) purely from
+   * where the walk happened to start. The constant is the same; the sampling grid is not.
    */
   private applyViewportSway(): void {
     const aspect = this.width / this.height
