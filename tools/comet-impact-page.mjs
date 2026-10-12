@@ -8,7 +8,7 @@ export function installImpactProbe() {
   const world=(p,o)=>o.localToWorld(e.scratch.vecA.clone().set(...p)).toArray()
   const gpu=o=>{const gl=e.renderer.getContext(),p=e.renderer.properties.get(o.material).currentProgram?.program,u={};if(!p)return null;for(let i=0;i<gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);i++){const a=gl.getActiveUniform(p,i);if(a.size===1)u[a.name]=plain(gl.getUniform(p,gl.getUniformLocation(p,a.name)))}return u}
   function inventory(){const rows=mp.inventory();for(const row of rows){const o=e.scene.getObjectByProperty('uuid',row.uuid);row.geometryType=o.geometry.type;row.parentMatrix=o.parent.matrixWorld.toArray();row.materials.forEach((m,i)=>{const mat=Array.isArray(o.material)?o.material[i]:o.material;m.fragmentSource=mat.fragmentShader||null;m.vertexSource=mat.vertexShader||null})}return rows}
-  function diagnosticGPU(uuid){const o=e.scene.getObjectByProperty('uuid',uuid);if(!o)return null;const old=[];e.scene.traverse(x=>{if(x.geometry){old.push([x,x.visible]);x.visible=x===o}});try{render();return {diagnosticForcedDraw:true,uniforms:gpu(o),matrix:o.matrixWorld.toArray()}}finally{for(const [x,v]of old)x.visible=v;render()}}
+  function diagnosticGPU(uuid){const o=e.scene.getObjectByProperty('uuid',uuid);if(!o)return null;const old=[];e.scene.traverse(x=>{if(x.geometry){old.push([x,x.visible]);x.visible=x===o}});try{render();return {diagnosticForcedDraw:true,uniforms:gpu(o),matrix:o.matrixWorld.toArray(),expectedModelView:e.camera.matrixWorldInverse.clone().multiply(o.matrixWorld).toArray()}}finally{for(const [x,v]of old)x.visible=v;render()}}
   function sample(){
     e.scene.updateMatrixWorld(true);const p=e.points.geometry.getAttribute('position'),pool=e.scratch.emittedTail,positions=[],births=[];let active=0
     const stride=Math.max(1,Math.ceil(p.count/96))
@@ -27,9 +27,9 @@ export function installImpactProbe() {
     const o=e.scene.getObjectByProperty('uuid',uuid),m=o.material,text=m.fragmentShader
     // Keep original marching step and extinction; suppress only one half's sample positions.
     const re=/vec3\s+(\w+)\s*=\s*\w+\s*\+\s*\w+\s*\*\s*\([^;]+;/g
-    const candidates=[...text.matchAll(re)].filter(v=>new RegExp('(?:density|sampleField|eventDensity)\\s*\\(\\s*'+v[1]+'\\s*\\)').test(text))
+    const candidates=[...text.matchAll(re)].filter(v=>new RegExp('(?:density|sampleField|eventDensity)\\s*\\(\\s*'+v[1]+'\\s*\\)').test(text)||/origin\s*=\s*uCameraFrame\s*-\s*uHead/.test(text)&&v[1]==='p'&&/length\(p\)/.test(text))
     if(candidates.length!==1)return {status:'instrument-invalid',reason:'unknown integration position; cannot instrument depth'}
-    const match=candidates[0];shader={material:m,fragment:text};m.fragmentShader=text.replace(match[0],match[0]+'\n if ('+match[1]+'.z '+(half==='near'?'<':'>=')+' uHead.z) continue;');m.needsUpdate=true;render();return {status:'observed',sample:match[1],half,plane:'uHead.z in actual shader frame'}
+    const match=candidates[0],relative=/origin\s*=\s*uCameraFrame\s*-\s*uHead/.test(text);shader={material:m,fragment:text};m.fragmentShader=text.replace(match[0],match[0]+'\n if ('+match[1]+'.z '+(half==='near'?'<':'>=')+' '+(relative?'0.0':'uHead.z')+') continue;');m.needsUpdate=true;render();return {status:'observed',sample:match[1],half,plane:relative?'0 in head-relative shader frame':'uHead.z in actual shader frame'}
   }
   function hideEvents(on){if(on){hidden=events().map(o=>[o,o.visible]);for(const [o]of hidden)o.visible=false}else if(hidden){for(const [o,v]of hidden)o.visible=v;hidden=null}render();return mp.pose()}
   function mutate(kind,uuid){
@@ -39,6 +39,7 @@ export function installImpactProbe() {
     if(kind==='noevent')o.visible=false
     else if(kind==='zeroOpacity'){if(m.uniforms.uOpacity)m.uniforms.uOpacity.value=0;else{m.fragmentShader=m.fragmentShader.replace(/}\s*$/,'gl_FragColor.a = 0.0;\n}');m.needsUpdate=true}}
     else if(kind==='board2D')o.scale.z=.00001
+    else if(kind==='planar-ring'){m.fragmentShader='uniform vec3 uHead;uniform float uRadius;uniform float uEventStrength;varying vec3 vFrame;void main(){float r=length((vFrame-uHead).xy)/uRadius;float ring=exp(-pow((r-0.6)/0.12,2.0));gl_FragColor=vec4(0.2,0.45,0.65,ring*uEventStrength);}';m.needsUpdate=true}
     else if(kind==='cpu-unlinked'){render();m.uniforms.uHead.value.x+=3;return {status:'observed',gpu:gpu(o)}}
     else throw Error('unknown negative '+kind)
     render();return {status:'observed'}

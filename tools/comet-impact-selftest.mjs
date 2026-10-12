@@ -24,6 +24,7 @@ float density(vec3 p) {
 void main(){vec3 ray=normalize(vFrame-uCameraFrame);float opacity=0.0;for(int i=0;i<24;i++){vec3 p=uCameraFrame+ray*(enter+(float(i)+.5)*stepLength);float d=density(p);float a=1.0-exp(-d*stepLength);opacity+=(1.0-opacity)*a;}gl_FragColor=vec4(vec3(.5),opacity);}`
 const uniforms={uEventMode:1,uEventProgress:.25,uEventStrength:.8,uHead:[0,0,0],uRadius:1}
 const row={label:'synthetic',kind:'gather',q:.25,pose:{head:[0,0,0],bodyMatrix:identity},inventory:[{isMesh:true,uuid:'test',visible:true,geometryType:'BoxGeometry',span:[1,1,1],triangles:12,matrix,parentMatrix:identity,worldCenter:[0,0,0],gpuAttributes:{attributes:{position:{exact:true}}},materials:[{linked:true,uniforms,gpuUniforms:structuredClone(uniforms),vertex:'modelViewMatrix',fragment}]}],eventPixels:pp,pageDelta:pp,depth:{status:'observed',near:pp,far:pp,difference:pp,rotate:pp,translate:pp,frozen:true}}
+row.eventGPU={uniforms:{...structuredClone(uniforms),modelViewMatrix:matrix},expectedModelView:matrix}
 record('event-positive-fixture',()=>assert(eventChecks(row).every(c=>c.status==='pass'),JSON.stringify(eventChecks(row))))
 const neg=(name,mutate,id)=>record(name,()=>{const r=structuredClone(row);mutate(r);const checks=eventChecks(r);assert(checks.some(c=>c.status==='fail'&&c.id.endsWith(id)),JSON.stringify(checks))})
 neg('noevent-negative',r=>r.inventory=[],'event-implemented')
@@ -31,7 +32,7 @@ neg('zeroOpacity-negative',r=>{r.eventPixels=pixels(empty,empty);r.pageDelta=r.e
 neg('always-on-phase-negative',r=>{r.kind='hold';r.q=.5},'event-hidden-zero')
 neg('2D-board-negative',r=>{r.inventory[0].matrix[10]=.00001},'event-local-box')
 neg('CPU-unlinked-negative',r=>{r.inventory[0].materials[0].uniforms.uHead[0]=3},'event-linked-GPU')
-neg('head-unanchored-negative',r=>{r.inventory[0].materials[0].gpuUniforms.uHead[0]=3},'event-world-head')
+neg('head-unanchored-negative',r=>{r.eventGPU.uniforms.uHead[0]=3},'event-world-head')
 neg('empty-depth-negative',r=>{r.depth.far=pixels(empty,empty)},'event-image-depth')
 record('comments-names-not-3D-proof',()=>assert.equal(shaderEvidence('modelViewMatrix','// density(vec3 p) for(int i=0;i<24;i++)\nvoid main(){gl_FragColor=vec4(1.0);}').status,'instrument-invalid'))
 record('tail-is-not-event',()=>assert.equal(eventObjects([{isMesh:true,name:'comet-event-field',materials:[{uniforms:{uBins:[],uDensities:[]},fragment}]}]).length,0))

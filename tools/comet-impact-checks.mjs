@@ -26,7 +26,8 @@ export function shaderEvidence(vertex,fragment) {
   const body=s.match(/(?:density|sampleField|eventDensity)\s*\(\s*vec3\s+(\w+)\s*\)\s*\{([\s\S]*?)\n\s*\}/)
   const depth=!!body&&new RegExp('\\b'+body[1]+'\\.z\\b|\\b'+body[1]+'\\s*-\\s*uHead|length\\(\\s*'+body[1]+'\\s*\\)').test(body[2])
   const consumed=sample.some(x=>{const p=x.match(/vec3\s+(\w+)/)[1];return new RegExp('(?:density|sampleField|eventDensity)\\s*\\(\\s*'+p+'\\s*\\)').test(s)})
-  return {status:march&&cameraRay&&spatial&&depth&&consumed?'pass':'instrument-invalid',march,cameraRay,spatial,depth,consumed,localVertex:/modelViewMatrix|modelMatrix/.test(vertex||''),note:'structural adapter + live slab/camera contributions required; regex alone never certifies 3D'}
+  const inline=/vec3\s+p\s*=\s*origin\s*\+\s*ray\s*\*/.test(s)&&/origin\s*=\s*uCameraFrame\s*-\s*uHead/.test(s)&&/length\(p\)/.test(s)&&/tilted\(p\)/.test(s)&&/height\s*=\s*d\.z/.test(s)&&/extinction\s*=\s*\(dust\+dark\)\s*\*\s*uEventStrength/.test(s)&&/alpha\s*=\s*1\.0-exp\(-extinction\*stepLength\)/.test(s)&&/opacity\s*\+=\s*\(1\.0-opacity\)\*alpha/.test(s)
+  return {status:march&&cameraRay&&(spatial&&depth&&consumed||inline)?'pass':'instrument-invalid',march,cameraRay,spatial,depth,consumed,inline,localVertex:/modelViewMatrix|modelMatrix/.test(vertex||''),note:'structural adapter + live slab/camera contributions required; regex alone never certifies 3D'}
 }
 export function eventChecks(row) {
   const out=[],add=(id,ok,detail,status='fail')=>out.push({id:row.label+'-'+id,status:ok?'pass':status,detail})
@@ -37,7 +38,9 @@ export function eventChecks(row) {
   add('event-contract',!!m,{geometryType:o.geometryType,keys:Object.keys(u||{})})
   if(!m)return out
   const hidden=row.kind==='travel'||row.kind==='hold'||row.kind==='scatter'&&row.q>=1||row.kind==='late-scatter'
-  const active=!hidden&&row.q>0&&row.q<1
+  const active=!hidden&&row.q>0&&row.q<1&&u.uEventStrength>0
+  const required=!hidden&&(row.kind==='gather'&&row.q>=.1&&row.q<=.4||row.kind==='scatter'&&row.q>=.15&&row.q<=.7)
+  if(required)add('event-required-window',active,{strength:u.uEventStrength,kind:row.kind,q:row.q})
   // Actual hidden draws retain stale GPU values. Probe also forces a diagnostic draw without
   // changing uniforms, then restores visibility; this distinguishes CPU claims from uploads.
   const gpu=row.eventGPU?.uniforms||g,expectedMode=row.kind==='gather'?1:2
@@ -50,6 +53,7 @@ export function eventChecks(row) {
   add('event-progress-bounds',Number.isFinite(u.uEventProgress)&&u.uEventProgress>=0&&u.uEventProgress<=1,{progress:u.uEventProgress})
   if(active){
     add('event-linked-GPU',m.linked&&EVENT_KEYS.every(k=>Array.isArray(u[k])?same(u[k],gpu?.[k],2e-5):close(u[k],gpu?.[k],2e-5)),{cpu:u,gpu},gpu?'fail':'instrument-invalid')
+    add('event-GPU-object-matrix',same(gpu?.modelViewMatrix,row.eventGPU?.expectedModelView,2e-5),{gpu:gpu?.modelViewMatrix,expected:row.eventGPU?.expectedModelView,objectMatrix:o.matrix},'instrument-invalid')
     const worldHead=Array.isArray(gpu?.uHead)&&o.parentMatrix?transform(gpu.uHead,o.parentMatrix):null
     add('event-world-head',same(worldHead,row.pose.head)&&same(o.worldCenter,row.pose.head)&&same(o.parentMatrix,row.pose.bodyMatrix),{sourceHead:row.pose.head,gpuHead:gpu?.uHead,worldHead,objectCenter:o.worldCenter,matrix:o.matrix,parent:o.parentMatrix})
     const axis=[0,1,2].map(j=>Math.hypot(o.matrix[j*4],o.matrix[j*4+1],o.matrix[j*4+2])*o.span[j])

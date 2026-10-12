@@ -49,6 +49,13 @@ export async function motionEvidence(sources,out) {
     if(row.erased){row.localHash=hash(await fs.readFile(path.join(repo,'frontend/src/features/home-particle/engine',name+'.ts')));row.status=row.localHash===row.baselineOriginalHash?'pass':'fail';row.attribution='local frozen source + erased runtime module, not remote source proof'}
     rows.push(row)
   }
+  const engine=sources.find(r=>r.name==='ParticleEngine'),current=engine?.originalText,baseline=git('show','2acd2457e:frontend/src/features/home-particle/engine/ParticleEngine.ts')
+  for(const name of ['advanceCamera','updateCameraFit','resize','applyViewportSway']){
+    const re=new RegExp('^  (?:private )?'+name+'\\([^\\n]*\\{[\\s\\S]*?^  \\}', 'm'),a=current?.match(re)?.[0],b=baseline.match(re)?.[0]
+    rows.push({name:'ParticleEngine.'+name,status:a&&b&&a===b?'pass':'instrument-invalid',originalHash:a?hash(a):null,baselineOriginalHash:b?hash(b):null})
+  }
+  const cameraLines=s=>s?.split('\n').filter(line=>/this\.camera\.|new PerspectiveCamera|CAMERA_(?:FOV|NEAR|FAR)/.test(line)).join('\n')
+  rows.push({name:'ParticleEngine.camera-access-lines',status:current&&cameraLines(current)===cameraLines(baseline)?'pass':'instrument-invalid',originalHash:current?hash(cameraLines(current)):null,baselineOriginalHash:hash(cameraLines(baseline))})
   const result={status:resultStatus(rows),rows,contractExcluded:'cometVisualContract authorized geometry only; no motion source exclusion'}
   if(out)await fs.writeFile(path.join(out,'frozen-motion.json'),JSON.stringify(result,null,2))
   return result
