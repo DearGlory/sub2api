@@ -569,11 +569,15 @@ describe('createBrandTargetSource', () => {
       // stroke depth, and a blob around the origin — and must not throw.
       expect(value.anchorCount).toBe(count)
       expect(Array.from(value.strokeDepth).every((depth) => depth === 0)).toBe(true)
-      // The mean is a sanity check on the fallback's placement, not a discriminator:
-      // a uniform ball of radius 4..11 has |mean(x)| up to ~1.5 over 48 samples, so
-      // the bound is loose. It still separates the fallback from a glyph, whose
-      // anchors are centred on ICON_CENTER_X (5.8) and would sit far outside it.
-      expect(Math.abs(meanX(value.targets, count))).toBeLessThan(2)
+      // Verify the vendor's actual ellipsoid about the origin. A finite random
+      // sample's mean is not bounded by 2 and made the old assertion flaky.
+      for (let i = 0; i < count; i++) {
+        const radius = Math.hypot(
+          value.targets[i * 3], value.targets[i * 3 + 1], value.targets[i * 3 + 2] / 0.64
+        )
+        expect(radius).toBeGreaterThanOrEqual(4 - 1e-6)
+        expect(radius).toBeLessThanOrEqual(11 + 1e-6)
+      }
     }
   })
 

@@ -31,17 +31,22 @@
  * Laziness (§6 items 7 and 8)
  * ---------------------------
  * Nothing is rasterised at import time and the 28 logos are never rasterised in
- * one go. `prefetch()` puts a decode on the idle queue; `ensure()` is the
- * synchronous path the engine takes when a glyph is actually due.
+ * one go. `prefetch()` dispatches geometry from the idle queue to a lazy module
+ * worker. Rasterisation, sampling and levelling run there on OffscreenCanvas;
+ * completed buffers transfer back together. Unsupported/failed workers use the
+ * idle DOM fallback. `ensure()` remains synchronous when a glyph is due.
  */
 import {
   VOXSPACE_ICON_CANVAS_SIZE,
-  VOXSPACE_ICON_MASK_ALPHA,
-  buildVoxSpaceIconTargets,
   createVoxSpaceNoiseIconTargets,
 } from '../vendor/voxspace-icon-targets'
-import { GLYPH_WORLD_HEIGHT } from './glyphSize'
-import { ICON_CENTER_X } from '../vendor/voxspace-math'
+import { buildGlyphTargets } from './brandTargetsRaster'
+import type {
+  BrandTargetsRequest,
+  BrandTargetsResponse,
+  GlyphEllipse,
+  GlyphSource,
+} from './brandTargetsRaster'
 import type { BrandTargetSource, BrandTargets } from './types'
 
 /**
@@ -65,42 +70,18 @@ for (const [path, text] of Object.entries(BRAND_SVG_MODULES)) {
   if (match) BRAND_SVG_TEXT.set(match[1], text)
 }
 
-/** The vendor's anchor walk, restated so `anchorCount` can be reported. */
-const ICON_MASK_STEP = 3
-
-/** The glyph is drawn into the middle 80% of the canvas, as the sampler expects. */
-const ICON_DRAW_INSET = 0.1
-const ICON_DRAW_SPAN = 0.8
-
 /** Keeps a caller from asking for a canvas edge no device can serve. */
 const MIN_CANVAS_SIZE = 96
 const MAX_CANVAS_SIZE = 2048
-
 const DEFAULT_VIEW_BOX: [number, number, number, number] = [0, 0, 24, 24]
 
-type FillRule = 'evenodd' | 'nonzero'
-
-interface GlyphEllipse {
-  cx: number
-  cy: number
-  rx: number
-  ry: number
-}
-
-/** One SVG document, reduced to the parts a rasteriser needs. */
-interface GlyphSource {
-  /** `minX minY width height`, already validated. */
-  viewBox: [number, number, number, number]
-  /** Raw `d` attributes, in document order. */
-  paths: string[]
-  ellipses: GlyphEllipse[]
-  fillRule: FillRule
-}
-
 interface PendingWork {
-  /** `requestIdleCallback` / `setTimeout` handle, as the DOM numbers them. */
-  handle: number
-  idle: boolean
+  id: number
+  count: number
+  canvasSize: number
+  handle?: number
+  idle?: boolean
+  worker: boolean
 }
 
 /**
@@ -110,12 +91,13 @@ interface PendingWork {
  * environment, so it is narrowed once, here, instead of casting inside the
  * scheduling logic.
  */
-const scheduleTimeout = globalThis.setTimeout as unknown as (
-  handler: () => void,
-  ms: number
-) => number
+function scheduleTimeout(handler: () => void, ms: number): number {
+  return globalThis.setTimeout(handler, ms) as unknown as number
+}
 
-const cancelTimeout = globalThis.clearTimeout as unknown as (handle: number) => void
+function cancelTimeout(handle: number): void {
+  globalThis.clearTimeout(handle)
+}
 
 // ---------------------------------------------------------------------------
 // SVG text -> geometry
@@ -160,7 +142,7 @@ function readGlyphSource(svgText: string): GlyphSource | null {
   // `nonzero`, so falling back to the specification default is the right guess for
   // an icon that does not say — the counters in these logo marks genuinely depend
   // on getting the rule right.
-  const fillRule: FillRule =
+  const fillRule: GlyphSource['fillRule'] =
     root?.getAttribute('fill-rule') === 'evenodd' ? 'evenodd' : 'nonzero'
 
   return { viewBox: readViewBox(root), paths, ellipses, fillRule }
@@ -190,201 +172,17 @@ function readEllipse(node: Element): GlyphEllipse | null {
   return { cx, cy, rx, ry }
 }
 
-// ---------------------------------------------------------------------------
-// Geometry -> alpha mask
-// ---------------------------------------------------------------------------
-
-function releaseCanvas(canvas: HTMLCanvasElement): void {
-  // Dropping the backing store here instead of leaving it to the collector is what
-  // keeps peak bitmap memory at one canvas rather than one per brand.
-  canvas.width = 0
-  canvas.height = 0
-}
-
-/**
- * Rasterises the glyph and returns its alpha channel as a `size * size` mask, or
- * `null` in an environment that cannot rasterise (no 2D context, no `Path2D`).
- *
- * The canvas edge is the same `size` the sampler is handed, and this function only
- * ever returns a mask of exactly that length, so the sampler's pixel-to-world
- * conversion (it divides by `size`) can never be fed a mismatched pair. That is
- * the one arithmetic error in this file that would pass review and still scale
- * every particle's glyph by the wrong constant.
- */
-function rasteriseGlyphMask(source: GlyphSource, size: number): Uint8Array | null {
-  if (typeof Path2D === 'undefined') return null
-
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  if (!ctx) {
-    releaseCanvas(canvas)
-    return null
-  }
-
-  let outline: Path2D
-  try {
-    outline = new Path2D()
-    for (const d of source.paths) outline.addPath(new Path2D(d))
-    for (const { cx, cy, rx, ry } of source.ellipses) {
-      // Added to the same path so the whole glyph fills in one call under one
-      // rule, which is how the source SVG draws it.
-      outline.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
-    }
-  } catch {
-    // `Path2D` throws on malformed path data; a bad asset degrades, never throws.
-    releaseCanvas(canvas)
-    return null
-  }
-
-  const [minX, minY, viewBoxWidth, viewBoxHeight] = source.viewBox
-  const inset = size * ICON_DRAW_INSET
-  const span = size * ICON_DRAW_SPAN
-  const scaleX = span / viewBoxWidth
-  const scaleY = span / viewBoxHeight
-
-  // The same box the reference `drawImage(image, size*0.1, size*0.1, size*0.8, …)`
-  // used, expressed as a transform so the `Path2D` geometry lands in the same
-  // place. The scales are kept separate on purpose: the drawImage form stretches
-  // to fill its box, and matching it keeps these anchors on the footprint the rest
-  // of the feature was tuned against. Every asset is a square `0 0 24 24` today,
-  // so the two are equal.
-  ctx.setTransform(scaleX, 0, 0, scaleY, inset - minX * scaleX, inset - minY * scaleY)
-  // Only the alpha channel is read; white is chosen so the buffer is obvious in a
-  // debugger, not because the colour matters.
-  ctx.fillStyle = '#ffffff'
-  ctx.fill(outline, source.fillRule)
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-
-  let mask: Uint8Array
-  try {
-    // Nothing drawn here comes from another origin, so the canvas cannot be
-    // tainted and `getImageData` cannot throw `SecurityError`; this guard only
-    // covers a context that died mid-draw.
-    const pixels = ctx.getImageData(0, 0, size, size).data
-    mask = new Uint8Array(size * size)
-    for (let i = 0; i < mask.length; i++) mask[i] = pixels[i * 4 + 3]
-  } catch {
-    releaseCanvas(canvas)
-    return null
-  }
-
-  releaseCanvas(canvas)
-  return mask
-}
-
-/**
- * Mirrors the sampler's 3-pixel walk to count the distinct anchors the glyph
- * offers. The vendor keeps its step private, so the constant is restated; this is
- * a diagnostic number, and if that step ever changed only `anchorCount` would
- * drift — no particle position depends on it.
- */
-function countMaskAnchors(mask: Uint8Array, size: number): number {
-  let anchors = 0
-  for (let y = 0; y < size; y += ICON_MASK_STEP) {
-    const row = y * size
-    for (let x = 0; x < size; x += ICON_MASK_STEP) {
-      if (mask[row + x] > VOXSPACE_ICON_MASK_ALPHA) anchors++
-    }
-  }
-  return anchors
-}
-
 function normaliseCanvasSize(canvasSize: number | undefined): number {
   const requested = canvasSize ?? VOXSPACE_ICON_CANVAS_SIZE
   if (!Number.isFinite(requested)) return VOXSPACE_ICON_CANVAS_SIZE
   return Math.min(MAX_CANVAS_SIZE, Math.max(MIN_CANVAS_SIZE, Math.floor(requested)))
 }
 
-/** Bounding-box height of an anchor buffer, in world units. */
-function anchorHeight(targets: Float32Array): number {
-  let min = Infinity
-  let max = -Infinity
-  for (let i = 1; i < targets.length; i += 3) {
-    const y = targets[i]
-    if (y < min) min = y
-    if (y > max) max = y
-  }
-  return max - min
-}
-
-/**
- * LANE LC — [user] 散开组成的图案太小了，高度最少要网页的三分之二.
- *
- * The vendor's sampler normalises every glyph onto the SAME world square (12.6
- * units) but each logo only uses the part of its 24x24 viewBox its artwork
- * actually reaches. Measured over the shipped roster at the frozen 760 px canvas,
- * the resulting anchor bbox heights run 6.06 units (xiaomimimo) to 9.96
- * (hunyuan) — a 1.64x spread. That spread is what makes V6 unsatisfiable with a
- * fixed camera distance:
- *
- *   - a distance that puts the SHORTEST mark at 2/3 of the viewport height leaves
- *     the tallest at 1.10 of it, i.e. clipped top and bottom;
- *   - a distance that puts the TALLEST at 2/3 leaves the shortest at 0.41, i.e.
- *     under two thirds of the way to the floor the user asked for.
- *
- * So the glyphs are levelled: every mark is scaled about the glyph centre until
- * its bbox height IS `GLYPH_WORLD_HEIGHT`, and `strokeDepth` is scaled by the same
- * factor because it is a world-unit distance rather than an index. After this the
- * roster's on-screen height share is one number for all 28 brands, which is what
- * lets a single `fitDistance` hold the floor for every one of them.
- *
- * Uniform, not anisotropic: the same factor goes to x, y and z about the glyph
- * centre (`ICON_CENTER_X`, 0, 0), so the mark is scaled rather than stretched and
- * its silhouette is untouched. The side effect is that a short, wide mark stays
- * short and wide — levelling sets the HEIGHT, not the width — which is why
- * `glyphSize.ts` carries the roster's narrowest bbox aspect as its own constant.
- */
-function levelToGlyphHeight(targets: Float32Array, strokeDepth: Float32Array): void {
-  const height = anchorHeight(targets)
-  // A degenerate mask (a single anchor, or a horizontal hairline) has no height to
-  // scale against. Dividing by it would put Infinity into every anchor, which the
-  // flow would then read as a NaN position and blank the frame; leaving it alone
-  // keeps a bad glyph merely small instead of fatal.
-  if (!Number.isFinite(height) || height <= 0) return
-
-  const scale = GLYPH_WORLD_HEIGHT / height
-  if (!Number.isFinite(scale) || scale <= 0) return
-
-  for (let i = 0; i < targets.length; i += 3) {
-    targets[i] = ICON_CENTER_X + (targets[i] - ICON_CENTER_X) * scale
-    targets[i + 1] *= scale
-    targets[i + 2] *= scale
-  }
-  for (let i = 0; i < strokeDepth.length; i++) strokeDepth[i] *= scale
-}
-
-/** The whole glyph pipeline, or `null` when this environment or asset cannot serve it. */
-function buildTargets(
-  svgText: string,
-  count: number,
-  canvasSize: number
-): BrandTargets | null {
+/** Synchronous ensure uses exactly the worker's raster and sampler. */
+function buildTargets(svgText: string, count: number, canvasSize: number): BrandTargets | null {
   const source = readGlyphSource(svgText)
-  if (!source) return null
-
-  const mask = rasteriseGlyphMask(source, canvasSize)
-  if (!mask) return null
-
-  // Belt and braces: the sampler is handed the very edge the mask was cut from,
-  // never a caller-supplied number, so a resize bug cannot reach it.
-  if (mask.length !== canvasSize * canvasSize) return null
-
-  const sampled = buildVoxSpaceIconTargets(mask, canvasSize, count)
-  if (!sampled) return null
-
-  // Level the mark to the design height before it leaves this function, so every
-  // consumer downstream (the engine's spring, the orbit field, the sizing maths)
-  // sees one glyph size for the whole roster. See `levelToGlyphHeight`.
-  levelToGlyphHeight(sampled.targets, sampled.strokeDepth)
-
-  return {
-    targets: sampled.targets,
-    strokeDepth: sampled.strokeDepth,
-    anchorCount: countMaskAnchors(mask, canvasSize),
-  }
+  if (!source || typeof document === 'undefined') return null
+  return buildGlyphTargets(source, count, canvasSize, document.createElement('canvas'))
 }
 
 /**
@@ -425,31 +223,117 @@ export function createBrandTargetSource(): BrandTargetSource {
   const cache = new Map<string, BrandTargets>()
   const pending = new Map<string, PendingWork>()
   let disposed = false
+  let worker: Worker | null = null
+  let workerUnavailable = false
+  let nextId = 0
 
   function cancelPending(work: PendingWork): void {
-    if (work.idle) {
-      if (typeof globalThis.cancelIdleCallback === 'function') {
-        globalThis.cancelIdleCallback(work.handle)
-      }
-    } else {
-      cancelTimeout(work.handle)
+    if (work.handle === undefined) return
+    if (work.idle) globalThis.cancelIdleCallback?.(work.handle)
+    else cancelTimeout(work.handle)
+    work.handle = undefined
+  }
+
+  function stopWorker(): void {
+    if (!worker) return
+    worker.onmessage = null
+    worker.onerror = null
+    worker.onmessageerror = null
+    worker.terminate()
+    worker = null
+  }
+
+  function schedule(slug: string, work: PendingWork): void {
+    const run = () => runIdle(slug, work)
+    work.idle = typeof globalThis.requestIdleCallback === 'function'
+    work.handle = work.idle
+      ? globalThis.requestIdleCallback(run, { timeout: 500 })
+      : scheduleTimeout(run, 200)
+  }
+
+  function failWorker(): void {
+    workerUnavailable = true
+    stopWorker()
+    if (disposed) return
+    // Retry each outstanding glyph in a separate idle turn. Never rasterise in
+    // the error/message handler; ensure can still supersede these retries.
+    for (const [slug, work] of pending) {
+      if (!work.worker) continue
+      cancelPending(work)
+      work.worker = false
+      schedule(slug, work)
     }
   }
 
-  function runIdle(slug: string, count: number, canvasSize: number): void {
-    // Guard the callback as well as the caller: an idle task can still fire after
-    // `dispose()`, and building the glyph then would resurrect a whole brand.
-    if (disposed) return
-    pending.delete(slug)
-    if (cache.has(slug)) return
+  function getWorker(): Worker | null {
+    if (worker || workerUnavailable) return worker
+    if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') {
+      workerUnavailable = true
+      return null
+    }
+    try {
+      const active = new Worker(new URL('./brandTargets.worker.ts', import.meta.url), {
+        type: 'module',
+        name: 'brand-targets',
+      })
+      worker = active
+      active.onmessage = ({ data }: MessageEvent<BrandTargetsResponse>) => {
+        if (disposed || worker !== active) return
+        const work = pending.get(data.slug)
+        if (!work?.worker || work.id !== data.id) return
+        const result = data.result
+        // Only a complete pair of transferred buffers can enter the cache.
+        if (!result || !(result.targets instanceof Float32Array) ||
+            !(result.strokeDepth instanceof Float32Array) ||
+            result.targets.length !== Math.floor(work.count * 3) ||
+            result.strokeDepth.length !== Math.floor(work.count) ||
+            !Number.isFinite(result.anchorCount) || result.anchorCount < 1) {
+          failWorker()
+          return
+        }
+        cancelPending(work)
+        pending.delete(data.slug)
+        if (!cache.has(data.slug)) cache.set(data.slug, result)
+      }
+      active.onerror = (event) => {
+        event.preventDefault()
+        if (worker === active) failWorker()
+      }
+      active.onmessageerror = () => {
+        if (worker === active) failWorker()
+      }
+      return active
+    } catch {
+      failWorker()
+      return null
+    }
+  }
 
-    const svgText = BRAND_SVG_TEXT.get(slug)
-    cache.set(
-      slug,
-      svgText
-        ? (buildTargets(svgText, count, canvasSize) ?? noiseTargets(count))
-        : noiseTargets(count)
-    )
+  function runIdle(slug: string, work: PendingWork): void {
+    if (disposed || pending.get(slug) !== work || cache.has(slug)) return
+    work.handle = undefined
+    const svgText = BRAND_SVG_TEXT.get(slug)!
+    const active = getWorker()
+    if (active) {
+      const source = readGlyphSource(svgText)
+      if (source) {
+        work.worker = true
+        work.idle = false
+        // Bound a worker that loads but never answers (e.g. a lost renderer).
+        work.handle = scheduleTimeout(failWorker, 10000)
+        try {
+          const request: BrandTargetsRequest = {
+            id: work.id, slug, source, count: work.count, canvasSize: work.canvasSize,
+          }
+          active.postMessage(request)
+        } catch {
+          failWorker()
+        }
+        return
+      }
+    }
+    pending.delete(slug)
+    cache.set(slug, buildTargets(svgText, work.count, work.canvasSize) ?? noiseTargets(work.count))
   }
 
   return {
@@ -460,26 +344,15 @@ export function createBrandTargetSource(): BrandTargetSource {
     },
 
     prefetch(slug: string, count: number, canvasSize?: number): void {
-      if (disposed) return
+      if (disposed || !Number.isFinite(count) || count < 1) return
       if (cache.has(slug) || pending.has(slug)) return
-      // A slug with no asset would only ever produce noise, which is a valid
-      // answer but never worth computing ahead of time.
       if (!BRAND_SVG_TEXT.has(slug)) return
 
-      const size = normaliseCanvasSize(canvasSize)
-      // §6 item 8: off the critical path. The timeout fallback is long enough that
-      // it lands after the frame that asked for it.
-      if (typeof globalThis.requestIdleCallback === 'function') {
-        pending.set(slug, {
-          handle: globalThis.requestIdleCallback(() => runIdle(slug, count, size)),
-          idle: true,
-        })
-      } else {
-        pending.set(slug, {
-          handle: scheduleTimeout(() => runIdle(slug, count, size), 200),
-          idle: false,
-        })
+      const work: PendingWork = {
+        id: ++nextId, count, canvasSize: normaliseCanvasSize(canvasSize), worker: false,
       }
+      pending.set(slug, work)
+      schedule(slug, work)
     },
 
     ensure(slug: string, count: number, canvasSize?: number): BrandTargets | null {
@@ -515,6 +388,7 @@ export function createBrandTargetSource(): BrandTargetSource {
       cache.clear()
       for (const work of pending.values()) cancelPending(work)
       pending.clear()
+      stopWorker()
     },
   }
 }
