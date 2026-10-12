@@ -62,7 +62,7 @@ func (s *OpenAIGatewayService) findOpenAICompatAnthropicDigestPromptCacheKey(acc
 					}
 				}
 			}
-			s.openaiCompatAnthropicDigestSessions.Delete(ns + chain)
+			compareDeleteOpenAICompatEntry(&s.openaiCompatAnthropicDigestSessions, ns+chain, raw)
 		}
 		i := strings.LastIndex(chain, "-")
 		if i < 0 {
@@ -88,6 +88,7 @@ func (s *OpenAIGatewayService) bindOpenAICompatAnthropicDigestPromptCacheKey(acc
 	if oldDigestChain != "" && oldDigestChain != digestChain {
 		s.openaiCompatAnthropicDigestSessions.Delete(ns + oldDigestChain)
 	}
+	s.noteOpenAICompatDigestSessionWrite()
 }
 
 func promptCacheKeyFromAnthropicDigest(digestChain string) string {

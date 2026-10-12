@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -116,6 +117,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 		}
 
 		resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
+		pkghttputil.ReleaseRequestReplay(upstreamReq)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
 			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
@@ -203,6 +205,10 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 		return s.handleErrorResponse(ctx, resp, c, account, patchedBody, upstreamModel)
 	}
 
+	// Retain only the small billing field once request retries are finished.
+	reasoningEffort := extractOpenAIReasoningEffortFromBody(patchedBody, originalModel)
+	patchedBody = nil
+
 	// Attach model so rate-limit snapshots can fan out a team+model cool.
 	stateCtx := withGrokTeamRateLimitModel(ctx, upstreamModel)
 	s.updateGrokUsageFromResponse(stateCtx, account, resp.Header, resp.StatusCode)
@@ -247,7 +253,6 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	if usage == nil {
 		usage = &OpenAIUsage{}
 	}
-	reasoningEffort := extractOpenAIReasoningEffortFromBody(patchedBody, originalModel)
 	result := &OpenAIForwardResult{
 		RequestID:       firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id")),
 		UpstreamHeaders: resp.Header,
@@ -1620,10 +1625,11 @@ func buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Acc
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, nil)
 	if err != nil {
 		return nil, err
 	}
+	pkghttputil.BindReleasableRequestBody(req, body)
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileGrok))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")

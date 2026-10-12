@@ -174,18 +174,18 @@ func (s *OpenAIGatewayService) getOpenAICompatSessionResponseID(_ context.Contex
 	}
 	binding, ok := raw.(openAICompatSessionResponseBinding)
 	if !ok {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
 		return ""
 	}
 	if !binding.ExpiresAt.IsZero() && time.Now().After(binding.ExpiresAt) {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
 		return ""
 	}
 	if binding.ContinuationDisabled {
 		return ""
 	}
 	if strings.TrimSpace(binding.ResponseID) == "" {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
 		return ""
 	}
 	return strings.TrimSpace(binding.ResponseID)
@@ -210,12 +210,14 @@ func (s *OpenAIGatewayService) bindOpenAICompatSessionResponseID(_ context.Conte
 				existing.ResponseID = ""
 				existing.ExpiresAt = time.Now().Add(s.openAIWSResponseStickyTTL())
 				s.openaiCompatSessionResponses.Store(key, existing)
+				s.noteOpenAICompatSessionResponseWrite()
 				return
 			}
 			binding.TurnState = existing.TurnState
 		}
 	}
 	s.openaiCompatSessionResponses.Store(key, binding)
+	s.noteOpenAICompatSessionResponseWrite()
 }
 
 func (s *OpenAIGatewayService) deleteOpenAICompatSessionResponseID(_ context.Context, c *gin.Context, account *Account, promptCacheKey string) {
@@ -232,16 +234,19 @@ func (s *OpenAIGatewayService) deleteOpenAICompatSessionResponseID(_ context.Con
 	}
 	binding, ok := raw.(openAICompatSessionResponseBinding)
 	if !ok {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
+		s.noteOpenAICompatSessionResponseWrite()
 		return
 	}
 	binding.ResponseID = ""
 	if strings.TrimSpace(binding.TurnState) == "" && !binding.ContinuationDisabled {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
+		s.noteOpenAICompatSessionResponseWrite()
 		return
 	}
 	binding.ExpiresAt = time.Now().Add(s.openAIWSResponseStickyTTL())
 	s.openaiCompatSessionResponses.Store(key, binding)
+	s.noteOpenAICompatSessionResponseWrite()
 }
 
 func (s *OpenAIGatewayService) disableOpenAICompatSessionContinuation(_ context.Context, c *gin.Context, account *Account, promptCacheKey string) {
@@ -262,6 +267,7 @@ func (s *OpenAIGatewayService) disableOpenAICompatSessionContinuation(_ context.
 		}
 	}
 	s.openaiCompatSessionResponses.Store(key, binding)
+	s.noteOpenAICompatSessionResponseWrite()
 }
 
 func (s *OpenAIGatewayService) isOpenAICompatSessionContinuationDisabled(_ context.Context, c *gin.Context, account *Account, promptCacheKey string) bool {
@@ -278,11 +284,11 @@ func (s *OpenAIGatewayService) isOpenAICompatSessionContinuationDisabled(_ conte
 	}
 	binding, ok := raw.(openAICompatSessionResponseBinding)
 	if !ok {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
 		return false
 	}
 	if !binding.ExpiresAt.IsZero() && time.Now().After(binding.ExpiresAt) {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
 		return false
 	}
 	return binding.ContinuationDisabled
@@ -305,7 +311,7 @@ func (s *OpenAIGatewayService) getOpenAICompatSessionTurnState(_ context.Context
 		return ""
 	}
 	if !binding.ExpiresAt.IsZero() && time.Now().After(binding.ExpiresAt) {
-		s.openaiCompatSessionResponses.Delete(key)
+		compareDeleteOpenAICompatEntry(&s.openaiCompatSessionResponses, key, raw)
 		return ""
 	}
 	return strings.TrimSpace(binding.TurnState)
@@ -331,4 +337,5 @@ func (s *OpenAIGatewayService) bindOpenAICompatSessionTurnState(_ context.Contex
 		}
 	}
 	s.openaiCompatSessionResponses.Store(key, binding)
+	s.noteOpenAICompatSessionResponseWrite()
 }
