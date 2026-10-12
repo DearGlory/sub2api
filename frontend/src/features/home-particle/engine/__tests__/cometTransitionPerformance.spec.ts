@@ -22,6 +22,12 @@ describe('transition hot-path allocation and bounded CPU work', () => {
         ts.forEachChild(node, inspect)
       }
       const locate = (node: ts.Node): void => {
+        if (filename === 'cometEventField.ts' && ts.isBinaryExpression(node) &&
+          ts.isPropertyAccessExpression(node.left) && node.left.name.text === 'onBeforeRender' && ts.isArrowFunction(node.right)) {
+          inspected.push(`${filename}:onBeforeRender`)
+          inspect(node.right.body)
+          return
+        }
         if ((ts.isMethodDeclaration(node) || ts.isFunctionDeclaration(node)) && node.body &&
           (filename === 'cometTransition.ts' || /^(integrate|updateCometVisual|upload|publishStats|update|smooth)$/.test(node.name?.getText(file) ?? ''))) {
           inspected.push(`${filename}:${node.name?.getText(file)}`)
