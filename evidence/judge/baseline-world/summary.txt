@@ -1,0 +1,52 @@
+status: pass
+exit: 0
+url: http://127.0.0.1:5210/
+tool SHA: d3e16b10dbae5254e12ac2215f5cae2895f722b8
+head source: choreography.state.headX/headY/headZ + points.matrixWorld
+leg 1 claude: worldDelta=[0,0,0] cameraDeltaZ=4.049729999999997 projectionRatio=0.8191254729632853 holdSeconds=3
+leg 2 gemini: worldDelta=[0,0,0] cameraDeltaZ=4.049730000000011 projectionRatio=0.8200253777798767 holdSeconds=3
+leg 3 grok: worldDelta=[0,0,0] cameraDeltaZ=4.049729999999997 projectionRatio=0.8122205441654432 holdSeconds=3
+leg 4 deepseek: worldDelta=[0,0,0] cameraDeltaZ=4.049730000000011 projectionRatio=0.81069505675497 holdSeconds=3
+pass: actual-source
+pass: gpu-position3-color4-scale
+pass: sample-coverage
+pass: head-final-geometry-agreement
+pass: finite
+pass: camera-always-plus-Z
+pass: camera-150-152.2
+pass: hold-world-freeze-1
+pass: hold-perspective-shrink-1
+pass: hold-three-seconds-1
+pass: glyph-final-geometry-1
+pass: paired-PNG-1
+pass: hold-world-freeze-2
+pass: hold-perspective-shrink-2
+pass: hold-three-seconds-2
+pass: glyph-final-geometry-2
+pass: paired-PNG-2
+pass: hold-world-freeze-3
+pass: hold-perspective-shrink-3
+pass: hold-three-seconds-3
+pass: glyph-final-geometry-3
+pass: paired-PNG-3
+pass: hold-world-freeze-4
+pass: hold-perspective-shrink-4
+pass: hold-three-seconds-4
+pass: glyph-final-geometry-4
+pass: paired-PNG-4
+pass: gather-hold-early-scatter-freeze
+pass: four-consecutive-flights
+pass: XZ-movement-support
+pass: flight-no-rest-plus-Z
+pass: X-one-sign-flip-at-departure
+pass: stop-at-fitGap
+pass: capture-band
+pass: fixed-world-subject-groups
+pass: tail-real-births
+pass: tail-world-inertia
+pass: tail-axis-world-plus-Z
+pass: draw-budget
+pass: geometry-budget
+pass: normal-RAF-recording
+pass: served-source-stable
+

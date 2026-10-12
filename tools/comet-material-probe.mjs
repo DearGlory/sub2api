@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import net from 'node:net'
+import { gzipSync } from 'node:zlib'
 import { CDP, connect, launchChrome } from './tail-probe-lib/cdp.mjs'
 import { installSpaceProbe } from './space-pursuit-lib/page.mjs'
 import { installMaterialProbe } from './comet-material-page.mjs'
@@ -11,7 +12,8 @@ for(const k of ['url','out','port','w','h','theme'])if(!args[k])throw Error('req
 if(!['light','dark'].includes(args.theme))throw Error('theme must be light/dark')
 const out=path.resolve(args.out),port=Number(args.port),width=Number(args.w),height=Number(args.h)
 await fs.mkdir(out,{recursive:true})
-const save=(name,v)=>fs.writeFile(path.join(out,name),JSON.stringify(v,null,2)),hash=b=>crypto.createHash('sha256').update(b).digest('hex')
+const save=(name,v)=>fs.writeFile(path.join(out,name),JSON.stringify(v,(key,value)=>['positions','glyph','source','offsets','glyphFlow','births'].includes(key)&&Array.isArray(value)?{externalRawGeometry:true,count:value.length}:value,2)),hash=b=>crypto.createHash('sha256').update(b).digest('hex')
+async function rawGeometry(name,row){const file=name+'.json.gz',bytes=gzipSync(JSON.stringify(row));await fs.writeFile(path.join(out,file),bytes);return {file,sha256:hash(bytes)}}
 const data={schema:1,url:args.url,width,height,theme:args.theme,limits:LIMITS,started:new Date().toISOString(),travel:[],runs:[],hold:[],errors:[],checks:[]}
 const modules=['ParticleEngine','emittedTail','cometVisualContract','cometVisual','cometSurface','cometVolume','cometTransition','spaceMotion','spaceMotionContract','flightPath','flightTiming','choreography','constants','types']
 async function sources(label){const rows=[];await fs.mkdir(path.join(out,label),{recursive:true});for(const name of modules){const r=await fetch(new URL('/src/features/home-particle/engine/'+name+'.ts',args.url));const text=await r.text();await fs.writeFile(path.join(out,label,name+'.js'),text);rows.push({name,status:r.status,sha256:hash(text),module:r.ok&&!text.trimStart().startsWith('<')})}return rows}
@@ -41,10 +43,17 @@ try{
     const subjects=inventory.filter(o=>o.body||o.tail||o.isMesh)
     for(let i=0;i<subjects.length;i++){const o=subjects[i],s=await shot(label+'-object'+i,[o.uuid]);contributions[o.uuid]=pixels(s.png,empty.png);files.push({uuid:o.uuid,file:s.file,sha256:s.sha256,frozen:s.frozen})}
     // Surface + local coma: exclude tail proxy volumes by world span, never by object name.
-    const bodyIds=subjects.filter(o=>o.body||o.isMesh&&Math.max(...o.span)<=4).map(o=>o.uuid)
+    const bodyIds=subjects.filter(o=>o.body||o.isMesh&&o.materials.some(m=>/#define IS_COMA 1\b/.test(m.fragment||'')||m.uniforms.uLightDirection)).map(o=>o.uuid)
+    const lighting={}
+    for(const o of subjects.filter(o=>o.isMesh&&o.normalCount>0)){
+      const control=await ev('__MATERIAL_PROBE.lightControl('+JSON.stringify(o.uuid)+',true)')
+      if(control.status==='observed')try{const reversed=await shot(label+'-reverse-light',[o.uuid]),original=await fs.readFile(path.join(out,files.find(f=>f.uuid===o.uuid).file));lighting[o.uuid]={...control,difference:pixels(reversed.png,original),file:reversed.file};files.push({file:reversed.file,sha256:reversed.sha256,frozen:reversed.frozen})}finally{await ev('__MATERIAL_PROBE.lightControl('+JSON.stringify(o.uuid)+',false)')}
+      else lighting[o.uuid]=control
+    }
     const body=await shot(label+'-body',bodyIds),all=await shot(label+'-subjects',subjects.map(o=>o.uuid))
     files.push({file:body.file,sha256:body.sha256,frozen:body.frozen},{file:all.file,sha256:all.sha256,frozen:all.frozen})
-    data.travel.push({label,pose,inventory,contributions,bodyIds,bodyPixels:pixels(body.png,empty.png),files,geometry:await ev('__MATERIAL_PROBE.geometry()')})
+    const geometry=await ev('__MATERIAL_PROBE.geometry()');geometry.raw=await rawGeometry(label+'-geometry',geometry)
+    data.travel.push({label,pose,inventory,contributions,lighting,bodyIds,bodyPixels:pixels(body.png,empty.png),files,geometry})
     console.log('captured',label)
   }
   const cadences=args.dt?[args.dt.split(',').map(Number)]:[[1/60],[1/30],[.008,.024,.016]]
@@ -54,9 +63,9 @@ try{
     for(const kind of ['gather','hold','scatter']){
       const qs=kind==='gather'?[0,.05,.1,.18,.25,.4,.7,1]:kind==='scatter'?[0,.05,.2,.4,.5,.6,.8,.92,.99,1]:[0,1]
       for(const q of qs){const t=leg*12+(kind==='gather'?6.5+Math.min(1.4-1e-7,q*1.4)+1e-8:kind==='hold'?7.9+q*(3-1e-7)+1e-8:10.9+q*1.1*.62+1e-9)
-        await step(t,cadences[ri]);const row=await ev('__MATERIAL_PROBE.geometry()');Object.assign(row,{kind,q})
-        if(kind==='hold'){if(ri===0)data.hold.push(row)}else run.rows.push(row)
-        if(ri===0){const inv=await ev('__MATERIAL_PROBE.inventory()'),s=await shot(kind+'-q'+q,inv.filter(o=>o.body||o.tail||o.isMesh).map(o=>o.uuid));run.files.push({kind,q,t,file:s.file,sha256:s.sha256,frozen:s.frozen})}
+        await step(t,cadences[ri]);const row=await ev('__MATERIAL_PROBE.geometry()');Object.assign(row,{kind,q});row.raw=await rawGeometry(run.name+'-'+kind+'-'+q,row)
+        if(kind==='hold'){if(ri===0){row.inventory=await ev('__MATERIAL_PROBE.inventory()');data.hold.push(row)}}else run.rows.push(row)
+        if(ri===0){const inv=await ev('__MATERIAL_PROBE.inventory()'),s=await shot(kind+'-q'+q,inv.filter(o=>o.body||o.tail||o.isMesh).map(o=>o.uuid)),empty=await shot(kind+'-q'+q+'-empty',[]);run.files.push({kind,q,t,file:s.file,sha256:s.sha256,frozen:s.frozen,pixels:pixels(s.png,empty.png),emptyFile:empty.file})}
       }
     }
     data.runs.push(run);await save('observations.json',data);console.log('sampled',run.name)
