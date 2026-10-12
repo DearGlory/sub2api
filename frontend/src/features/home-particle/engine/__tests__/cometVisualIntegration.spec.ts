@@ -8,10 +8,16 @@ import type { Choreography } from '../types'
 
 const rendererControl = vi.hoisted(() => ({ fail: false }))
 
-// The production factory remains mandatory. This file alone supplies a test factory.
-vi.mock('../cometVisual', () => ({
-  createCometVisual: vi.fn(() => ({ object: new Group(), geometryBytes: 123456, update: vi.fn(), dispose: vi.fn() })),
-}))
+// Exercise the real graph; spies only observe calls and inject explicit failures.
+vi.mock('../cometVisual', async importOriginal => {
+  const actual = await importOriginal<typeof import('../cometVisual')>()
+  return { createCometVisual: vi.fn((options: import('../cometVisualContract').CometVisualOptions) => {
+    const visual = actual.createCometVisual(options)
+    vi.spyOn(visual, 'update')
+    vi.spyOn(visual, 'dispose')
+    return visual
+  }) }
+})
 vi.mock('../starfield', () => ({
   createStarfield: () => ({ object: new Group(), update: vi.fn(), setTheme: vi.fn(), setReducedMotion: vi.fn(), dispose: vi.fn() }),
 }))
@@ -88,7 +94,7 @@ function radial(h: ReturnType<typeof harness>) {
   return { mean: sum / radii.length, median: radii[radii.length / 2], max: radii[radii.length - 1], depth: zMax - zMin }
 }
 
-describe('required comet model integration (explicit isolated factory mock)', () => {
+describe('required comet model integration (real production graph)', () => {
   it('constructs the model, updates one frame with the real pool, counts bytes and releases it once', () => {
     const h = harness()
     expect(createCometVisual).toHaveBeenLastCalledWith({ particleCount: 1024, light: false, reducedMotion: false })
@@ -104,7 +110,11 @@ describe('required comet model integration (explicit isolated factory mock)', ()
     expect(h.engine.tailPoints.geometry.getAttribute('position').itemSize).toBe(3)
     expect(h.engine.tailPoints.geometry.getAttribute('color').itemSize).toBe(4)
     const bytes = h.s.positions.byteLength + h.s.colors.byteLength + h.s.body.spriteScale.byteLength + h.s.emittedTail.positions.byteLength + h.s.emittedTail.colors.byteLength
-    expect(h.engine.getStats().geometryBytes).toBe(bytes + 123456)
+    const events = h.engine.cometVisual.object.children.filter(o =>
+      'material' in o && 'uniforms' in (o.material as object) &&
+      'uEventMode' in (o.material as import('three').ShaderMaterial).uniforms)
+    expect(events).toHaveLength(1)
+    expect(h.engine.getStats().geometryBytes).toBe(bytes + h.engine.cometVisual.geometryBytes)
     const firstTime = frame.time
     h.render('scatter', 0.62)
     expect(h.access.cometVisualFrame).toBe(frame)

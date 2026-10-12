@@ -1,14 +1,15 @@
-import { Group } from 'three'
-import { vi } from 'vitest'
+import { afterEach } from 'vitest'
 import { SUBJECT_Z } from '../constants'
-import type { CometVisual, CometVisualFrame } from '../cometVisualContract'
+import { createCometVisual } from '../cometVisual'
+import type { CometVisualFrame } from '../cometVisualContract'
 
-/** Explicit CPU-only fixture. Never installed in or selected by production code. */
+const visuals: ReturnType<typeof createCometVisual>[] = []
+afterEach(() => { for (const visual of visuals.splice(0)) visual.dispose() })
+
+/** Real production graph even in CPU tests; only the renderer is absent. */
 export function cometVisualFixture(light = false) {
-  const cometVisual: CometVisual = {
-    object: new Group(), geometryBytes: 512,
-    update: vi.fn(), dispose: vi.fn(),
-  }
+  const cometVisual = createCometVisual({ particleCount: 128, light, reducedMotion: false })
+  visuals.push(cometVisual)
   cometVisual.object.position.z = SUBJECT_Z
   const cometVisualFrame: CometVisualFrame = {
     phase: 'travel', progress: 0, time: 0, delta: 0,
