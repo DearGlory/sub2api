@@ -1,4 +1,5 @@
 import { pixels, resultStatus } from './comet-material-checks.mjs'
+import { loadedSourceCheck } from './comet-impact-source-checks.mjs'
 export { pixels, resultStatus }
 export const IMPACT = Object.freeze({ sizeMin:1.1, sizeMax:1.3, nucleusRatio:.9/.72, comaRadius:1.836, minPixels:12, world:1e-5, drawCalls:10, geometryBytes:3500000 })
 export const PHASES = Object.freeze({gather:[0,.05,.1,.18,.25,.4,.55,.8,1],scatter:[0,.15,.35,.5,.7,.85,1]})
@@ -70,8 +71,7 @@ export function judgeImpact(data,baseline) {
   add('baseline-artifacts',baseline.verified===true,baseline.provenance,'instrument-invalid')
   add('frozen-original-motion',data.motion?.status==='pass',data.motion,'instrument-invalid')
   add('sources-stable',data.sourceStable===true,data.sourceStable,'instrument-invalid')
-  const loaded=data.sources?.filter(s=>s.module&&!s.erased).map(s=>({name:s.name,original:s.originalSha256,matches:data.loaded?.filter(l=>new URL(l.url).pathname.endsWith('/'+s.name+'.ts')).every(l=>l.originalSha256===s.originalSha256),count:data.loaded?.filter(l=>new URL(l.url).pathname.endsWith('/'+s.name+'.ts')).length}))
-  add('actual-loaded-original-sources',loaded?.length>0&&loaded.every(s=>s.original&&s.matches&&s.count>0),loaded,'instrument-invalid')
+  checks.push(loadedSourceCheck(data))
   add('requested-theme',data.actualTheme?.engineLight===(data.theme==='light'),data.actualTheme,'instrument-invalid')
   add('travel-coverage',data.travel?.length===4,data.travel?.map(r=>r.label),'instrument-invalid')
   for(const row of data.travel||[]){
