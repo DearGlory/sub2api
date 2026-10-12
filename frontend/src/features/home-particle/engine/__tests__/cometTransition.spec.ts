@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCometBody } from '../emittedTail'
 import { writeCometTransition } from '../cometTransition'
+import { COMET_COMA_RADIUS } from '../cometVisualContract'
 
 const count = 1024
 const body = createCometBody(count)
@@ -102,7 +103,7 @@ describe('deterministic internal ejection and gravitational collapse', () => {
     const ratio = (samples[3].mean - samples[6].mean) / (samples[0].mean - samples[3].mean)
     expect(ratio).toBeGreaterThanOrEqual(1.8)
     expect(samples[3].depth).toBeGreaterThan(samples[0].depth + 1)
-    expect(samples[6].max).toBeLessThanOrEqual(1.53)
+    expect(samples[6].max).toBeLessThanOrEqual(COMET_COMA_RADIUS)
     console.info('scatter radial evidence', { samples, secondHalfSpeedRatio: ratio })
   })
 

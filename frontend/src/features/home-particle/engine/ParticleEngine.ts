@@ -1729,7 +1729,12 @@ export class ParticleEngine implements ParticleEngineContract {
       colors[colorIndex] = cr > cap ? cap : cr
       colors[colorIndex + 1] = cg > cap ? cap : cg
       colors[colorIndex + 2] = cb > cap ? cap : cb
-      const spriteScale = 1 + cometMix * (this.light ? 0.35 : s.body.spriteSize[i] - 1)
+      const flightScale = 1 + cometMix * (this.light ? 0.35 : s.body.spriteSize[i] - 1)
+      // Keep transition dust compact enough to read as individual moving strands.
+      // The coverage channel remains area-normalised, preserving endpoint energy.
+      const eventCoverage = phase === 'gather' || phase === 'scatter'
+        ? Math.sin(Math.PI * shapeProgress) ** 2 : 0
+      const spriteScale = flightScale + (Math.min(flightScale, 1.5) - flightScale) * eventCoverage
       s.body.spriteScale[i] = spriteScale
       colors[colorIndex + 3] = alpha / (spriteScale * spriteScale)
     }

@@ -9,7 +9,7 @@ describe('transition hot-path allocation and bounded CPU work', () => {
   it('has no constructors, literals, closures or allocating array helpers in the changed hot path', () => {
     const violations: string[] = []
     const inspected: string[] = []
-    for (const filename of ['ParticleEngine.ts', 'cometTransition.ts']) {
+    for (const filename of ['ParticleEngine.ts', 'cometTransition.ts', 'cometEventField.ts']) {
       const path = resolve('src/features/home-particle/engine', filename)
       const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true)
       const inspect = (node: ts.Node): void => {
@@ -23,7 +23,7 @@ describe('transition hot-path allocation and bounded CPU work', () => {
       }
       const locate = (node: ts.Node): void => {
         if ((ts.isMethodDeclaration(node) || ts.isFunctionDeclaration(node)) && node.body &&
-          (filename === 'cometTransition.ts' || /^(integrate|updateCometVisual|upload|publishStats)$/.test(node.name?.getText(file) ?? ''))) {
+          (filename === 'cometTransition.ts' || /^(integrate|updateCometVisual|upload|publishStats|update|smooth)$/.test(node.name?.getText(file) ?? ''))) {
           inspected.push(`${filename}:${node.name?.getText(file)}`)
           inspect(node.body)
           return

@@ -9,6 +9,11 @@ function smooth(q: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
+function smoothAttitude(q: number): number {
+  const t = unit(q)
+  return t * t * (3 - 2 * t)
+}
+
 /** Gravity accelerates until the final eight percent, then settles with C1 continuity. */
 export function collapseProgress(q: number): number {
   const t = unit(q)
@@ -83,14 +88,14 @@ export function writeCometTransition(
     out[0] = bx + (glyphX - bx) * capture
     out[1] = by + (glyphY - by) * capture
     out[2] = bz + (glyphZ - bz) * capture
-    // Reveal sparse fragments as their projected area opens, then cool into the
-    // original glyph coverage. A small, independently salted minority stays warm.
-    const reveal = smooth(t / 0.18)
-    const cooling = Math.exp(-Math.max(0, t - 0.18) * 5)
-    const fragmentAlpha = sourceAlpha + (0.20 - sourceAlpha) * reveal * cooling
+    // Pressure opens the cloud before cooling. Keep individual dust strands
+    // readable through mid-burst; normalised point area limits overlap energy.
+    const reveal = smooth(t / 0.085)
+    const cooling = 1 - smooth((t - 0.24) / 0.48)
+    const fragmentAlpha = sourceAlpha + (0.38 + salt * 0.22 - sourceAlpha) * reveal * cooling
     out[3] = fragmentAlpha + (1 - fragmentAlpha) * capture
     out[4] = capture
-    out[5] = salt > 0.93 ? reveal * cooling * (1 - capture) * 0.65 : 0
+    out[5] = salt > 0.9 ? reveal * cooling * (1 - capture) * 0.5 : 0
     return
   }
 
@@ -102,20 +107,28 @@ export function writeCometTransition(
   const coreRadius = Math.hypot(cx, cy, cz)
   const sourceAngle = Math.atan2(y, x)
   const coreAngle = Math.atan2(cy, cx)
-  const angleDelta = Math.atan2(Math.sin(coreAngle - sourceAngle), Math.cos(coreAngle - sourceAngle))
   const sourceLatitude = Math.atan2(z, Math.hypot(x, y))
   const coreLatitude = Math.atan2(cz, Math.hypot(cx, cy))
-  const spin = (2.2 + salt * 1.6) * t
-  const angle = sourceAngle + angleDelta * c + spin * remain
-  // Tilting the spiral changes depth without injecting radial energy. Radius is
-  // strictly interpolated, so the inward motion cannot start with another burst.
-  const latitude = sourceLatitude * remain + coreLatitude * c +
-    Math.sin(sourceAngle + spin) * Math.sin(Math.PI * t) * 0.62 * remain
+  // Integrated positive angular velocity; it never multiplies a shrinking radius
+  // envelope. Large-radius orbits know nothing about the final core orientation.
+  const spin = (1.8 + salt * 0.8) * (0.15 * t + 0.85 * t * t * t)
+  const orbitAngle = sourceAngle + spin
   const radius = sourceRadius + (coreRadius - sourceRadius) * c
+  // Dock attitude only within 1.2 units of the final radius. Passing through
+  // the latitude pole makes the azimuth change spatially C1-continuous, including
+  // source angles across +/-pi; no branch-selected full turn can pop the orbit.
+  const settleStart = Math.max(0.72, 1 - 1.2 / Math.max(sourceRadius, 1.2))
+  const settle = unit((c - settleStart) / (1 - settleStart))
+  const orbitLatitude = sourceLatitude + Math.sin(orbitAngle) * Math.sin(Math.PI * t) * 0.62
+  const angle = settle <= 0.5 ? orbitAngle : coreAngle
+  const latitude = settle <= 0.5
+    ? orbitLatitude + (Math.PI / 2 - orbitLatitude) * smoothAttitude(settle * 2)
+    : Math.PI / 2 + (coreLatitude - Math.PI / 2) * smoothAttitude(settle * 2 - 1)
   const planarRadius = radius * Math.cos(latitude)
   out[0] = headX + Math.cos(angle) * planarRadius
   out[1] = headY + Math.sin(angle) * planarRadius
   out[2] = headZ + Math.sin(latitude) * radius
-  out[3] = coreAlpha + (sourceAlpha - coreAlpha) * remain * remain
+  const coverage = (1 - 0.52 * smooth(t / 0.48)) * (1 - smooth((c - 0.76) / 0.24))
+  out[3] = coreAlpha + (sourceAlpha - coreAlpha) * coverage
   out[4] = remain
 }
