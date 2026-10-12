@@ -42,6 +42,6 @@ export interface CometVisualOptions {
   readonly reducedMotion: boolean
 }
 
-export const COMET_VOLUME_SCALE = 1.5
-export const COMET_SURFACE_RADIUS = 0.72
-export const COMET_COMA_RADIUS = 1.53
+export const COMET_VOLUME_SCALE = 1.8
+export const COMET_SURFACE_RADIUS = 0.9
+export const COMET_COMA_RADIUS = 1.836
