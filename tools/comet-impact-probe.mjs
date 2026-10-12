@@ -2,13 +2,11 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import net from 'node:net'
 import { CDP, connect, launchChrome } from './tail-probe-lib/cdp.mjs'
-import { installSpaceProbe } from './space-pursuit-lib/page.mjs'
-import { installMaterialProbe } from './comet-material-page.mjs'
-import { installImpactProbe } from './comet-impact-page.mjs'
+import { createSourceCapture, fetchImpactSources, installImpactWithSources } from './comet-impact-sources.mjs'
 import { createCapture } from './comet-impact-capture.mjs'
 import { volumeProvenance } from './comet-material-volume.mjs'
 import { PHASES, judgeImpact, resultStatus } from './comet-impact-checks.mjs'
-import { loadBaseline, motionEvidence, hash, original, FROZEN, git } from './comet-impact-baseline.mjs'
+import { loadBaseline, motionEvidence, git } from './comet-impact-baseline.mjs'
 const args=Object.fromEntries(process.argv.slice(2).reduce((a,v,i,s)=>v.startsWith('--')?[...a,[v.slice(2),s[i+1]]]:a,[]))
 for(const k of ['url','out','port','w','h','theme','baseline'])if(!args[k])throw Error('required --'+k)
 if(!['light','dark'].includes(args.theme))throw Error('theme must be light/dark')
@@ -18,11 +16,10 @@ if(!out.replaceAll('\\','/').startsWith('E:/Global-session/xiao-20261013-025234/
 await fs.mkdir(out,{recursive:true})
 const data={schema:1,toolSHA:git('rev-parse','HEAD').trim(),scope:'independent impact observations; original world/material regressions remain separate',url:args.url,width,height,theme:args.theme,started:new Date().toISOString(),travel:[],phases:[],errors:[],checks:[]}
 const save=()=>fs.writeFile(path.join(out,'result.json'),JSON.stringify(data,null,2))
-const modules=[...FROZEN,'ParticleEngine','cometVisualContract','cometVisual','cometSurface','cometVolume','cometTransition','cometEventField']
-async function sources(label){await fs.mkdir(path.join(out,label),{recursive:true});return Promise.all(modules.map(async name=>{const response=await fetch(new URL('/src/features/home-particle/engine/'+name+'.ts',args.url)),text=await response.text(),raw=original(text),module=response.ok&&!text.trimStart().startsWith('<');await fs.writeFile(path.join(out,label,name+'.js'),text);if(raw!==null)await fs.writeFile(path.join(out,label,name+'.original.ts'),raw);return {name,status:response.status,module,sha256:hash(text),originalSha256:raw===null?null:hash(raw),erased:module&&text.length===0}}))}
-let browser,ws,cdp
+const sources=label=>fetchImpactSources({url:args.url,out,label})
+let browser,ws,cdp,sourceCapture
 const ev=async s=>{const r=await cdp.eval(s);if(r?.__error)throw Error(r.__error);return r}
-async function install(){await cdp.send('Page.navigate',{url:args.url});await ev('new Promise((r,j)=>{let n=0;const tick=()=>window.__SUB2API_PARTICLE_ENGINE__?.currentBrandSlug?r(true):++n>200?j(Error("missing dev engine")):setTimeout(tick,100);tick()})');await ev('('+installSpaceProbe.toString()+')()');await ev('__SPACE_PROBE.stop()');await ev('('+installMaterialProbe.toString()+')()');return ev('('+installImpactProbe.toString()+')()')}
+const install=()=>installImpactWithSources({capture:sourceCapture,ev,url:args.url})
 try{
   const baseline=await loadBaseline(args.baseline,out);data.baseline=baseline.provenance
   data.sources=await sources('source-start');const engineSource=data.sources.find(r=>r.name==='ParticleEngine');engineSource.originalText=await fs.readFile(path.join(out,'source-start/ParticleEngine.original.ts'),'utf8');data.motion=await motionEvidence(data.sources,out);delete engineSource.originalText
@@ -30,7 +27,8 @@ try{
   await new Promise((r,j)=>{const s=net.createServer();s.once('error',j);s.listen(port,'127.0.0.1',()=>s.close(r))})
   browser=launchChrome({port,profile:path.join(out,'profile'),chrome:args.chrome||'C:/Program Files/Google/Chrome/Application/chrome.exe',w:width,h:height,extra:['--disable-background-timer-throttling','--disable-renderer-backgrounding']})
   ws=new WebSocket(await connect(port));await new Promise((r,j)=>{ws.addEventListener('open',r,{once:true});ws.addEventListener('error',j,{once:true})});cdp=new CDP(ws)
-  const loaded=[];ws.addEventListener('message',event=>{const m=JSON.parse(event.data);if(m.method==='Runtime.exceptionThrown'||m.method==='Log.entryAdded'&&m.params.entry.level==='error'||m.method==='Runtime.consoleAPICalled'&&m.params.type==='error')data.errors.push(m);if(m.method==='Network.responseReceived'&&/\/engine\//.test(m.params.response.url))loaded.push({requestId:m.params.requestId,url:m.params.response.url})})
+  ws.addEventListener('message',event=>{const m=JSON.parse(event.data);if(m.method==='Runtime.exceptionThrown'||m.method==='Log.entryAdded'&&m.params.entry.level==='error'||m.method==='Runtime.consoleAPICalled'&&m.params.type==='error')data.errors.push(m)})
+  sourceCapture=createSourceCapture({cdp,ws,out,data})
   for(const domain of ['Page','Runtime','Log','Network'])await cdp.send(domain+'.enable')
   await cdp.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<600})
   await cdp.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:args.theme},{name:'prefers-reduced-motion',value:'no-preference'}]})
@@ -54,10 +52,14 @@ try{
       data.phases.push(row);await save();console.log('captured',row.label,row.eventPixels.count,'event pixels',row.shadow.shadowPixels,'shadow pixels')
     }
   }
-  data.loaded=[]
-  for(const row of loaded){try{const r=await cdp.send('Network.getResponseBody',{requestId:row.requestId}),text=r.base64Encoded?Buffer.from(r.body,'base64').toString():r.body,file='loaded-'+data.loaded.length+'.js';await fs.writeFile(path.join(out,file),text);data.loaded.push({...row,file,sha256:hash(text),originalSha256:original(text)===null?null:hash(original(text))})}catch(error){data.loaded.push({...row,error:String(error)})}}
+  await sourceCapture.checkpoint('after-captures')
   if(Number(args['record-seconds'])>=36){const {recordNormal}=await import('./space-pursuit-lib/record.mjs');data.normalRAF=await recordNormal({cdp,ws,evaluate:ev,out,seconds:Number(args['record-seconds'])})}
   data.sourcesEnd=await sources('source-end');data.sourceStable=data.sources.every((r,i)=>r.sha256===data.sourcesEnd[i].sha256)
+  await sourceCapture.close();sourceCapture=null
   data.checks=judgeImpact(data,baseline);data.status=resultStatus(data.checks)
 }catch(error){data.error=String(error.stack);data.checks.push({id:'instrument',status:'instrument-invalid',detail:data.error});data.status='instrument-invalid'}
-finally{if(cdp)try{await ev('__IMPACT_PROBE?.restore()');await cdp.send('Browser.close')}catch{}ws?.close();browser?.kill();data.finished=new Date().toISOString();data.exitCode={pass:0,fail:1,'instrument-invalid':2,skip:3}[data.status]??2;await save();const summary=[`status: ${data.status}`,`implementation: ${data.sourceImplementation}`,...data.checks.map(c=>`${c.status}: ${c.id}`),data.error||''].join('\n');await fs.writeFile(path.join(out,'summary.txt'),summary);console.log(summary);process.exitCode=data.exitCode}
+finally{
+  if(sourceCapture)try{await sourceCapture.close()}catch(error){data.checks.push({id:'source-capture-close',status:'instrument-invalid',detail:String(error)});data.status='instrument-invalid'}
+  if(cdp){try{await ev('window.__IMPACT_PROBE?.restore()')}catch{}try{await cdp.send('Browser.close')}catch{}}
+  ws?.close();browser?.kill();data.finished=new Date().toISOString();data.exitCode={pass:0,fail:1,'instrument-invalid':2,skip:3}[data.status]??2;await save();const summary=[`status: ${data.status}`,`implementation: ${data.sourceImplementation}`,...data.checks.map(c=>`${c.status}: ${c.id}`),data.error||''].join('\n');await fs.writeFile(path.join(out,'summary.txt'),summary);console.log(summary);process.exitCode=data.exitCode
+}
