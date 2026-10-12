@@ -72,6 +72,7 @@ import {
 } from '../vendor/voxspace-math'
 
 import { createBrandTargetSource } from './brandTargets'
+import { EmittedTail, createCometBody } from './emittedTail'
 import { createChoreography, staggeredGlyphMix, type Point3 } from './choreography'
 import {
   AMPLITUDE_X,
@@ -85,7 +86,6 @@ import {
   DOLLY_WRAP_SECONDS,
   FRICTION,
   GATHER_SECONDS,
-  HEAD_CORE_LEAD,
   HEAD_CORE_RADIUS,
   HEAD_CORE_SHARE,
   HOLD_SECONDS,
@@ -113,6 +113,7 @@ import {
   TAIL_SPEED_JITTER,
   TAIL_SPREAD,
 } from './constants'
+import { COALESCE_END, departureSeconds } from './flightTiming'
 import { createQualityProfile, probeQualityProfile } from './quality'
 import { GLYPH_MIN_BBOX_ASPECT, fitDistanceForRoster, requiredGlyphWorldSize } from './glyphSize'
 import { createStarfield } from './starfield'
@@ -275,6 +276,8 @@ export function paletteFor(isLightTheme: boolean): ThemePalette {
 // ---------------------------------------------------------------------------
 
 interface EngineScratch {
+  emittedTail: EmittedTail
+  body: ReturnType<typeof createCometBody>
   positions: Float32Array
   velocities: Float32Array
   /** RGBA vertex colours; alpha is the actual lifetime visibility channel. */
@@ -495,6 +498,8 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
   }
 
   return {
+    emittedTail: new EmittedTail(Math.max(1, Math.floor(count * (1 - HEAD_CORE_SHARE)))),
+    body: createCometBody(count),
     // The opening frame is a wide scatter that the spring pulls into the first
     // comet, so the background assembles itself instead of popping into being.
     positions: createInitialScatterTargets(count),
@@ -872,6 +877,10 @@ export class ParticleEngine implements ParticleEngineContract {
   private readonly points: Points
   private readonly geometry: BufferGeometry
   private readonly material: PointsMaterial
+  /** Dev-observable: independent final GPU buffers, never glyph targets. */
+  readonly tailPoints: Points
+  private readonly tailGeometry: BufferGeometry
+  private readonly tailMaterial: PointsMaterial
 
   private readonly choreography: Choreography
   private readonly starfield: Starfield
@@ -879,12 +888,6 @@ export class ParticleEngine implements ParticleEngineContract {
   private readonly ownsBrandSource: boolean
 
   private readonly scratch: EngineScratch
-  /**
-   * Scratch output for {@link writeTailParticlePosition}, so the per-particle emission
-   * step allocates nothing. A `Float32Array` rather than a `Vector3` because the write
-   * path is three indexed stores, with no method call in the hot loop.
-   */
-  private readonly tailPoint = new Float32Array(3)
   /** One object, mutated in place and republished every frame (see §6 item 2). */
   private readonly stats: EngineStats
 
@@ -991,6 +994,17 @@ export class ParticleEngine implements ParticleEngineContract {
     this.points.position.set(0, 0, SUBJECT_Z)
     this.points.frustumCulled = false
     this.scene.add(this.points)
+
+    this.tailGeometry = new BufferGeometry()
+    this.tailGeometry.setAttribute('position', new BufferAttribute(this.scratch.emittedTail.positions, 3).setUsage(DynamicDrawUsage))
+    this.tailGeometry.setAttribute('color', new BufferAttribute(this.scratch.emittedTail.colors, 4).setUsage(DynamicDrawUsage))
+    this.tailMaterial = this.material.clone()
+    this.tailMaterial.size = this.palette.pointSize * 0.78
+    this.tailPoints = new Points(this.tailGeometry, this.tailMaterial)
+    this.tailPoints.name = 'causal-emitted-tail'
+    this.tailPoints.frustumCulled = false
+    this.tailPoints.position.copy(this.points.position)
+    this.scene.add(this.tailPoints)
 
     this.starfield = createStarfield({
       count: this.quality.starCount,
@@ -1100,6 +1114,10 @@ export class ParticleEngine implements ParticleEngineContract {
     this.material.size = this.palette.pointSize
     this.material.opacity = this.palette.opacity
     this.material.needsUpdate = true
+    this.tailMaterial.blending = this.palette.blending
+    this.tailMaterial.size = this.palette.pointSize * 0.78
+    this.tailMaterial.opacity = this.palette.opacity
+    this.tailMaterial.needsUpdate = true
     this.renderer.setClearColor(this.palette.background, isLightTheme ? 1 : 0)
     this.starfield.setTheme(isLightTheme)
     // Colours are rewritten every frame, so the next tick picks the palette up.
@@ -1199,6 +1217,9 @@ export class ParticleEngine implements ParticleEngineContract {
     this.unbindContextLoss()
 
     this.scene.remove(this.points)
+    this.scene.remove(this.tailPoints)
+    this.tailGeometry.dispose()
+    this.tailMaterial.dispose()
     this.scene.remove(this.starfield.object)
     this.starfield.dispose()
 
@@ -1374,7 +1395,7 @@ export class ParticleEngine implements ParticleEngineContract {
     try {
       this.advanceClock(clockStep)
       this.writeEmissionTable()
-      this.integrate(frameStep, now / 1000)
+      this.integrate(frameStep, now / 1000, clockStep)
       this.upload()
       this.advanceCamera()
       this.starfield.update(clockStep, this.camera.position.z, now / 1000)
@@ -1472,31 +1493,10 @@ export class ParticleEngine implements ParticleEngineContract {
    * needs is preallocated in `scratch`, so the frame allocates nothing.
    */
   private writeEmissionTable(): void {
-    const table = this.scratch.tailTable
-    fillEmissionTable(table, this.choreography, this.scratch.probePoint)
-    const state = this.choreography.state
-    const outgoing = state.phase === 'scatter' || state.phase === 'hold'
-    const direction = (state.toX > state.fromX ? 1 : -1) * (outgoing ? -1 : 1)
-    const dx = direction * 2 * AMPLITUDE_X
-    const dy = direction * Math.PI * 2 * SWAY_Y * swayAspectScale(this.width / this.height)
-    const length = Math.hypot(dx, dy)
-    // A stationary emitter still has an orientation. Use the departure tangent;
-    // previously the zero-velocity fallback always sprayed to the same side.
-    for (let k = 0; k < table.xyz.length; k += 3) {
-      if (Math.hypot(table.vel[k], table.vel[k + 1], table.vel[k + 2]) > 1e-6) continue
-      table.axis[k] = -dx / length
-      table.axis[k + 1] = -dy / length
-      table.axis[k + 2] = 0
-      table.side1[k] = dy / length
-      table.side1[k + 1] = -dx / length
-      table.side1[k + 2] = 0
-      table.side2[k] = 0
-      table.side2[k + 1] = 0
-      table.side2[k + 2] = 1
-    }
+    fillEmissionTable(this.scratch.tailTable, this.choreography, this.scratch.probePoint)
   }
 
-  private integrate(frameStep: number, time: number): void {
+  private integrate(frameStep: number, time: number, delta = frameStep / 60): void {
     const s = this.scratch
     const positions = s.positions
     const velocities = s.velocities
@@ -1513,14 +1513,14 @@ export class ParticleEngine implements ParticleEngineContract {
         s.pointerOffset.fill(0)
         velocities.fill(0)
       }
-      if (phase === 'scatter') s.tailReady.fill(0)
       this.renderedPhase = phase
     }
 
     // How committed this frame is to the glyph shape: 0 is a pure comet, 1 is the
     // settled logo. Everything that only makes sense on a glyph is gated by it, so
     // the two shapes can never bleed into each other.
-    let glyphMix = glyphMixFor(phase, state.phaseProgress)
+    const shapeProgress = phase === 'scatter' ? clamp01(state.phaseProgress / COALESCE_END) : state.phaseProgress
+    let glyphMix = glyphMixFor(phase, shapeProgress)
     // Reduced motion snaps the blend instead of animating it: the shape change is
     // the part of this that a motion-sensitive visitor asked us not to animate.
     if (this.reducedMotion) glyphMix = glyphMix > 0.5 ? 1 : 0
@@ -1542,9 +1542,9 @@ export class ParticleEngine implements ParticleEngineContract {
     // the flat slab volume. Faded, so a brand switch cannot drop it in one frame.
     this.holdFade = nextVoxSpaceIconHoldFade(this.holdFade, glyphMix, frameStep)
     writeVoxSpaceIconHoldPose(s.iconHoldPose, time, this.holdFade)
-    this.points.rotation.z = s.iconHoldPose.rotationZ
-    this.points.rotation.x = s.iconHoldPose.rotationX
-    this.points.rotation.y = s.iconHoldPose.rotationY
+    this.points.rotation.z = s.iconHoldPose.rotationZ * glyphMix
+    this.points.rotation.x = s.iconHoldPose.rotationX * glyphMix
+    this.points.rotation.y = s.iconHoldPose.rotationY * glyphMix
 
     // Pointer, resolved into the object's own frame so the repulsion stays under
     // the cursor even while the slab is tilted.
@@ -1593,39 +1593,13 @@ export class ParticleEngine implements ParticleEngineContract {
       }
     }
 
-    const coreCount = Math.floor(count * HEAD_CORE_SHARE)
     const useHoldStep = phase === 'hold' && glyphMix > 0.5
-    // The comet half of the blend. Its inverse weights the glyph, and the emission
-    // model is faded out by it *before* the glyph target is built — a tail particle
-    // still mid-flight when the gather starts has to give way to the glyph rather than
-    // fight it, which is why this is a weight on the whole emission term and not a
-    // gate on whether the age advances.
     const cometMix = 1 - glyphMix
-
-    // The nucleus is offset forward along the direction of travel, which is the
-    // head's velocity: the core ball's leading surface has to be convex or the comet
-    // reads as a sliced-off disc. Taken from the emission table's newest probe rather
-    // than from a difference of two table samples, because the table already holds the
-    // central-difference velocity and re-deriving it here would be a second, subtly
-    // different estimate of the same quantity.
     const table = s.tailTable
-    let leadX = 0
-    let leadY = 0
-    let leadZ = 0
-    {
-      const vx0 = table.vel[0]
-      const vy0 = table.vel[1]
-      const vz0 = table.vel[2]
-      const speed = Math.sqrt(vx0 * vx0 + vy0 * vy0 + vz0 * vz0)
-      if (speed > 1e-6) {
-        const scale = (HEAD_CORE_RADIUS * HEAD_CORE_LEAD) / speed
-        leadX = vx0 * scale
-        leadY = vy0 * scale
-        leadZ = vz0 * scale
-      }
-    }
-
-    const tailOut = this.tailPoint
+    const departure = departureSeconds(phase, state.phaseProgress, LEG_SECONDS, SCATTER_SECONDS)
+    const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6
+    s.emittedTail.update(delta, departure, departure > 0 && moving && !this.reducedMotion,
+      table, state.headX, state.headY, state.headZ, palette.core, palette.accent, this.light)
 
     for (let i = 0; i < count; i++) {
       const idx = i * 3
@@ -1633,39 +1607,17 @@ export class ParticleEngine implements ParticleEngineContract {
       const py = positions[idx + 1]
       const pz = positions[idx + 2]
 
-      const core = i < coreCount
-      // --- comet target ------------------------------------------------------
-      // Two populations under one model. The core particles are the nucleus: they sit
-      // inside the head ball, biased forward, and never age — a comet whose nucleus
-      // evaporated would not be a comet. The tail particles are *emitted*: each has its
-      // own age, life and reach, and its position is the closed form in
-      // `writeTailParticlePosition` rather than a slot on a shared rigid path.
-      let cometX: number
-      let cometY: number
-      let cometZ: number
-      let emit: number
-
-      if (core) {
-        const radius = Math.hypot(s.headOffset[idx], s.headOffset[idx + 1], s.headOffset[idx + 2]) / HEAD_CORE_RADIUS
-        const coma = radius * radius * (1.2 + s.tailSeed[i] * 1.4)
-        const halo = 1 + radius * 0.8
-        cometX = table.xyz[0] + s.headOffset[idx] * halo + leadX + table.axis[0] * coma
-        cometY = table.xyz[1] + s.headOffset[idx + 1] * halo + leadY + table.axis[1] * coma
-        cometZ = table.xyz[2] + s.headOffset[idx + 2] * halo + leadZ + table.axis[2] * coma
-        emit = Math.exp(-3.2 * radius * radius) * (0.035 + 0.085 * s.tailSeed[i])
-      } else {
-        // Freeze age during a shape change; its source pose cannot recycle mid-morph.
-        emit = advanceEmittedTail(s, i, phase === 'travel' ? frameStep / 60 : 0, tailOut)
-        cometX = tailOut[0]
-        cometY = tailOut[1]
-        cometZ = tailOut[2]
-      }
+      // All former logo particles belong to the compact body throughout flight.
+      const cometX = state.headX + s.body.offsets[idx]
+      const cometY = state.headY + s.body.offsets[idx + 1]
+      const cometZ = state.headZ + s.body.offsets[idx + 2]
+      const emit = s.body.alpha[i] * (this.light ? 1.7 : 1)
 
       // --- glyph target: the anchor plus its bounded internal drift -----------
       let tx = cometX
       let ty = cometY
       let tz = cometZ
-      const mix = this.reducedMotion ? glyphMix : staggeredGlyphMix(phase, state.phaseProgress, i)
+      const mix = this.reducedMotion ? glyphMix : staggeredGlyphMix(phase, shapeProgress, i)
       let alpha = emit
       if (phase === 'gather') {
         tx = s.shapeFrom[idx] + (glyph[idx] + s.iconOrbitOffsets[idx] - s.shapeFrom[idx]) * mix
@@ -1673,10 +1625,13 @@ export class ParticleEngine implements ParticleEngineContract {
         tz = s.shapeFrom[idx + 2] + (glyph[idx + 2] + s.iconOrbitOffsets[idx + 2] - s.shapeFrom[idx + 2]) * mix
         alpha = s.shapeAlpha[i] + (1 - s.shapeAlpha[i]) * mix
       } else if (phase === 'scatter') {
-        tx += (s.shapeFrom[idx] - cometX) * mix
-        ty += (s.shapeFrom[idx + 1] - cometY) * mix
-        tz += (s.shapeFrom[idx + 2] - cometZ) * mix
-        alpha = emit + (s.shapeAlpha[i] - emit) * mix
+        const bend = Math.sin(Math.PI * mix) * (s.tailSeed[i] - 0.5) * 0.16
+        tx += (s.shapeFrom[idx] - cometX) * mix - (s.shapeFrom[idx + 1] - cometY) * bend
+        ty += (s.shapeFrom[idx + 1] - cometY) * mix + (s.shapeFrom[idx] - cometX) * bend
+        tz += (s.shapeFrom[idx + 2] - cometZ) * mix + Math.sin(Math.PI * mix) * (s.tailSeed[i] - 0.5) * 0.22
+        // Projected area falls roughly quadratically while the logo concentrates.
+        // Normalize the in-flight glyph light before its points overlap at the core.
+        alpha = emit + (s.shapeAlpha[i] - emit) * mix * mix
       } else if (phase === 'hold') {
         tx = glyph[idx] + s.iconOrbitOffsets[idx]
         ty = glyph[idx + 1] + s.iconOrbitOffsets[idx + 1]
@@ -1737,15 +1692,14 @@ export class ParticleEngine implements ParticleEngineContract {
       // "达到一定距离后渐变消失". A particle's brightness falls to exactly zero as its
       // life runs out, so the far end of the plume dissolves instead of being cut off.
       // The head's own luminance is left where it was; nothing here shrinks the comet.
-      const warm = glyphMix > 0 ? glyphMix * 0.26 : (1 - emit) * cometMix * 0.55
+      const warm = glyphMix * 0.26 + cometMix * 0.045
       const depth = Math.max(-1, Math.min(1, nz / 1.4)) * this.holdFade
       const shimmer = 0.86 + Math.sin(time * 2.1 + s.tailSeed[i] * 43.0) * 0.05 + depth * 0.08
       // The ion population is tinted toward the accent and the dust toward the cool
       // core, which is the one nod to the two-tail structure the brief asks for that
       // this renderer can afford: one multiply and one compare per particle.
-      const ionWarm = core ? 0 : s.tailIon[i] * 0.18
-      const w = warm > ionWarm ? warm : ionWarm
-      const lum = (0.42 + emit * 0.72 + Math.abs(depth) * 0.06) * shimmer * palette.gain
+      const w = warm
+      const lum = (glyphMix * 1.14 + cometMix * s.body.tone[i] + Math.abs(depth) * 0.06) * shimmer * palette.gain
 
       const cr = (palette.core.r + (palette.accent.r - palette.core.r) * w) * lum
       const cg = (palette.core.g + (palette.accent.g - palette.core.g) * w) * lum
@@ -1763,6 +1717,8 @@ export class ParticleEngine implements ParticleEngineContract {
   private upload(): void {
     this.geometry.getAttribute('position').needsUpdate = true
     this.geometry.getAttribute('color').needsUpdate = true
+    this.tailGeometry.getAttribute('position').needsUpdate = true
+    this.tailGeometry.getAttribute('color').needsUpdate = true
   }
 
   /**
@@ -1825,6 +1781,7 @@ export class ParticleEngine implements ParticleEngineContract {
     // Constant gap: the content rides the dolly one framing distance ahead, so the
     // glyph's on-screen size is the same at the near end as at the far one.
     this.points.position.z = cameraZ - this.fitGap
+    this.tailPoints.position.z = this.points.position.z
     this.camera.position.set(0, 0, cameraZ)
     this.camera.lookAt(0, 0, 0)
   }
@@ -1853,7 +1810,9 @@ export class ParticleEngine implements ParticleEngineContract {
     // Positions and colours are the only GPU-resident buffers the cloud owns.
     this.stats.geometryBytes =
       this.geometry.getAttribute('position').array.byteLength +
-      this.geometry.getAttribute('color').array.byteLength
+      this.geometry.getAttribute('color').array.byteLength +
+      this.tailGeometry.getAttribute('position').array.byteLength +
+      this.tailGeometry.getAttribute('color').array.byteLength
 
     if (typeof window !== 'undefined') {
       // The external acceptance harness reads this. It is the same object every
