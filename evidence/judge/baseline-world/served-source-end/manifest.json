@@ -1,0 +1,61 @@
+{
+  "capturedAt": "2026-10-12T17:27:54.846Z",
+  "rows": [
+    {
+      "name": "ParticleEngine",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/ParticleEngine.ts",
+      "status": 200,
+      "sha256": "ada335812ed53d51278a5cc5f06a26103d97f57ed4f696e3d5ad2add4a375cd1",
+      "oldCameraRide": false,
+      "unusedSkeleton": false
+    },
+    {
+      "name": "choreography",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/choreography.ts",
+      "status": 200,
+      "sha256": "4d24893321ba2af93242e8b3287526164d05d3c581cf66a319255962dd5382c1",
+      "oldCameraRide": false,
+      "unusedSkeleton": false
+    },
+    {
+      "name": "spaceMotion",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/spaceMotion.ts",
+      "status": 200,
+      "sha256": "020d58a0aced228ca701b5d610a14afc5d3dc6bb880100c43b0aac8b882f11af",
+      "oldCameraRide": false,
+      "unusedSkeleton": false
+    },
+    {
+      "name": "spaceMotionContract",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/spaceMotionContract.ts",
+      "status": 200,
+      "sha256": "96d430acfa1161ae57a6294ea622111027442c1102d9ff1b5bed967f36526141",
+      "oldCameraRide": false,
+      "unusedSkeleton": false
+    },
+    {
+      "name": "emittedTail",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/emittedTail.ts",
+      "status": 200,
+      "sha256": "886e4c8e0e83b2e481708a2ab2de3d2018e2ec6887084f48b66da1f72124f635",
+      "oldCameraRide": false,
+      "unusedSkeleton": false
+    },
+    {
+      "name": "constants",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/constants.ts",
+      "status": 200,
+      "sha256": "1e59e54b6dec5c8ae264e14c8927d46bc98e4bd76b06494cf88b60c01266575d",
+      "oldCameraRide": false,
+      "unusedSkeleton": false
+    },
+    {
+      "name": "flightTiming",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/flightTiming.ts",
+      "status": 200,
+      "sha256": "132b6823e1b6d0f6bf38835cf537e20decd6ac4cba6d4824f8217102a25bf40a",
+      "oldCameraRide": false,
+      "unusedSkeleton": false
+    }
+  ]
+}

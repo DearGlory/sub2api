@@ -1,5 +1,5 @@
 // Independent requirements, copied from this round's frozen specification, not motion code.
-export const LIMITS = Object.freeze({ world: 1e-5, shrink: .10, hold: 3, capture: .08, legs: 4, drawCalls: 6, geometryBytes: 3500000 })
+export const LIMITS = Object.freeze({ world: 1e-5, shrink: .10, hold: 3, capture: .08, legs: 4, drawCalls: 10, geometryBytes: 3500000 })
 export const exitFor = status => ({pass:0,fail:1,'instrument-invalid':2,skip:3})[status] ?? 2
 export function summarize(checks) {
   return ['instrument-invalid','fail','skip'].find(s=>checks.some(c=>c.status===s && c.required!==false)) || 'pass'

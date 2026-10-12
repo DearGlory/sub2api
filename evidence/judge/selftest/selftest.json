@@ -1,0 +1,102 @@
+{
+  "status": "pass",
+  "scope": "synthetic judge self-proof ONLY, never product evidence",
+  "tests": [
+    {
+      "name": "synthetic positive",
+      "passed": true,
+      "note": "judge self-proof only; no product acceptance"
+    },
+    {
+      "name": "no explosion",
+      "criterion": "gather-internal-explosion",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "linear collapse",
+      "criterion": "scatter-accelerating-collapse",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "world drift",
+      "criterion": "gather-world-anchor",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "pixel size positive",
+      "criterion": "size",
+      "status": "pass",
+      "expected": "pass",
+      "passed": true
+    },
+    {
+      "name": "pixel exposure positive",
+      "criterion": "exposure",
+      "status": "pass",
+      "expected": "pass",
+      "passed": true
+    },
+    {
+      "name": "no mesh",
+      "criterion": "mesh-normals-triangles",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "only points / no volume",
+      "criterion": "volume-draw",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "opacity zero tail",
+      "criterion": "volume-draw",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "overexposed",
+      "criterion": "exposure",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "shrunken",
+      "criterion": "size",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "same old bright sphere",
+      "criterion": "size",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "synthetic volume pool/GPU mapping positive",
+      "passed": true
+    },
+    {
+      "name": "detached GPU density samples",
+      "passed": true,
+      "expected": "fail"
+    },
+    {
+      "name": "prelaid density without births",
+      "passed": true,
+      "expected": "fail"
+    }
+  ]
+}
