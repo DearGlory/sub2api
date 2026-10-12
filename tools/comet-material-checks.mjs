@@ -67,7 +67,7 @@ export function judgeMaterial(data,baseline) {
       add(id+'-surface-directional-light',light?.difference?.count>=LIMITS.minPixels&&normalLight,{light,shaderUsesNormalDotLight:normalLight},light?.status==='observed'?'fail':'instrument-invalid')
     }
     // Names and opacity of the legacy tail Points never decide whether a volume exists.
-    const volumes=meshes.filter(o=>o.materials.some(m=>/for\s*\(/.test(m.fragment||'')&&/(density|Density)/.test(m.fragment||'')&&/vec3/.test(m.fragment||'')&&!/#define IS_COMA 1\b/.test(m.fragment||'')))
+    const volumes=meshes.filter(o=>o.materials.some(m=>/for\s*\(/.test(m.fragment||'')&&/(density|Density)/.test(m.fragment||'')&&/vec3/.test(m.fragment||'')&&/#define IS_COMA 0\b/.test(m.fragment||'')))
     add(id+'-volume-draw',volumes.some(o=>row.contributions[o.uuid]?.count>=LIMITS.minPixels),{candidates:volumes.map(o=>({uuid:o.uuid,pixels:row.contributions[o.uuid]}))})
     if(volumes.length){const proofs=volumes.map(o=>({uuid:o.uuid,...volumeProvenance(o,row.geometry)}));add(id+'-volume-actual-tail-provenance',proofs.some(p=>p.status==='pass'),proofs,proofs.some(p=>p.status==='fail')?'fail':'instrument-invalid')}
     const base=baseline?.travel?.find(b=>b.label===row.label),current=row.bodyPixels
