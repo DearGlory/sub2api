@@ -5,24 +5,11 @@ import { cameraTravelAt, glyphStopZ } from '../spaceMotion'
 import { CAMERA_FOV, GATHER_SECONDS, HOLD_SECONDS, LEG_SECONDS, SCATTER_SECONDS, SUBJECT_Z } from '../constants'
 import type { BrandTargets, ChoreographyState, CometPhase } from '../types'
 
-// Explicit pre-merge fixture mode. The default suite isolates the renderer while
-// the API is a throw stub; after A lands, set B_RENDER_REAL_API=1 to exercise it.
-vi.mock('../spaceMotion', async importOriginal => {
-  const actual = await importOriginal<typeof import('../spaceMotion')>()
-  if (process.env.B_RENDER_REAL_API === '1') return actual
-  return {
-    ...actual,
-    cameraTravelAt: (seconds: number) => 1.35 * seconds,
-    glyphStopZ: (leg: number) => 1.35 * (leg * 12 + 6.5),
-  }
-})
-
 const timing = { legSeconds: LEG_SECONDS, gatherSeconds: GATHER_SECONDS, holdSeconds: HOLD_SECONDS, scatterSeconds: SCATTER_SECONDS }
 const cycle = LEG_SECONDS + GATHER_SECONDS + HOLD_SECONDS + SCATTER_SECONDS
 const count = 128
 
-/** Real engine methods and three matrices, with a controlled stationary/path fixture.
- * No WebGL constructor, raster worker or chronology implementation is replaced in production. */
+/** Real engine methods, motion API and three matrices, with manually controlled choreography state. */
 function harness(leg = 0, light = false) {
   const scratch = createEngineScratch(count, 48)
   const state: ChoreographyState = {
@@ -97,7 +84,7 @@ function harness(leg = 0, light = false) {
 
 const worldAnchor = (h: ReturnType<typeof harness>) => new Vector3(h.state.toX, 0, glyphStopZ(h.state.legIndex, timing)).applyMatrix4(h.points.matrixWorld)
 
-describe('world-space rendering (fixture unless B_RENDER_REAL_API=1)', () => {
+describe('world-space rendering', () => {
   it.each([0, 1, 300])('holds the geometry anchor through gather, hold and early scatter on leg %s', leg => {
     const h = harness(leg)
     const anchorZ = glyphStopZ(leg, timing)
