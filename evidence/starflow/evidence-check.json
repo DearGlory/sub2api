@@ -1,0 +1,33 @@
+{
+  "pass": true,
+  "checks": [
+    {
+      "mode": "baseline",
+      "exit": 0,
+      "noHmr": true,
+      "methodHash": "cac2b5de016c453acdb2e70e977f84f7cb3db3ec25549e52c29f70b0a0bbc833",
+      "pairs": 4
+    },
+    {
+      "mode": "stopped",
+      "exit": 0,
+      "noHmr": true,
+      "methodHash": "cac2b5de016c453acdb2e70e977f84f7cb3db3ec25549e52c29f70b0a0bbc833",
+      "pairs": 1
+    },
+    {
+      "mode": "outward",
+      "exit": 0,
+      "noHmr": true,
+      "methodHash": "cac2b5de016c453acdb2e70e977f84f7cb3db3ec25549e52c29f70b0a0bbc833",
+      "pairs": 1
+    },
+    {
+      "mode": "dark",
+      "exit": 0,
+      "noHmr": true,
+      "methodHash": "cac2b5de016c453acdb2e70e977f84f7cb3db3ec25549e52c29f70b0a0bbc833",
+      "pairs": 1
+    }
+  ]
+}
