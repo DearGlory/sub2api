@@ -568,15 +568,70 @@ const MARKER = (x, y, w, h, on) => `(() => {
   return { x: r.x, y: r.y, w: r.width, h: r.height };
 })()`
 
-/** Scene-graph gates. Pixels must contain the glyph and nothing else. */
+/**
+ * Gate actual render objects, including the independent causal-emitted-tail pool.
+ * A visibility accessor holds the gate across phase updates without stopping rAF.
+ * On release restore the descriptor and the latest value requested by the engine.
+ * (true, true) releases the gate; glyph mode admits ONLY debugScene.points.
+ */
 const SET_VIS = (points, stars) => `(() => {
+  const key = '__FRAMING_VIS_GATE__';
+  const release = () => {
+    const gate = window[key];
+    if (!gate) return;
+    for (const row of gate.rows) {
+      Object.defineProperty(row.object, 'visible', { ...row.descriptor, value: row.latest });
+    }
+    delete window[key];
+  };
+  release();
+  if (${points && stars}) return { restored: true };
   const eng = window.__SUB2API_PARTICLE_ENGINE__;
-  if (!eng) return { error: 'no engine handle' };
-  eng.debugScene.points.visible = ${points};
-  const sf = eng.debugScene.scene.getObjectByName('starfield');
-  if (sf) sf.visible = ${stars};
-  return { points: eng.debugScene.points.visible, stars: sf ? sf.visible : null };
+  if (!eng) throw new Error('no engine handle');
+  const { scene, points: glyph } = eng.debugScene;
+  const sf = scene.getObjectByName('starfield');
+  if (!glyph || !sf) throw new Error('missing glyph or starfield render object');
+  const objects = new Map([[glyph, ${points}], [sf, ${stars}]]);
+  const inStars = object => {
+    for (let p = object; p; p = p.parent) if (p === sf) return true;
+    return false;
+  };
+  // Descend the real scene rather than assuming one comet draw object forever.
+  // Keep the existing star mask/geometry definitions; tail is never glyph geometry.
+  scene.traverse(object => {
+    if (object !== glyph && object.geometry && object.material && !inStars(object)) objects.set(object, false);
+  });
+  for (const tail of [eng.tailPoints, scene.getObjectByName('causal-emitted-tail')]) {
+    if (tail && tail !== glyph) objects.set(tail, false);
+  }
+  const rows = [...objects].map(([object, forced]) => {
+    const descriptor = Object.getOwnPropertyDescriptor(object, 'visible');
+    if (!descriptor || !descriptor.configurable || !descriptor.writable || !('value' in descriptor)) {
+      throw new Error('unsupported visible descriptor: ' + object.name);
+    }
+    return { object, forced, descriptor, latest: descriptor.value };
+  });
+  window[key] = { rows };
+  for (const row of rows) Object.defineProperty(row.object, 'visible', {
+    configurable: true, enumerable: row.descriptor.enumerable,
+    get: () => row.forced,
+    set: value => { row.latest = value; },
+  });
+  return { points: glyph.visible, stars: sf.visible,
+    objects: rows.map(row => ({ name: row.object.name || '(glyph)', visible: row.object.visible })) };
 })()`
+
+/** Pair every gate with release, including a screenshot/evaluation exception. */
+async function withSceneVisibility(cdp, points, stars, action) {
+  const state = await cdp.eval(SET_VIS(points, stars))
+  if (!state || state.__error || state.error) throw new Error('scene isolation failed: ' + JSON.stringify(state))
+  try {
+    return await action(state)
+  } finally {
+    const restored = await cdp.eval(SET_VIS(true, true))
+    if (!restored?.restored) throw new Error('scene isolation restore failed: ' + JSON.stringify(restored))
+  }
+}
 
 /** Phase, brand, camera and the viewport, in one read. */
 const STATE = `(() => {
@@ -910,7 +965,9 @@ function record(criterion, name, pass, detail, evidence) {
 function instrumentInvalid(reason) {
   console.log('\n!!! INSTRUMENT INVALID — ' + reason)
   console.log('    (not reporting PASS or FAIL: the measurement itself is untrustworthy)')
-  finish(2)
+  const error = new Error(reason)
+  error.instrumentInvalid = true
+  throw error // unwind scene gates before the outer runner writes the result
 }
 
 function finish(code) {
@@ -985,9 +1042,10 @@ async function shoot(cdp, name) {
  * That difference is what separates a glyph from an artefact.
  */
 async function measureGlyph(cdp, label) {
-  await cdp.eval(SET_VIS(true, false))
-  await sleep(140)
-  const shot = await shoot(cdp, label)
+  const shot = await withSceneVisibility(cdp, true, false, async () => {
+    await sleep(140)
+    return shoot(cdp, label)
+  })
   const thresholds = {}
   for (const thr of [16, 24, 32, 48]) {
     const b = litBbox(shot.lum, shot.img.w, shot.img.h, thr)
@@ -1017,9 +1075,17 @@ async function calibrate(cdp) {
   await cdp.eval(ISOLATE)
   await sleep(300)
 
+  const { calOk, blackOk, worst } = await withSceneVisibility(cdp, false, false,
+    () => calibrateIsolated(cdp))
+  if (!calOk || !blackOk) {
+    instrumentInvalid(`calibration failed (marker error ${round(worst, 2)} px, negative control black=${blackOk})`)
+  }
+  console.log('  instrument validated on known answers.')
+}
+
+async function calibrateIsolated(cdp) {
   // The negative control: nothing lit must measure as nothing lit.
   await cdp.eval(MARKER(0, 0, 0, 0, false))
-  await cdp.eval(SET_VIS(false, false))
   await sleep(400)
   const black = await shoot(cdp, 'cal-negative-control.png')
   const litAt = {}
@@ -1098,12 +1164,7 @@ async function calibrate(cdp) {
     `frame ${black.img.w}x${black.img.h} vs CSS ${st.iw}x${st.ih}@${st.dpr}x`,
     measurements.frameScale)
 
-  await cdp.eval(SET_VIS(true, true))
-
-  if (!calOk || !blackOk) {
-    instrumentInvalid(`calibration failed (marker error ${round(worst, 2)} px, negative control black=${blackOk})`)
-  }
-  console.log('  instrument validated on known answers.')
+  return { calOk, blackOk, worst }
 }
 
 // ---------------------------------------------------------------------------
@@ -2137,7 +2198,12 @@ async function criterionV5(cdp, opts) {
     { postRegatherRises: postRegatherRises.slice(0, 8) })
 
   // --- 2. radial flow of the background, at several phases ---------------
-  await cdp.eval(SET_VIS(true, true))
+  // Keep the existing two-frame mask and estimator; remove comet render objects
+  // from its input, including tails that extend beyond the glyph-only mask.
+  await withSceneVisibility(cdp, false, true, () => measureStarFlow(cdp))
+}
+
+async function measureStarFlow(cdp) {
   await sleep(300)
 
   /**
@@ -2988,6 +3054,7 @@ function statSyncSafe(p) {
 }
 
 main().catch((e) => {
+  if (e.instrumentInvalid) return finish(2)
   console.error('\nframing-probe crashed:', e.stack || e.message)
   if (chrome) chrome.kill('SIGKILL')
   process.exit(2)
