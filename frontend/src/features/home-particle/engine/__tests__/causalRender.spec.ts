@@ -29,6 +29,7 @@ export function renderHarness(light = false, moving = true) {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(scratch.positions, 3))
   geometry.setAttribute('color', new BufferAttribute(scratch.colors, 4))
+  geometry.setAttribute('cometScale', new BufferAttribute(scratch.body.spriteScale, 1))
   // The pool is owned by createEngineScratch, never by the test fixture.
   const pool = Reflect.get(scratch, 'emittedTail') as {
     positions: Float32Array; colors: Float32Array; birthTime: Float64Array

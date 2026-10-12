@@ -20,6 +20,7 @@ function flight(light = false) {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(scratch.positions, 3))
   geometry.setAttribute('color', new BufferAttribute(scratch.colors, 4))
+  geometry.setAttribute('cometScale', new BufferAttribute(scratch.body.spriteScale, 1))
   const tailGeometry = new BufferGeometry()
   tailGeometry.setAttribute('position', new BufferAttribute(pool.positions, 3))
   tailGeometry.setAttribute('color', new BufferAttribute(pool.colors, 4))
