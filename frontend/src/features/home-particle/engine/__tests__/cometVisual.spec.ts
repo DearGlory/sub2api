@@ -284,7 +284,7 @@ describe('emitted volume', () => {
     visual.dispose()
   })
 
-  it('bounds sparse density, fades with age, and creates only three texture-free meshes', () => {
+  it('bounds sparse density, fades with age, and keeps all four meshes texture-free', () => {
     const visual = createCometVisual(options)
     const tail = pool(24)
     const mesh = tailMesh(visual)
@@ -301,7 +301,9 @@ describe('emitted volume', () => {
     tail.age.fill(3.7)
     visual.update(frame(), tail)
     expect(Math.max(...densities)).toBeLessThan(young * 0.1)
-    expect(visual.object.children).toHaveLength(3)
+    expect(visual.object.children).toHaveLength(4)
+    const event = visual.object.children.find(object => 'uEventMode' in material(object as Mesh).uniforms)
+    expect(event?.visible).toBe(false)
     for (const object of visual.object.children) {
       expect(object).toBeInstanceOf(Mesh)
       const shader = material(object as Mesh)

@@ -247,7 +247,7 @@ describe('closed, rigid comet fracture geometry', () => {
     expect(materialDisposals).toBe(1)
   })
 
-  it('counts every attribute in the three model meshes and fits the full high-quality scene budget', () => {
+  it('counts every model and event attribute within the full high-quality scene budget', () => {
     const quality = createQualityProfile()
     const visual = createCometVisual({ ...options, particleCount: quality.particleCount })
     const context = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
@@ -268,7 +268,7 @@ describe('closed, rigid comet fracture geometry', () => {
       const particleBytes = scratch.positions.byteLength + scratch.colors.byteLength + scratch.body.spriteScale.byteLength
         + scratch.emittedTail.positions.byteLength + scratch.emittedTail.colors.byteLength
       const total = visualBytes + starBytes + particleBytes
-      expect(visual.object.children).toHaveLength(3)
+      expect(visual.object.children).toHaveLength(4)
       expect(visual.geometryBytes).toBe(visualBytes)
       expect(total).toBeLessThanOrEqual(3500000)
       expect(draws).toBeLessThanOrEqual(10)
