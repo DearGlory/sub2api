@@ -125,3 +125,86 @@ describe('procedural comet surface', () => {
     expect(visual.object.children).toHaveLength(0)
   })
 })
+
+describe('emitted volume', () => {
+  const tailMesh = (visual: ReturnType<typeof createCometVisual>) => visual.object.getObjectByName('comet-tail-volume') as Mesh
+  const born = (tail: CometTailView, i: number, x: number, age = 0.4) => {
+    tail.active[i] = 1
+    tail.birthTime[i] = 0.2
+    tail.age[i] = age
+    tail.positions.set([x, 2, -9], i * 3)
+  }
+
+  it('uses only active births, never the head, uninitialized slots or a death upload', () => {
+    const visual = createCometVisual(options)
+    const tail = pool(24)
+    tail.birthTime.fill(-1)
+    visual.update(frame(), tail)
+    const mesh = tailMesh(visual)
+    expect(mesh.visible).toBe(false)
+    born(tail, 0, -4)
+    born(tail, 1, -6)
+    born(tail, 2, 900)
+    tail.active[2] = 2
+    born(tail, 3, 800)
+    tail.birthTime[3] = -1
+    visual.update(frame(), tail)
+    const uniforms = material(mesh).uniforms
+    const bins = uniforms.uBins!.value as Float32Array
+    const densities = uniforms.uDensities!.value as Float32Array
+    const occupied = Array.from(densities).findIndex(value => value > 0)
+    expect(occupied).toBeGreaterThanOrEqual(0)
+    expect(bins[occupied * 4]).toBeCloseTo(-5)
+    expect(bins[occupied * 4 + 1]).toBeCloseTo(2)
+    expect(bins[occupied * 4 + 2]).toBeCloseTo(-9)
+    const saved = Array.from(bins)
+    visual.update(frame({ phase: 'hold', headX: 1000, headZ: -1000 }), tail)
+    expect(Array.from(bins)).toEqual(saved)
+    expect(mesh.visible).toBe(true)
+    tail.active.fill(0)
+    visual.update(frame({ phase: 'hold' }), tail)
+    expect(mesh.visible).toBe(false)
+    expect(Array.from(densities).every(value => value === 0)).toBe(true)
+    expect(uniforms.uBins!.value).toBe(bins)
+    expect(uniforms.uDensities!.value).toBe(densities)
+    visual.dispose()
+  })
+
+  it('bounds sparse density, fades with age, and creates only three texture-free meshes', () => {
+    const visual = createCometVisual(options)
+    const tail = pool(24)
+    const mesh = tailMesh(visual)
+    born(tail, 0, -4)
+    visual.update(frame(), tail)
+    const densities = material(mesh).uniforms.uDensities!.value as Float32Array
+    const sparse = Math.max(...densities)
+    expect(sparse).toBeGreaterThan(0)
+    expect(sparse).toBeLessThan(0.05)
+    for (let i = 1; i < tail.count; i++) born(tail, i, -4 + i * 0.01)
+    visual.update(frame(), tail)
+    const young = Math.max(...densities)
+    expect(young).toBeGreaterThan(sparse * 5)
+    tail.age.fill(3.7)
+    visual.update(frame(), tail)
+    expect(Math.max(...densities)).toBeLessThan(young * 0.1)
+    expect(visual.object.children).toHaveLength(3)
+    for (const object of visual.object.children) {
+      expect(object).toBeInstanceOf(Mesh)
+      const shader = material(object as Mesh)
+      expect(shader.blending).toBe(NormalBlending)
+      expect(Object.values(shader.uniforms).some(uniform => uniform.value?.isTexture)).toBe(false)
+    }
+    expect(material(mesh).defines.MARCH_STEPS).toBe(28)
+    expect(material(mesh).depthWrite).toBe(false)
+    const coma = visual.object.getObjectByName('comet-coma-volume') as Mesh
+    expect(coma.scale.x).toBeCloseTo(COMET_COMA_RADIUS * 2)
+    visual.update(frame({ phase: 'gather', progress: 1 }), tail)
+    expect(coma.visible).toBe(false)
+    visual.update(frame({ phase: 'hold' }), tail)
+    expect(coma.visible).toBe(false)
+    visual.dispose()
+    const mobile = createCometVisual({ ...options, particleCount: 800 })
+    expect(material(tailMesh(mobile)).defines.MARCH_STEPS).toBe(16)
+    mobile.dispose()
+  })
+})
