@@ -12,7 +12,7 @@ const args=Object.fromEntries(process.argv.slice(2).reduce((a,v,i,s)=>v.startsWi
 for(const k of ['url','out','port'])if(!args[k])throw Error('required --'+k)
 const out=path.resolve(args.out),port=Number(args.port),fault=args.fault||'none'
 if(port!==10432)throw Error('source selftest owns only CDP 10432')
-if(!out.replaceAll('\\','/').startsWith('E:/Global-session/xiao-20261013-025234/evidence/judge/source-fix/'))throw Error('output must be under source-fix')
+if(!['source-fix','scope-fix'].some(dir=>out.replaceAll('\\','/').startsWith('E:/Global-session/xiao-20261013-025234/evidence/judge/'+dir+'/')))throw Error('output must be under source-fix or scope-fix')
 if(!['none','expected-hash','body-loss'].includes(fault))throw Error('unknown fault')
 await fs.mkdir(out,{recursive:true})
 const data={scope:'two real navigation epochs using production probe source capture; no pixel/performance acceptance',toolSHA:git('rev-parse','HEAD').trim(),url:args.url,fault,errors:[],selftests:[]}
@@ -58,7 +58,7 @@ try{
   if(fault==='none'){
     assert.equal(data.check.status,'pass',JSON.stringify(data.check))
     const negative=(name,mutate)=>{
-      const candidate=structuredClone({sources:data.sources,loaded:data.loaded,loadEpochs:data.loadEpochs})
+      const candidate=structuredClone({sources:data.sources,loaded:data.loaded,loadEpochs:data.loadEpochs,auxiliaryRequests:data.auxiliaryRequests,sourceCapture:data.sourceCapture})
       mutate(candidate)
       const check=loadedSourceCheck(candidate);assert.equal(check.status,'instrument-invalid',name)
       data.selftests.push({name,status:'pass',rejectedAs:check.status,issues:check.detail.issues})

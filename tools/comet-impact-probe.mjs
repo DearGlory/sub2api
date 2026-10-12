@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import net from 'node:net'
 import { CDP, connect, launchChrome } from './tail-probe-lib/cdp.mjs'
-import { createSourceCapture, fetchImpactSources, installImpactWithSources } from './comet-impact-sources.mjs'
+import { createSourceCapture, fetchImpactSources, installImpactWithSources, closeSourcesBeforeRecording } from './comet-impact-sources.mjs'
 import { createCapture } from './comet-impact-capture.mjs'
 import { volumeProvenance } from './comet-material-volume.mjs'
 import { PHASES, judgeImpact, resultStatus } from './comet-impact-checks.mjs'
@@ -53,9 +53,16 @@ try{
     }
   }
   await sourceCapture.checkpoint('after-captures')
-  if(Number(args['record-seconds'])>=36){const {recordNormal}=await import('./space-pursuit-lib/record.mjs');data.normalRAF=await recordNormal({cdp,ws,evaluate:ev,out,seconds:Number(args['record-seconds'])})}
+  await closeSourcesBeforeRecording({capture:sourceCapture,data,record:Number(args['record-seconds'])>=36?async()=>{
+    const {recordNormal}=await import('./space-pursuit-lib/record.mjs')
+    const recording=await recordNormal({cdp,ws,evaluate:ev,out,seconds:Number(args['record-seconds'])})
+    const {frameTree:{frame}}=await cdp.send('Page.getFrameTree')
+    Object.assign(data.recordingSourceScope,{loaderId:frame.loaderId,frameId:frame.id,finishedAt:new Date().toISOString()})
+    if(data.loadEpochs.some(e=>e.loaderId===frame.loaderId))throw Error('recording did not use a separate document loader')
+    return recording
+  }:null});sourceCapture=null
   data.sourcesEnd=await sources('source-end');data.sourceStable=data.sources.every((r,i)=>r.sha256===data.sourcesEnd[i].sha256)
-  await sourceCapture.close();sourceCapture=null
+  if(data.recordingSourceScope)Object.assign(data.recordingSourceScope,{sourceEndFetchedAt:new Date().toISOString(),sourceStable:data.sourceStable,sourceEndHashes:data.sourcesEnd.map(({name,sha256,originalSha256})=>({name,sha256,originalSha256})),attribution:'served endpoint hashes after recording match source-start; recording document response bodies were not measured'})
   data.checks=judgeImpact(data,baseline);data.status=resultStatus(data.checks)
 }catch(error){data.error=String(error.stack);data.checks.push({id:'instrument',status:'instrument-invalid',detail:data.error});data.status='instrument-invalid'}
 finally{
