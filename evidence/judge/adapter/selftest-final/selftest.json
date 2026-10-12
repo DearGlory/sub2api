@@ -1,0 +1,117 @@
+{
+  "status": "pass",
+  "scope": "synthetic judge self-proof ONLY, never product evidence",
+  "tests": [
+    {
+      "name": "synthetic positive",
+      "passed": true,
+      "note": "judge self-proof only; no product acceptance"
+    },
+    {
+      "name": "no explosion",
+      "criterion": "gather-internal-explosion",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "linear collapse",
+      "criterion": "scatter-accelerating-collapse",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "world drift",
+      "criterion": "gather-world-anchor",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "pixel size positive",
+      "criterion": "size",
+      "status": "pass",
+      "expected": "pass",
+      "passed": true
+    },
+    {
+      "name": "pixel exposure positive",
+      "criterion": "exposure",
+      "status": "pass",
+      "expected": "pass",
+      "passed": true
+    },
+    {
+      "name": "no mesh",
+      "criterion": "mesh-normals-triangles",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "only points / no volume",
+      "criterion": "volume-draw",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "opacity zero tail",
+      "criterion": "volume-draw",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "overexposed",
+      "criterion": "exposure",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "shrunken",
+      "criterion": "size",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "same old bright sphere",
+      "criterion": "size",
+      "status": "fail",
+      "expected": "fail",
+      "passed": true
+    },
+    {
+      "name": "synthetic anisotropic pool/GPU mapping positive",
+      "passed": true
+    },
+    {
+      "name": "axes GPU mismatch",
+      "passed": true,
+      "expected": "fail"
+    },
+    {
+      "name": "non-unit axis / invalid radius",
+      "passed": true,
+      "expected": "fail"
+    },
+    {
+      "name": "no births with prelaid density",
+      "passed": true,
+      "expected": "fail"
+    },
+    {
+      "name": "missing birth provenance",
+      "passed": true,
+      "expected": "instrument-invalid"
+    },
+    {
+      "name": "legacy spherical layout negative baseline",
+      "passed": true,
+      "expected": "fail"
+    }
+  ]
+}

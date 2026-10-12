@@ -32,12 +32,15 @@ material('opacity zero tail',{...row,contributions:{surface:bigger,tail:pixels(e
 material('overexposed',{...row,bodyPixels:pixels(image(30,255),empty)},'exposure','fail')
 material('shrunken',{...row,bodyPixels:pixels(image(12,140),empty)},'size','fail')
 material('same old bright sphere',{...row,bodyPixels:old},'size','fail')
-const bins=Array(80).fill(0),densities=Array(20).fill(0);bins.splice(4,4,1,2,3,.4);densities[1]=.5
-const proofObject={materials:[{linked:true,fragment:'#define IS_COMA 0\n density(p);uCameraFrame + ray;1.0-exp(-d);p-uBins[j].xyz',uniforms:{uBins:bins,uDensities:densities},gpuUniforms:{'uBins[0]':Array.from({length:20},(_,i)=>bins.slice(i*4,i*4+4)),'uDensities[0]':densities.slice()}}]}
+const bins=Array(80).fill(0),densities=Array(20).fill(0),axes=Array(80).fill(0);bins.splice(4,4,1,2,3,.129);densities[1]=.5;axes.splice(4,4,1,0,0,.1935)
+const proofObject={materials:[{linked:true,fragment:'#define IS_COMA 0\n uniform vec4 uBinAxes[20]; density(p);uCameraFrame + ray;1.0-exp(-d);p-uBins[j].xyz;uBins[j].w;uBinAxes[j].xyz;uBinAxes[j].w; dot(d,axis);d-axis*along;r2-s*s',uniforms:{uBins:bins,uBinAxes:axes,uDensities:densities},gpuUniforms:{'uBins[0]':Array.from({length:20},(_,i)=>bins.slice(i*4,i*4+4)),'uBinAxes[0]':Array.from({length:20},(_,i)=>axes.slice(i*4,i*4+4)),'uDensities[0]':densities.slice()}}]}
 const proofGeometry={tail:{births:[{birthTime:1,age:.2,life:2,position:[1,2,3]}]}}
-assert.equal(volumeProvenance(proofObject,proofGeometry).status,'pass');tests.push({name:'synthetic volume pool/GPU mapping positive',passed:true})
-const fake=structuredClone(proofObject);fake.materials[0].gpuUniforms['uBins[0]'][1][0]=9;assert.equal(volumeProvenance(fake,proofGeometry).status,'fail');tests.push({name:'detached GPU density samples',passed:true,expected:'fail'})
-assert.equal(volumeProvenance(proofObject,{tail:{births:[]}}).status,'fail');tests.push({name:'prelaid density without births',passed:true,expected:'fail'})
+assert.equal(volumeProvenance(proofObject,proofGeometry).status,'pass');tests.push({name:'synthetic anisotropic pool/GPU mapping positive',passed:true})
+const fake=structuredClone(proofObject);fake.materials[0].gpuUniforms['uBinAxes[0]'][1][0]=9;assert.equal(volumeProvenance(fake,proofGeometry).status,'fail');tests.push({name:'axes GPU mismatch',passed:true,expected:'fail'})
+const invalidAxis=structuredClone(proofObject);invalidAxis.materials[0].uniforms.uBinAxes[4]=2;invalidAxis.materials[0].gpuUniforms['uBinAxes[0]'][1][0]=2;assert.equal(volumeProvenance(invalidAxis,proofGeometry).status,'fail');tests.push({name:'non-unit axis / invalid radius',passed:true,expected:'fail'})
+assert.equal(volumeProvenance(proofObject,{tail:{births:[]}}).status,'fail');tests.push({name:'no births with prelaid density',passed:true,expected:'fail'})
+const noBirthField=structuredClone(proofGeometry);delete noBirthField.tail.births;assert.equal(volumeProvenance(proofObject,noBirthField).status,'instrument-invalid');tests.push({name:'missing birth provenance',passed:true,expected:'instrument-invalid'})
+const legacy=structuredClone(proofObject);legacy.materials[0].uniforms.uBinAxes=undefined;legacy.materials[0].gpuUniforms['uBinAxes[0]']=undefined;legacy.materials[0].fragment+='\n vec3 d = (p-uBins[j].xyz) / max(uBins[j].w, 0.01);';assert.equal(volumeProvenance(legacy,proofGeometry).status,'fail');tests.push({name:'legacy spherical layout negative baseline',passed:true,expected:'fail'})
 const result={status:'pass',scope:'synthetic judge self-proof ONLY, never product evidence',tests}
 await fs.writeFile(path.join(out,'selftest.json'),JSON.stringify(result,null,2))
 await fs.writeFile(path.join(out,'synthetic-baseline.png'),image(20,240));await fs.writeFile(path.join(out,'synthetic-positive.png'),image(30,140))
