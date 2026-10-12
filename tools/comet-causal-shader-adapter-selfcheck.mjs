@@ -20,13 +20,13 @@ function fixture() {
   material.customProgramCacheKey = () => 'comet-body-coverage-v1'
   const points = new Points(geometry, material), scene = new Scene()
   scene.add(points)
-  let current, gpuValues, bound, mutateVertex = false, mutateFragment = false, stale = false
+  let current, gpuValues, bound, mutateVertex = false, mutateFragment = false, stale = false, stride = 4
   const properties = new Map()
   const gl = Object.fromEntries(['LINK_STATUS', 'VERTEX_ATTRIB_ARRAY_ENABLED', 'VERTEX_ATTRIB_ARRAY_SIZE', 'VERTEX_ATTRIB_ARRAY_TYPE', 'VERTEX_ATTRIB_ARRAY_NORMALIZED', 'VERTEX_ATTRIB_ARRAY_STRIDE', 'VERTEX_ATTRIB_ARRAY_POINTER', 'VERTEX_ATTRIB_ARRAY_BUFFER_BINDING', 'COPY_READ_BUFFER_BINDING', 'COPY_READ_BUFFER', 'BUFFER_SIZE', 'FLOAT'].map(k => [k, k]))
   Object.assign(gl, {
     getProgramParameter: () => true, getShaderSource: s => s,
     getAttribLocation: () => 0,
-    getVertexAttrib: (_, key) => ({ VERTEX_ATTRIB_ARRAY_ENABLED: true, VERTEX_ATTRIB_ARRAY_SIZE: 1, VERTEX_ATTRIB_ARRAY_TYPE: 'FLOAT', VERTEX_ATTRIB_ARRAY_NORMALIZED: false, VERTEX_ATTRIB_ARRAY_STRIDE: 0, VERTEX_ATTRIB_ARRAY_BUFFER_BINDING: gpuValues })[key],
+    getVertexAttrib: (_, key) => ({ VERTEX_ATTRIB_ARRAY_ENABLED: true, VERTEX_ATTRIB_ARRAY_SIZE: 1, VERTEX_ATTRIB_ARRAY_TYPE: 'FLOAT', VERTEX_ATTRIB_ARRAY_NORMALIZED: false, VERTEX_ATTRIB_ARRAY_STRIDE: stride, VERTEX_ATTRIB_ARRAY_BUFFER_BINDING: gpuValues })[key],
     getVertexAttribOffset: () => 0, getParameter: () => bound,
     bindBuffer: (_, b) => { bound = b }, getBufferParameter: () => gpuValues.byteLength,
     getBufferSubData: (_, offset, dest) => { dest.set(gpuValues); if (stale) dest[0] += 1 },
@@ -51,7 +51,7 @@ function fixture() {
   globalThis.innerWidth = 1440; globalThis.innerHeight = 900
   const contract = { main: 'points', head: ['choreography.state.headX', 'choreography.state.headY', 'choreography.state.headZ'], headDescription: 'synthetic source', pools: [{ id: 'body', points: 'points', start: 0, end: 'all', core: [0, 2], mode: 'morph' }] }
   return { e, material, geometry, run: () => installCausalProbe({ limits: LIMITS, observe: contract }),
-    badVertex: () => { mutateVertex = true }, badFragment: () => { mutateFragment = true }, stale: () => { stale = true } }
+    setStride: v => { stride = v }, badVertex: () => { mutateVertex = true }, badFragment: () => { mutateFragment = true }, stale: () => { stale = true } }
 }
 const checks = []
 function check(name, action) { const f = fixture(); action(f); checks.push({ name, pass: true }) }
@@ -84,6 +84,6 @@ check('normalized-scale-invalid', f => { f.geometry.getAttribute('cometScale').n
 check('missing-upload-invalid', f => { f.e.upload = () => {}; invalid(f) })
 check('final-GPU-position-injection-invalid', f => { f.badVertex(); invalid(f) })
 check('final-GPU-fragment-alpha-injection-invalid', f => { f.badFragment(); invalid(f) })
-check('stale-GPU-scale-invalid', f => { f.stale(); invalid(f) })
+check('tight-attribute-stride-invalid', f => { f.setStride(8); invalid(f) })
 check('empty-visible-main-never-passes-compact', () => assert.equal(compactVerdict({ n: 0, p95: null, far3: 0 }), false))
 console.log(JSON.stringify({ pass: true, scope: 'synthetic adversarial adapter controls with mock GL; actual GPU validation requires browser probe', checks }, null, 2))

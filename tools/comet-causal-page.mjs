@@ -136,7 +136,7 @@ void main() {
       const declaration = 'attribute float cometScale;\n', size = 'gl_PointSize = size * cometScale;'
       if (actual.vertex.split(declaration).length !== 2 || actual.vertex.split(size).length !== 2 || actual.vertex.replace(declaration, '').replace(size, 'gl_PointSize = size;') !== baseline.vertex || actual.fragment !== baseline.fragment) fail('final GPU shader differs beyond PointSize declaration/multiplication')
       const location = gl.getAttribLocation(actual.program.program, 'cometScale')
-      if (location < 0 || !gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_ENABLED) || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_SIZE) !== 1 || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_TYPE) !== gl.FLOAT || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_NORMALIZED) || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_STRIDE) !== 0 || gl.getVertexAttribOffset(location, gl.VERTEX_ATTRIB_ARRAY_POINTER) !== 0) fail('GPU cometScale attribute binding invalid')
+      if (location < 0 || !gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_ENABLED) || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_SIZE) !== 1 || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_TYPE) !== gl.FLOAT || gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_NORMALIZED) || ![0, Float32Array.BYTES_PER_ELEMENT].includes(gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_STRIDE)) || gl.getVertexAttribOffset(location, gl.VERTEX_ATTRIB_ARRAY_POINTER) !== 0) fail('GPU cometScale attribute binding invalid')
       const buffer = gl.getVertexAttrib(location, gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING), previous = gl.getParameter(gl.COPY_READ_BUFFER_BINDING), values = new Float32Array(a.count)
       let bytes
       try {
