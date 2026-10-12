@@ -1,6 +1,8 @@
 import { BufferAttribute, BufferGeometry, Points, PointsMaterial, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { createEngineScratch, paletteFor, ParticleEngine } from '../ParticleEngine'
+import { cometVisualFixture } from './cometVisualFixture'
+import { COMET_COMA_RADIUS } from '../cometVisualContract'
 import { LEG_SECONDS, SCATTER_SECONDS } from '../constants'
 import { COALESCE_END, departureSeconds } from '../flightTiming'
 import type { ChoreographyState } from '../types'
@@ -45,6 +47,7 @@ export function renderHarness(light = false, moving = true) {
     integrate(step: number, time: number, delta: number): void
     upload(): void
   }, {
+    ...cometVisualFixture(light),
     scratch, particleCount: COUNT, choreography, geometry, tailGeometry,
     palette: paletteFor(light), light, reducedMotion: false,
     points: new Points(geometry, new PointsMaterial({ size: paletteFor(light).pointSize })), tailPoints: new Points(tailGeometry),
@@ -133,7 +136,16 @@ describe('causal render: separate body and emitted tail', () => {
     const h = renderHarness(false, false)
     h.update('scatter', 0)
     h.update('scatter', p)
-    expect(extent(h.geometry.getAttribute('position').array, h.geometry.getAttribute('color').array, h.state.headX)).toBeLessThan(1.15)
+    // The contract deliberately enlarges the old 1.02 coma by 1.5; test actual
+    // geometry too, so lowering opacity cannot make this radius check vacuous.
+    expect(extent(h.geometry.getAttribute('position').array, h.geometry.getAttribute('color').array, h.state.headX)).toBeLessThanOrEqual(COMET_COMA_RADIUS)
+    for (let i = 0; i < COUNT; i++) {
+      const k = i * 3
+      expect(Math.hypot(h.scratch.positions[k] - h.state.headX, h.scratch.positions[k + 1], h.scratch.positions[k + 2])).toBeLessThanOrEqual(COMET_COMA_RADIUS)
+      expect(h.scratch.positions[k]).toBeCloseTo(h.state.headX + h.scratch.body.offsets[k], 6)
+      expect(h.scratch.positions[k + 1]).toBe(h.state.headY + h.scratch.body.offsets[k + 1])
+      expect(h.scratch.positions[k + 2]).toBe(h.state.headZ + h.scratch.body.offsets[k + 2])
+    }
     expect(h.pool, 'a separately owned emission pool must exist').toBeDefined()
     expect(extent(h.tailGeometry.getAttribute('position').array, h.tailGeometry.getAttribute('color').array, h.state.headX)).toBe(0)
   })

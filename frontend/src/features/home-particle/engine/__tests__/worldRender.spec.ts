@@ -1,6 +1,7 @@
 import { BufferAttribute, BufferGeometry, PerspectiveCamera, Points, PointsMaterial, Vector3 } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import { createEngineScratch, fillEmissionTable, paletteFor, ParticleEngine } from '../ParticleEngine'
+import { cometVisualFixture } from './cometVisualFixture'
 import { cameraTravelAt, glyphStopZ } from '../spaceMotion'
 import { CAMERA_FOV, GATHER_SECONDS, HOLD_SECONDS, LEG_SECONDS, SCATTER_SECONDS, SUBJECT_Z } from '../constants'
 import type { BrandTargets, ChoreographyState, CometPhase } from '../types'
@@ -56,6 +57,7 @@ function harness(leg = 0, light = false) {
     updateCameraFit(): void
     setReducedMotion(value: boolean): void
   }, {
+    ...cometVisualFixture(light),
     scratch, particleCount: count, choreography, geometry, tailGeometry, points, tailPoints, camera,
     palette: paletteFor(light), light, reducedMotion: false, disposed: false,
     renderedPhase: 'hold' as CometPhase, lastPhase: 'hold' as CometPhase, currentGlyphLeg: -1,

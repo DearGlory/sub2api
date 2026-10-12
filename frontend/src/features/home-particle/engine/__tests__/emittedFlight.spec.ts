@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BufferAttribute, BufferGeometry, Points, PointsMaterial, Vector3 } from 'three'
 import { createEngineScratch, fillEmissionTable, paletteFor, ParticleEngine } from '../ParticleEngine'
+import { cometVisualFixture } from './cometVisualFixture'
 import type { ChoreographyState } from '../types'
 
 /** Real integration and upload; only WebGL construction is omitted. */
@@ -27,6 +28,7 @@ function flight(light = false) {
   const engine = Object.assign(Object.create(ParticleEngine.prototype) as {
     integrate(step: number, time: number, delta: number): void; upload(): void
   }, {
+    ...cometVisualFixture(light),
     scratch, particleCount: count, choreography: { state }, geometry, tailGeometry,
     palette: paletteFor(light), light, reducedMotion: false,
     points: new Points(geometry, new PointsMaterial({ size: paletteFor(light).pointSize })), tailPoints: new Points(tailGeometry),

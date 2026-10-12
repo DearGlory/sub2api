@@ -1,5 +1,6 @@
 import type { Color } from 'three'
 import type { EmissionTable } from './ParticleEngine'
+import { COMET_VOLUME_SCALE } from './cometVisualContract'
 
 function noise(i: number, salt: number): number {
   let n = Math.imul(i ^ salt, 0x45d9f3b)
@@ -142,9 +143,10 @@ export function createCometBody(count: number) {
     const x = r * radial * Math.cos(angle)
     const y = r * radial * Math.sin(angle)
     const texture = 0.76 + 0.24 * Math.sin(x * 34 + y * 17) * Math.sin(z * 9 - y * 23)
-    offsets[i * 3] = x * (nucleus ? 1.12 : 1)
-    offsets[i * 3 + 1] = y * (nucleus ? 0.79 : 1)
-    offsets[i * 3 + 2] = r * z * 0.8
+    // 1.5x coma volume; the visible .72 rocky surface belongs to CometVisual.
+    offsets[i * 3] = x * (nucleus ? 1.12 : 1) * COMET_VOLUME_SCALE
+    offsets[i * 3 + 1] = y * (nucleus ? 0.79 : 1) * COMET_VOLUME_SCALE
+    offsets[i * 3 + 2] = r * z * 0.8 * COMET_VOLUME_SCALE
     const shade = 0.42 + 0.58 * Math.max(0, (z - y / r + 1) / 3)
     // Keep the bright nucleus small; the coma spends its light on a wider,
     // softer footprint. Both remain particles of this same coalescing body.
