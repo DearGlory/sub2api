@@ -358,6 +358,99 @@ describe('choreography: brand and leg advance', () => {
   })
 })
 
+describe('choreography: setSwayY retunes the vertical sway at runtime', () => {
+  /** Peak |headY| over one full travel leg, sampled finely. */
+  function peakHeadY(choreo: Choreography, seconds: number): number {
+    let peak = 0
+    const dt = 0.001
+    for (let t = 0; t < seconds; t += dt) {
+      peak = Math.max(peak, Math.abs(choreo.state.headY))
+      choreo.update(dt)
+    }
+    return peak
+  }
+
+  it('scales the peak sway in proportion to the requested value', () => {
+    // The whole point of B1: a portrait viewport multiplies SWAY_Y and the plume must
+    // follow. Proportionality is the design claim, so it is what gets asserted —
+    // an absolute threshold would pass for a sway that ignored the argument.
+    const base = createChoreography(makeOptions())
+    const k = 3.462
+    const doubled = createChoreography(makeOptions({ swayY: SWAY_Y * k }))
+    const a = peakHeadY(base, CYCLE_SECONDS)
+    const b = peakHeadY(doubled, CYCLE_SECONDS)
+    expect(b / a).toBeCloseTo(k, 2)
+  })
+
+  it('reaches the new amplitude without a restart, measured after the retune', () => {
+    const k = 3.462
+    const choreo = createChoreography(makeOptions())
+    // Establish the un-scaled baseline first, then retune mid-flight — the case a
+    // resize actually produces.
+    const before = peakHeadY(choreo, CYCLE_SECONDS)
+    choreo.setSwayY(SWAY_Y * k)
+    const after = peakHeadY(choreo, CYCLE_SECONDS)
+    expect(after / before).toBeCloseTo(k, 2)
+  })
+
+  it('publishes the new amplitude on the same frame, not on the next update', () => {
+    // The engine seeds the opening glyph from `state` before the first `update()`, so a
+    // resize during boot would place the glyph on the stale curve if this lagged.
+    const choreo = createChoreography(makeOptions())
+    choreo.update(0.5)
+    const headYBefore = choreo.state.headY
+    choreo.setSwayY(SWAY_Y * 3)
+    expect(choreo.state.headY).not.toBe(headYBefore)
+  })
+
+  it('moves the head and its trail together', () => {
+    // `sampleTrail` and `writeState` must read the same sway, or the tail replays a
+    // path the head is no longer on. Comparing them across many phases is what catches
+    // a `setSwayY` that reached only one of the two code paths — an instantaneous check
+    // at a single phase can pass by coincidence where the S-curve crosses zero.
+    const choreo = createChoreography(makeOptions())
+    choreo.setSwayY(SWAY_Y * 3.462)
+    let peak = 0
+    const here: Point3 = { x: 0, y: 0, z: 0 }
+    for (let t = 0; t < CYCLE_SECONDS; t += 0.05) {
+      choreo.update(0.05)
+      // `sampleTrail(0)` is by definition the head's position now.
+      choreo.sampleTrail(0, here)
+      expect(here.x).toBeCloseTo(choreo.state.headX, 9)
+      expect(here.y).toBeCloseTo(choreo.state.headY, 9)
+      expect(here.z).toBeCloseTo(choreo.state.headZ, 9)
+      peak = Math.max(peak, Math.abs(here.y))
+    }
+    // And the retuned amplitude is really in that shared value. The S-curve passes
+    // through zero, so only the peak is comparable against the constant.
+    expect(peak).toBeGreaterThan(SWAY_Y * 3)
+  })
+
+  it('ignores a non-finite sway instead of collapsing it to zero', () => {
+    // A zero sway is legitimate (a flat S), so a NaN clamped to 0 would silently turn
+    // a caller's bug into a plausible-looking layout.
+    const choreo = createChoreography(makeOptions())
+    choreo.update(0.5)
+    const headY = choreo.state.headY
+    choreo.setSwayY(Number.NaN)
+    expect(choreo.state.headY).toBe(headY)
+    choreo.setSwayY(Number.POSITIVE_INFINITY)
+    expect(choreo.state.headY).toBe(headY)
+  })
+
+  it('accepts a zero sway, because a flat S is a real setting', () => {
+    const choreo = createChoreography(makeOptions())
+    choreo.setSwayY(0)
+    const dt = 0.001
+    for (let t = 0; t < CYCLE_SECONDS; t += dt) {
+      // `toBe(0)` would reject a legitimate `-0` (sin crosses zero from below), and
+      // `-0` is a perfectly flat S. The claim is "no vertical motion", so assert that.
+      expect(choreo.state.headY === 0).toBe(true)
+      choreo.update(dt)
+    }
+  })
+})
+
 describe('choreography: the head reaches the extremes', () => {
   it('gathers only at +/-amplitudeX: the head is at an extreme when gather starts', () => {
     const dt = 0.001

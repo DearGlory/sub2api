@@ -556,7 +556,12 @@ export function createChoreography(options: ChoreographyOptions): Choreography {
         leg,
         PHASES[index],
         phaseProgressAt(time, clock, index),
-        options,
+        // `safe`, not the raw `options`: this is the same object `writeState` samples, so
+        // a runtime `setSwayY` moves the head and its trail together. Passing the raw
+        // options here was equivalent while nothing mutated them (both paths sanitise),
+        // but once the sway is retuned on resize the two would disagree and the tail
+        // would replay a path the head is no longer on.
+        safe,
         out
       )
     },
@@ -569,6 +574,24 @@ export function createChoreography(options: ChoreographyOptions): Choreography {
     nextBrand(): void {
       brandIndex = wrapIndex(brandIndex + 1, brandCount)
       state.brandIndex = brandIndex
+    },
+
+    /**
+     * Retune the vertical sway (see the interface for why only this one).
+     *
+     * `writeState()` is called immediately so `state.headY` reflects the new sway on the
+     * same frame. Without it the state would keep the old amplitude until the next
+     * `update()`, and the engine seeds the opening glyph and reads `state` before the
+     * first update — so a resize during boot would put the glyph on the old curve.
+     *
+     * A non-finite input is ignored rather than sanitised to 0: a 0 sway is a legitimate
+     * setting (a flat S), so silently clamping a NaN to it would turn a caller's bug
+     * into a plausible-looking layout.
+     */
+    setSwayY(next: number): void {
+      if (!Number.isFinite(next)) return
+      safe.swayY = next
+      writeState()
     },
   }
 }

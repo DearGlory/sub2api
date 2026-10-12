@@ -63,6 +63,19 @@ export interface Choreography {
   ): void
   /** Advance to the next brand without waiting out the current leg. */
   nextBrand(): void
+  /**
+   * Retune the vertical sway, for a viewport whose aspect changes how steeply the
+   * plume reads on screen.
+   *
+   * Only `swayY` is exposed: it is the one term that aims the plume along the screen's
+   * vertical, which is where the long axis is on a portrait viewport. Retuning
+   * `amplitudeX` or `swayZ` at runtime would move the glyph or tilt the axis into
+   * depth, and neither is a function of the viewport.
+   *
+   * The value is sanitised the same way the constructor's is, so a caller that resizes
+   * into a degenerate aspect cannot write a NaN into `state.headY`.
+   */
+  setSwayY(next: number): void
 }
 
 // ---------------------------------------------------------------------------

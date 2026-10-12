@@ -73,6 +73,66 @@ export const SWAY_Y = 1.6 * (AMPLITUDE_X / SWAY_REFERENCE_AMPLITUDE_X)
  * out of the screen plane.
  */
 export const SWAY_Z = 2.2 * (AMPLITUDE_X / SWAY_REFERENCE_AMPLITUDE_X)
+
+/**
+ * The viewport aspect whose `SWAY_Y` is the authored one (1440x900, i.e. 16:10).
+ *
+ * Why the vertical sway alone has to answer to the viewport, and why `SWAY_Z` must
+ * not: the two sways tilt the emission axis in different screen directions.
+ *
+ *   `SWAY_Y` tilts the axis along the screen's VERTICAL;
+ *   `SWAY_Z` tilts it along the DEPTH axis, which is what raised
+ *   `mean |axis.z|` 0.212 -> 0.4455 in the wide-fan regression (§ SWAY_Y).
+ *
+ * So a lone `SWAY_Y` increase is the one lever that aims the plume at the long axis of
+ * a portrait viewport without re-creating the fan. Sweeping the axis analytically
+ * (`dx/de = toX - fromX = 2*AMPLITUDE_X` against `dy/de = swayY*2*pi*cos(turn)`), the
+ * depth share goes DOWN as the vertical sway grows, because a larger y term takes a
+ * bigger share of the unit vector:
+ *
+ *   k=1.000 (1440x900)  mean |axis.y| 0.317  mean |axis.z| 0.223  peak tilt 29.2 deg
+ *   k=2.489 (900x1400)  mean |axis.y| 0.593  mean |axis.z| 0.191  peak tilt 54.3 deg
+ *   k=3.462 (390x844)   mean |axis.y| 0.686  mean |axis.z| 0.172  peak tilt 62.7 deg
+ *
+ * For contrast, scaling `SWAY_Y` AND `SWAY_Z` together — the LF regression's shape —
+ * gives `mean |axis.y|` 0.617 against `mean |axis.z|` 0.464: same tilt, but the depth
+ * share is nearly 3x higher, which is the wide fan.
+ *
+ * The quantity that must stay fixed is the plume's direction IN VIEWPORT SHARES, and
+ * the projection is not isotropic: a world `x` of 1 maps to `1/aspect` of the viewport
+ * width while a world `y` of 1 maps to 1 of its height. So the on-screen tilt is
+ *
+ *     tan(tilt) = |axis.y| / (|axis.x| / aspect)
+ *
+ * and holding that angle constant across viewports means `SWAY_Y ∝ 1/aspect`. The
+ * scale is anchored so it is exactly 1 at this aspect, which is why the landscape
+ * layout — the authored, verified one — does not move by a single unit. Checked
+ * against the shipped constant: `0.4551 * (1.6 / 1.6) = 0.4551`.
+ */
+export const SWAY_ASPECT_REFERENCE = 1.6
+
+/**
+ * Ceiling on the portrait sway multiplier.
+ *
+ * Without it the multiplier runs away as the aspect approaches the `0.2` floor in
+ * `updateCameraFit` (where it would reach 8x, tilting the axis to 80 degrees and
+ * turning the plume near-vertical). 4.0 already saturates every real phone: the widest
+ * common case, 390x844 at aspect 0.462, needs 3.46, and anything narrower is below the
+ * floor of any viewport this effect is built for.
+ */
+export const SWAY_ASPECT_SCALE_MAX = 4.0
+
+/**
+ * How much to stretch `SWAY_Y` on a viewport narrower than {@link SWAY_ASPECT_REFERENCE}.
+ *
+ * Landscape returns exactly 1 (never less: narrowing the sway on a wide viewport would
+ * re-create the original tilt regression in the other direction), so this is a no-op
+ * for every desktop viewport and only engages in portrait.
+ */
+export function swayAspectScale(aspect: number): number {
+  if (!Number.isFinite(aspect) || aspect <= 0) return 1
+  return Math.min(SWAY_ASPECT_SCALE_MAX, Math.max(1, SWAY_ASPECT_REFERENCE / aspect))
+}
 /** The particle slab sits this far behind the origin, giving the starfield room. */
 export const SUBJECT_Z = -6.0
 
