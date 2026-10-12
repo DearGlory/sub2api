@@ -970,6 +970,7 @@ export class ParticleEngine implements ParticleEngineContract {
     colAttr.setUsage(DynamicDrawUsage)
     this.geometry.setAttribute('position', posAttr)
     this.geometry.setAttribute('color', colAttr)
+    this.geometry.setAttribute('cometScale', new BufferAttribute(this.scratch.body.spriteScale, 1).setUsage(DynamicDrawUsage))
     // The cloud is authored per frame and never culled, so three must not try to
     // compute a bounding sphere from one frame's worth of positions.
     this.geometry.boundingSphere = null
@@ -999,7 +1000,14 @@ export class ParticleEngine implements ParticleEngineContract {
     this.tailGeometry.setAttribute('position', new BufferAttribute(this.scratch.emittedTail.positions, 3).setUsage(DynamicDrawUsage))
     this.tailGeometry.setAttribute('color', new BufferAttribute(this.scratch.emittedTail.colors, 4).setUsage(DynamicDrawUsage))
     this.tailMaterial = this.material.clone()
-    this.tailMaterial.size = this.palette.pointSize * 0.78
+    this.tailMaterial.size = this.palette.pointSize * (this.light ? 1.05 : 3.6)
+    // Only the body uses per-point coverage; the tail keeps its own material.
+    this.material.onBeforeCompile = shader => {
+      shader.vertexShader = `attribute float cometScale;\n${shader.vertexShader}`.replace(
+        'gl_PointSize = size;', 'gl_PointSize = size * cometScale;'
+      )
+    }
+    this.material.customProgramCacheKey = () => 'comet-body-coverage-v1'
     this.tailPoints = new Points(this.tailGeometry, this.tailMaterial)
     this.tailPoints.name = 'causal-emitted-tail'
     this.tailPoints.frustumCulled = false
@@ -1115,7 +1123,7 @@ export class ParticleEngine implements ParticleEngineContract {
     this.material.opacity = this.palette.opacity
     this.material.needsUpdate = true
     this.tailMaterial.blending = this.palette.blending
-    this.tailMaterial.size = this.palette.pointSize * 0.78
+    this.tailMaterial.size = this.palette.pointSize * (this.light ? 1.05 : 3.6)
     this.tailMaterial.opacity = this.palette.opacity
     this.tailMaterial.needsUpdate = true
     this.renderer.setClearColor(this.palette.background, isLightTheme ? 1 : 0)
@@ -1512,7 +1520,10 @@ export class ParticleEngine implements ParticleEngineContract {
     if (phase !== this.renderedPhase) {
       if (phase === 'gather' || phase === 'scatter') {
         s.shapeFrom.set(positions)
-        for (let i = 0; i < count; i++) s.shapeAlpha[i] = colors[i * 4 + 3]
+        for (let i = 0; i < count; i++) {
+          const spriteScale = s.body.spriteScale[i]
+          s.shapeAlpha[i] = colors[i * 4 + 3] * spriteScale * spriteScale
+        }
         s.pointerOffset.fill(0)
         velocities.fill(0)
       }
@@ -1598,6 +1609,10 @@ export class ParticleEngine implements ParticleEngineContract {
 
     const useHoldStep = phase === 'hold' && glyphMix > 0.5
     const cometMix = 1 - glyphMix
+    // Per-point coverage separates the small nucleus from the diffuse coma.
+    // Restore the original point footprint as the body becomes a glyph.
+    const bodyMaterial = this.points.material as PointsMaterial
+    bodyMaterial.size = palette.pointSize
     const table = s.tailTable
     const departure = departureSeconds(phase, state.phaseProgress, LEG_SECONDS, SCATTER_SECONDS)
     const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6
@@ -1713,13 +1728,16 @@ export class ParticleEngine implements ParticleEngineContract {
       colors[colorIndex] = cr > cap ? cap : cr
       colors[colorIndex + 1] = cg > cap ? cap : cg
       colors[colorIndex + 2] = cb > cap ? cap : cb
-      colors[colorIndex + 3] = alpha
+      const spriteScale = 1 + cometMix * (this.light ? 0.35 : s.body.spriteSize[i] - 1)
+      s.body.spriteScale[i] = spriteScale
+      colors[colorIndex + 3] = alpha / (spriteScale * spriteScale)
     }
   }
 
   private upload(): void {
     this.geometry.getAttribute('position').needsUpdate = true
     this.geometry.getAttribute('color').needsUpdate = true
+    this.geometry.getAttribute('cometScale').needsUpdate = true
     this.tailGeometry.getAttribute('position').needsUpdate = true
     this.tailGeometry.getAttribute('color').needsUpdate = true
   }
@@ -1810,10 +1828,11 @@ export class ParticleEngine implements ParticleEngineContract {
     this.stats.brandSlug = this.currentBrandSlug
     this.stats.drawCalls = info.render.calls
     this.stats.triangles = info.render.triangles
-    // Positions and colours are the only GPU-resident buffers the cloud owns.
+    // Include per-point coverage as well as the position/colour buffers.
     this.stats.geometryBytes =
       this.geometry.getAttribute('position').array.byteLength +
       this.geometry.getAttribute('color').array.byteLength +
+      this.geometry.getAttribute('cometScale').array.byteLength +
       this.tailGeometry.getAttribute('position').array.byteLength +
       this.tailGeometry.getAttribute('color').array.byteLength
 

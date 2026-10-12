@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Points } from 'three'
+import { BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three'
 import { describe, expect, it } from 'vitest'
 import { createEngineScratch, paletteFor, ParticleEngine } from '../ParticleEngine'
 import { LEG_SECONDS, SCATTER_SECONDS } from '../constants'
@@ -29,6 +29,7 @@ export function renderHarness(light = false, moving = true) {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(scratch.positions, 3))
   geometry.setAttribute('color', new BufferAttribute(scratch.colors, 4))
+  geometry.setAttribute('cometScale', new BufferAttribute(scratch.body.spriteScale, 1))
   // The pool is owned by createEngineScratch, never by the test fixture.
   const pool = Reflect.get(scratch, 'emittedTail') as {
     positions: Float32Array; colors: Float32Array; birthTime: Float64Array
@@ -46,7 +47,7 @@ export function renderHarness(light = false, moving = true) {
   }, {
     scratch, particleCount: COUNT, choreography, geometry, tailGeometry,
     palette: paletteFor(light), light, reducedMotion: false,
-    points: new Points(geometry), tailPoints: new Points(tailGeometry),
+    points: new Points(geometry, new PointsMaterial({ size: paletteFor(light).pointSize })), tailPoints: new Points(tailGeometry),
     renderedPhase: 'hold', lastPhase: 'hold', holdFade: 0, tailPoint: new Float32Array(3),
     pointer: { active: false, lastMove: 0 }, width: 1440, height: 900,
     options: {}, roster: [{ slug: 'fixture' }], currentBrandSlug: 'fixture',
@@ -86,6 +87,26 @@ function extent(positions: ArrayLike<number>, colors: ArrayLike<number>, x: numb
 }
 
 describe('causal render: separate body and emitted tail', () => {
+  it.each([false, true])('preserves light through gather and restores glyph coverage (light=%s)', light => {
+    const h = renderHarness(light)
+    h.update('travel', 0.4)
+    const scale = h.geometry.getAttribute('cometScale')
+    const before = Array.from(h.scratch.colors.filter((_, i) => i % 4 === 3),
+      (alpha, i) => alpha * scale.getX(i) ** 2)
+    const version = scale.version
+    expect(Math.min(...h.scratch.body.spriteScale)).toBeGreaterThan(1)
+    h.update('gather', 0)
+    expect(scale.version).toBeGreaterThan(version)
+    for (let i = 0; i < COUNT; i++) {
+      expect(h.scratch.colors[i * 4 + 3] * scale.getX(i) ** 2).toBeCloseTo(before[i], 6)
+    }
+    h.update('gather', 1)
+    h.update('hold', 0)
+    expect(h.scratch.body.spriteScale.every(size => size === 1)).toBe(true)
+    expect(h.scratch.colors.filter((_, i) => i % 4 === 3).every(alpha => alpha === 1)).toBe(true)
+    expect(h.geometry.getAttribute('position').count).toBe(COUNT)
+  })
+
   it.each([0.62, 0.85, 1])('coalesces every visible logo particle into the nucleus/coma by scatter %s', (p) => {
     const h = renderHarness(false, false)
     h.update('scatter', 0)
