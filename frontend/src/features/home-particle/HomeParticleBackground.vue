@@ -224,6 +224,28 @@ defineExpose({
 }
 
 /*
+ * THE CANVAS MUST BE POSITIONED, or the photograph swallows it.
+ *
+ * CSS 2.1 Appendix E paints in-flow non-positioned descendants (the canvas, which
+ * the engine appends with only `display/width/height` set) in an EARLIER step than
+ * positioned ones with `z-index: auto` — which is what `.home-space-sky` is. So the
+ * sky div above, despite coming first in the DOM, painted OVER the canvas and the
+ * particles were invisible on the real page.
+ *
+ * The engine cannot be blamed: it is told to fill its container and does. Nor could
+ * any unit test catch it — jsdom applies no CSS from a scoped SFC block, so a green
+ * suite coexisted with a hero showing zero particles.
+ *
+ * Positioned here so both children are positioned; the DOM-order tiebreak then puts
+ * the canvas last, which is what the renderer's `alpha: true` + clear-alpha 0 in dark
+ * mode was always built for: photograph behind, additive particles in front.
+ */
+:deep(canvas) {
+  position: absolute;
+  inset: 0;
+}
+
+/*
  * Hand the small file to viewports that cannot tell the difference: a phone at
  * 2-3x DPR and a low-DPI laptop both resolve far below the 4096px master, so the
  * 234 KB lite pass buys the same picture for a twelfth of the bytes. Vite emits
