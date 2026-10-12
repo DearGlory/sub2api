@@ -6,13 +6,15 @@ import assert from 'node:assert/strict'
 import { decodePng } from './tail-probe-lib/png.mjs'
 
 const root=resolve(process.argv[2]||'evidence/starflow')
-const hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex')
+// Git may convert these text tools to CRLF on checkout. Accept the recorded
+// source bytes or their LF form; this does not normalize screenshot/buffer data.
+const hashes=p=>{const bytes=readFileSync(p);return [bytes,bytes.toString('utf8').replace(/\r\n/g,'\n')].map(x=>createHash('sha256').update(x).digest('hex'))}
 const checks=[]
 for(const mode of ['baseline','stopped','outward','dark']){
  const dir=join(root,'verified-'+mode), r=JSON.parse(readFileSync(join(dir,'result.json')))
  assert.equal(r.exit,0);assert.equal(r.pass,true);assert.equal(r.noHmr,true);assert.equal(r.controlEffective,true)
- assert.equal(r.methodHash,hash(new URL('./star-flow-probe.mjs',import.meta.url)))
- assert.equal(r.pageMethodHash,hash(new URL('./star-flow-page.mjs',import.meta.url)))
+ assert(hashes(new URL('./star-flow-probe.mjs',import.meta.url)).includes(r.methodHash))
+ assert(hashes(new URL('./star-flow-page.mjs',import.meta.url)).includes(r.pageMethodHash))
  assert.deepEqual(r.runtimeHashes,r.runtimeHashesAfter);assert.deepEqual(r.sourceBefore,r.sourceAfter)
  for(const run of r.runs){
   const prefix=mode==='baseline'?run.phase:'control'
