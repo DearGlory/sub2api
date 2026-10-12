@@ -83,8 +83,16 @@ describe('procedural comet surface', () => {
     expect(shader.uniforms.uRoughness!.value).toBeGreaterThan(0.7)
     expect(shader.uniforms.uLightDirection!.value.length()).toBeCloseTo(1)
     expect(shader.fragmentShader).toContain('dot(N, L)')
-    visual.update(frame({ light: true }), pool())
-    expect(shader.uniforms.uLightTheme!.value).toBe(1)
+    const exposure = shader.uniforms.uSurfaceExposure!.value
+    expect(exposure).toBeGreaterThan(0)
+    expect(exposure).toBeLessThan(1)
+    for (const light of [false, true]) {
+      visual.update(frame({ light }), pool())
+      expect(shader.uniforms.uLightTheme!.value).toBe(light ? 1 : 0)
+      expect(shader.uniforms.uSurfaceExposure!.value).toBe(exposure)
+      expect(shader.uniforms.uOpacity!.value).toBe(1)
+      expect(shader.depthWrite).toBe(true)
+    }
     expect(Object.values(shader.uniforms).some(uniform => uniform.value?.isTexture)).toBe(false)
     visual.dispose()
   })
@@ -280,6 +288,14 @@ describe('emitted volume', () => {
     expect(material(mesh).depthWrite).toBe(false)
     const coma = visual.object.getObjectByName('comet-coma-volume') as Mesh
     expect(coma.scale.x).toBeCloseTo(COMET_COMA_RADIUS * 2)
+    const comaExposure = material(coma).uniforms.uVolumeExposure!.value
+    for (const light of [false, true]) {
+      visual.update(frame({ light }), tail)
+      expect(material(coma).uniforms.uVolumeExposure!.value).toBe(comaExposure)
+      expect(material(coma).uniforms.uOpacity!.value).toBe(0.72)
+      expect(material(mesh).uniforms.uVolumeExposure!.value).toBe(1)
+      expect(material(mesh).uniforms.uOpacity!.value).toBe(1)
+    }
     visual.update(frame({ phase: 'gather', progress: 1 }), tail)
     expect(coma.visible).toBe(false)
     visual.update(frame({ phase: 'hold' }), tail)

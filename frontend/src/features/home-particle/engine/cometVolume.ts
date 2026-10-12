@@ -18,6 +18,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uSize;
   uniform vec3 uCameraFrame;
   uniform float uOpacity;
+  uniform float uVolumeExposure;
   uniform float uTime;
   uniform float uLightTheme;
   // xyz = active-birth centroid; w = transverse support half-axis, in the fixed subject frame.
@@ -92,7 +93,7 @@ const fragmentShader = /* glsl */ `
       if (opacity > 0.66) break;
     }
     if (opacity < 0.001) discard;
-    gl_FragColor = vec4(light / max(opacity,0.0001), min(opacity,0.66));
+    gl_FragColor = vec4(light * uVolumeExposure / max(opacity,0.0001), min(opacity,0.66));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -108,6 +109,8 @@ function proxy(name: string, coma: boolean, steps: number, options: CometVisualO
     uniforms: {
       uCenter: { value: new Vector3() }, uSize: { value: new Vector3(1, 1, 1) },
       uCameraFrame: { value: new Vector3() }, uOpacity: { value: 1 }, uTime: { value: 0 },
+      // Keep the local shell legible at lower surface exposure without increasing extinction.
+      uVolumeExposure: { value: coma ? 2 : 1 },
       uLightTheme: { value: options.light ? 1 : 0 }, uBins: { value: bins },
       uBinAxes: { value: axes }, uDensities: { value: densities },
     },

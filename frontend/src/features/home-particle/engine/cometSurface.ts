@@ -43,6 +43,7 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   uniform vec3 uLightDirection;
   uniform float uRoughness;
+  uniform float uSurfaceExposure;
   uniform float uOpacity;
   uniform float uEnergy;
   uniform float uLightTheme;
@@ -92,7 +93,8 @@ const fragmentShader = /* glsl */ `
     vec3 color = rock * (ambient + vec3(1.02, 0.94, 0.82) * diffuse * 1.65);
     float edge = 1.0 - smoothstep(0.01, 0.07, min(vBarycentric.x, min(vBarycentric.y, vBarycentric.z)));
     color += vec3(0.22, 0.085, 0.024) * uEnergy * edge * step(0.76, vSeed);
-    gl_FragColor = vec4(color, uOpacity);
+    // Expose linear radiance before the display transform; preserve solid depth and alpha.
+    gl_FragColor = vec4(color * uSurfaceExposure, uOpacity);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -185,7 +187,8 @@ export function createCometSurface(options: CometVisualOptions) {
     name: 'comet-rough-rock-ice', vertexShader, fragmentShader,
     uniforms: {
       uLightDirection: { value: new Vector3(-1.4, 0.95, 0.55).normalize() },
-      uRoughness: { value: 0.92 }, uOpacity: { value: 1 }, uEnergy: { value: 0 },
+      uRoughness: { value: 0.92 }, uSurfaceExposure: { value: 0.162 },
+      uOpacity: { value: 1 }, uEnergy: { value: 0 },
       uFracture: { value: 0 }, uExpansion: { value: 0 }, uLightTheme: { value: options.light ? 1 : 0 },
     },
     transparent: true, blending: NormalBlending, depthTest: true, depthWrite: true,
