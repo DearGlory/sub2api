@@ -55,7 +55,7 @@ describe('createEngineScratch', () => {
   it('allocates every buffer the frame loop needs, at the right length', () => {
     expect(scratch.positions.length).toBe(COUNT * 3)
     expect(scratch.velocities.length).toBe(COUNT * 3)
-    expect(scratch.colors.length).toBe(COUNT * 3)
+    expect(scratch.colors.length).toBe(COUNT * 4)
     expect(scratch.glyphTargets.length).toBe(COUNT * 3)
     expect(scratch.glyphStrokeDepth.length).toBe(COUNT)
     expect(scratch.tailAge.length).toBe(COUNT)
