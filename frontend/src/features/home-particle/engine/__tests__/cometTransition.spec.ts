@@ -66,9 +66,9 @@ describe('deterministic internal ejection and gravitational collapse', () => {
     console.info('gather radial evidence', samples)
   })
 
-  it('has outward individual radial velocity at .05/.15/.25, with a broad volume instead of a shell', () => {
+  it('has outward individual radial velocity at .05/.1/.15/.25, with a broad volume instead of a shell', () => {
     const velocities: number[] = []
-    for (const q of [0.05, 0.15, 0.25]) {
+    for (const q of [0.05, 0.1, 0.15, 0.25]) {
       const speeds: number[] = []
       const radii: number[] = []
       for (let i = 0; i < count; i++) {
@@ -89,7 +89,9 @@ describe('deterministic internal ejection and gravitational collapse', () => {
     }
     expect(velocities[1]).toBeGreaterThan(velocities[0])
     expect(velocities[2]).toBeGreaterThan(velocities[1])
-    console.info('gather median radial velocity, world units/s at .05/.15/.25', velocities)
+    expect(velocities[3]).toBeGreaterThan(velocities[2])
+    expect(distribution('gather', 0.1).depth).toBeGreaterThan(distribution('gather', 0).depth)
+    console.info('gather median radial velocity, world units/s at .05/.1/.15/.25', velocities)
   })
 
   it('contracts statistical radii monotonically, with a faster second half and a tilted spiral', () => {

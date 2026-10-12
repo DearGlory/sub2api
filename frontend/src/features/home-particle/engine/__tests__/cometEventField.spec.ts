@@ -69,6 +69,33 @@ describe('production event field graph', () => {
     } finally { event.dispose() }
   })
 
+  it('lowers mobile march cost and keeps event uniforms stable through updates and invalid progress', async () => {
+    const { createCometEventField } = await import('../cometEventField')
+    const mobile = createCometEventField({ ...options, particleCount: 5000, reducedMotion: true })
+    const desktop = createCometEventField(options)
+    const u = mobile.mesh.material.uniforms
+    const head = u.uHead.value, camera = u.uCameraFrame.value
+    expect(mobile.mesh.visible).toBe(false)
+    expect(mobile.mesh.material.defines.MARCH_STEPS).toBeLessThan(desktop.mesh.material.defines.MARCH_STEPS)
+    try {
+      for (const phase of ['gather', 'scatter'] as const) {
+        for (const progress of [-1, 0, 0.1, 0.4, 0.62, 1, 2, NaN, Infinity]) {
+          const f = frame(phase, progress)
+          f.reducedMotion = true
+          mobile.update(f)
+          expect(mobile.mesh.visible).toBe(false)
+          expect(u.uEventMode.value).toBe(0)
+          expect(u.uEventStrength.value).toBe(0)
+          expect(u.uHead.value).toBe(head)
+          expect(u.uCameraFrame.value).toBe(camera)
+          for (const uniform of Object.values(u)) {
+            if (typeof uniform.value === 'number') expect(Number.isFinite(uniform.value)).toBe(true)
+          }
+        }
+      }
+    } finally { mobile.dispose(); desktop.dispose() }
+  })
+
   it('uses parent world coordinates for the camera, handles themes/reduced motion and disposes exactly once', async () => {
     const { createCometEventField } = await import('../cometEventField')
     const event = createCometEventField(options)
