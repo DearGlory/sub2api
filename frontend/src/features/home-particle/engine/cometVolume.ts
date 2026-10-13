@@ -1,7 +1,12 @@
 import { BackSide, BoxGeometry, Matrix4, Mesh, NormalBlending, ShaderMaterial, Vector3 } from 'three'
 import { COMET_COMA_RADIUS } from './cometVisualContract'
 import type { CometTailView, CometVisualFrame, CometVisualOptions } from './cometVisualContract'
-import { nucleusEnvelope } from './cometSurface'
+
+function glowEnvelope(frame: CometVisualFrame): number {
+  if (frame.phase === 'hold') return 0
+  const t = Math.min(1, Math.max(0, 1 - frame.glyphMix))
+  return t * t * (3 - 2 * t)
+}
 
 const BIN_COUNT = 20
 const vertexShader = /* glsl */ `
@@ -97,7 +102,7 @@ const fragmentShader = /* glsl */ `
       float d = density(p);
       float alpha = 1.0-exp(-d * stepLength * uOpacity * 1.45);
       float ion = noise(p*2.4+7.0);
-      vec3 tint = mix(vec3(0.31,0.29,0.26), vec3(0.34,0.39,0.42), smoothstep(0.32,0.78,ion));
+      vec3 tint = mix(vec3(0.8,0.35,0.075), vec3(0.15,0.36,0.62), smoothstep(0.32,0.78,ion));
       #if IS_COMA == 1
         // Broad directional illumination, without a limb/Fresnel brightening term.
         vec3 local = (p-uCenter) / uComaRadius;
@@ -126,9 +131,9 @@ function proxy(name: string, coma: boolean, steps: number, options: CometVisualO
     name, vertexShader, fragmentShader, defines: { IS_COMA: coma ? 1 : 0, MARCH_STEPS: steps },
     uniforms: {
       uCenter: { value: new Vector3() }, uSize: { value: new Vector3(1, 1, 1) },
-      uCameraFrame: { value: new Vector3() }, uOpacity: { value: 1 }, uTime: { value: 0 },
-      // Thin gas is visible through integrated density, without an emissive bright rim.
-      uVolumeExposure: { value: 1 }, uComaRadius: { value: COMET_COMA_RADIUS },
+      // Both proxies have an optical-depth budget below visible particle grains.
+      uCameraFrame: { value: new Vector3() }, uOpacity: { value: coma ? 0.045 : 0.06 }, uTime: { value: 0 },
+      uVolumeExposure: { value: 0.55 }, uComaRadius: { value: COMET_COMA_RADIUS },
       ...(coma ? { uLightDirection: { value: new Vector3(-1.4, 0.95, 0.55).normalize() } } : {}),
       uLightTheme: { value: options.light ? 1 : 0 }, uBins: { value: bins },
       uBinAxes: { value: axes }, uDensities: { value: densities },
@@ -157,25 +162,23 @@ export function createCometVolume(options: CometVisualOptions) {
   const covariance = new Float64Array(BIN_COUNT * 6)
   const ages = new Float64Array(BIN_COUNT)
   const samples = new Uint32Array(BIN_COUNT)
-  const steps = options.particleCount <= 5000 ? 16 : 28
+  const steps = options.particleCount <= 5000 ? 8 : 12
   const coma = proxy('comet-coma-volume', true, steps, options, bins, axes, densities)
   const tail = proxy('comet-tail-volume', false, steps, options, bins, axes, densities)
   const comaUniforms = coma.material.uniforms
   const tailUniforms = tail.material.uniforms
   const expectedPerBin = Math.max(12, options.particleCount / BIN_COUNT * 0.55)
-  let noiseTime = 0
   return {
     coma, tail,
     update(frame: CometVisualFrame, pool: CometTailView) {
-      const envelope = nucleusEnvelope(frame)
+      const envelope = glowEnvelope(frame)
       coma.visible = envelope > 0
       coma.position.set(frame.headX, frame.headY, frame.headZ)
       coma.scale.setScalar(COMET_COMA_RADIUS * 2)
       comaUniforms.uCenter!.value.copy(coma.position)
       comaUniforms.uSize!.value.copy(coma.scale)
-      comaUniforms.uOpacity!.value = envelope * 0.72
-      if (!frame.reducedMotion) noiseTime = frame.time
-      comaUniforms.uTime!.value = tailUniforms.uTime!.value = noiseTime
+      comaUniforms.uOpacity!.value = envelope * 0.045
+      // Spatial noise is stationary: no clock can pulse an already-born plume.
       comaUniforms.uLightTheme!.value = tailUniforms.uLightTheme!.value = frame.light ? 1 : 0
       mass.fill(0); means.fill(0); covariance.fill(0); ages.fill(0); samples.fill(0)
       bins.fill(0); axes.fill(0); densities.fill(0)
