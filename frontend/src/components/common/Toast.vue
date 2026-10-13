@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      class="pointer-events-none fixed right-4 top-4 z-[9999] space-y-3"
+      class="cosmos-toast-region pointer-events-none fixed right-4 top-4 z-[9999] w-[calc(100vw-2rem)] max-w-md space-y-3"
       aria-live="polite"
       aria-atomic="true"
     >
@@ -17,7 +17,7 @@
           v-for="toast in toasts"
           :key="toast.id"
           :class="[
-            'pointer-events-auto min-w-[320px] max-w-md overflow-hidden rounded-lg shadow-pop',
+            'pointer-events-auto w-full overflow-hidden rounded-lg shadow-pop',
             'bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700'
           ]"
         >
@@ -35,12 +35,15 @@
 
               <!-- Content -->
               <div class="min-w-0 flex-1">
-                <p v-if="toast.title" class="text-sm font-semibold text-gray-900 dark:text-white">
+                <p
+                  v-if="toast.title"
+                  class="cosmos-toast-title text-sm font-semibold text-gray-900 dark:text-white"
+                >
                   {{ toast.title }}
                 </p>
                 <p
                   :class="[
-                    'text-sm leading-relaxed',
+                    'cosmos-toast-message text-sm leading-relaxed',
                     toast.title
                       ? 'mt-1 text-gray-600 dark:text-gray-300'
                       : 'text-gray-900 dark:text-white'

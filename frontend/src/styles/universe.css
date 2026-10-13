@@ -19,6 +19,21 @@ html[data-universe-theme='cosmos'] :is(body, #app, .universe-app) {
   color: var(--universe-foreground);
 }
 
+/* Teleported notifications remain readable regardless of saved theme preference. */
+html[data-universe-theme='cosmos'] .cosmos-toast-region :is(.cosmos-toast-title, .cosmos-toast-message) {
+  color: var(--universe-foreground);
+  overflow-wrap: anywhere;
+}
+
+/* Destructive actions keep red semantics and readable white text in both states. */
+html[data-universe-theme='cosmos'] .btn-danger {
+  background-color: #dc2626;
+}
+
+html[data-universe-theme='cosmos'] .btn-danger:hover {
+  background-color: #b91c1c;
+}
+
 /* Central components, including floating surfaces teleported directly to body. */
 html[data-universe-theme='cosmos'] :is(
   [class~='card'], .glass, .glass-card, .card-glass, .stat-card, .sidebar,
@@ -122,6 +137,11 @@ html[data-universe-theme='cosmos'] :is(
   .sidebar-header, .sidebar-nav
 ) {
   --universe-neutral-fill: transparent;
+  background-color: transparent;
+}
+
+/* TablePageLayout and the channel table share one outer surface. */
+html[data-universe-theme='cosmos'] .table-page-layout .table-scroll-container .table-wrapper :is(thead, th) {
   background-color: transparent;
 }
 
