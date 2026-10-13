@@ -1093,6 +1093,21 @@ tbody tr:hover .sticky-col {
 </style>
 
 <style>
+/* Cosmos overrides scoped sticky paints without changing table positioning. */
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper .table-header {
+  background-color: transparent;
+}
+
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper .sticky-header-cell,
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper tbody .sticky-col {
+  background-color: var(--universe-surface);
+}
+
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper tbody tr:hover .sticky-col {
+  background-color: var(--universe-surface);
+  background-image: linear-gradient(var(--universe-hover), var(--universe-hover));
+}
+
 /* ==========================================================================
    终极悬浮滚动条防丢器 (Sledgehammer Override)
    绕过 style.css 中 `* { scrollbar-color: transparent }` 的全局悬停隐身诅咒！

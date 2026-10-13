@@ -1,3 +1,5 @@
+@import './styles/universe.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -239,7 +241,7 @@
    * default chosen for borders and fills, not for small text; the `-700` step of the
    * same hue is 5.02–5.48:1 and still reads as the same colour.
    *
-   * Scope is the LIGHT theme only, via `html:not(.dark)` — NOT via a `:not()` on the
+   * Scope is the LIGHT theme only, via `html:not(.dark):not([data-universe-theme='cosmos'])` — NOT via a `:not()` on the
    * element's classes. An earlier version added `:not([class*='dark:text-'])` here
    * too, which exempted precisely the elements that needed it most: `text-emerald-600
    * dark:text-emerald-400` still renders at 3.77:1 in the light theme, because the
@@ -251,19 +253,19 @@
    * `dark-800` card that is 3.88:1 for emerald, so `dark:` counterparts are added to
    * the tokens that need them rather than guessed here.
    */
-  html:not(.dark) [class~='text-emerald-600'] {
+  html:not(.dark):not([data-universe-theme='cosmos']) [class~='text-emerald-600'] {
     color: #047857; /* emerald-700 */
   }
-  html:not(.dark) [class~='text-green-600'] {
+  html:not(.dark):not([data-universe-theme='cosmos']) [class~='text-green-600'] {
     color: #15803d; /* green-700 */
   }
-  html:not(.dark) [class~='text-amber-600'] {
+  html:not(.dark):not([data-universe-theme='cosmos']) [class~='text-amber-600'] {
     color: #b45309; /* amber-700 */
   }
-  html:not(.dark) [class~='text-orange-600'] {
+  html:not(.dark):not([data-universe-theme='cosmos']) [class~='text-orange-600'] {
     color: #c2410c; /* orange-700 */
   }
-  html:not(.dark) [class~='text-sky-600'] {
+  html:not(.dark):not([data-universe-theme='cosmos']) [class~='text-sky-600'] {
     color: #0369a1; /* sky-700 */
   }
 

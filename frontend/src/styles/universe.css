@@ -1,0 +1,216 @@
+/* Imported before Tailwind. These scoped, unlayered rules intentionally have
+ * higher specificity than generated utilities, including dark/hover variants.
+ * Only backgrounds carry alpha: never fade a panel's text or its descendants.
+ */
+html[data-universe-theme='cosmos'] {
+  --universe-surface: rgb(15 17 19 / 0.8);
+  --universe-foreground: #f1f2f4;
+  --universe-muted: #a6adb8;
+  --universe-border: rgb(148 154 163 / 0.24);
+  --universe-hover: rgb(148 154 163 / 0.14);
+  --universe-disabled: rgb(15 17 19 / 0.55);
+  color-scheme: dark;
+  color: var(--universe-foreground);
+  background-color: transparent;
+}
+
+html[data-universe-theme='cosmos'] :is(body, #app, .universe-app) {
+  background-color: transparent;
+  color: var(--universe-foreground);
+}
+
+/* Central components, including floating surfaces teleported directly to body. */
+html[data-universe-theme='cosmos'] :is(
+  [class~='card'], .glass, .glass-card, .card-glass, .stat-card, .sidebar,
+  .input, .table-container, .dropdown, .modal-content, .dialog-container,
+  .toast, .tabs, .btn-secondary, .code-block
+) {
+  --universe-neutral-fill: var(--universe-surface);
+  background-color: var(--universe-surface);
+}
+
+html[data-universe-theme='cosmos'] :is(
+  [class~='card'], .glass-card, .card-glass, .stat-card, .sidebar, .table-container,
+  .dropdown, .modal-content, .dialog-container, .tabs, .btn-secondary,
+  .input:not(.input-error), .toast:not(.toast-success, .toast-error, .toast-warning, .toast-info)
+) {
+  border-color: var(--universe-border);
+}
+
+/* Scoped common controls use @apply rather than literal neutral class tokens. */
+html[data-universe-theme='cosmos'] :is(
+  .select-trigger, .select-dropdown, .select-dropdown-portal,
+  .date-picker-trigger, .date-picker-dropdown, .date-picker-input
+) {
+  background-color: var(--universe-surface);
+}
+
+html[data-universe-theme='cosmos'] .select-trigger-disabled {
+  background-color: var(--universe-disabled);
+}
+
+html[data-universe-theme='cosmos'] .select-dropdown-portal :is(
+  .select-option-focused, .select-option:not(.select-option-selected):not(.select-option-disabled):hover
+),
+html[data-universe-theme='cosmos'] .select-dropdown .select-option:not(.select-option-selected):hover,
+html[data-universe-theme='cosmos'] .date-picker-preset:not(.date-picker-preset-active):hover {
+  background-color: var(--universe-hover);
+}
+
+html[data-universe-theme='cosmos'] .select-dropdown-portal .select-option-group {
+  background-color: transparent;
+}
+
+/* Neutral utility families only. A declared dark semantic/brand background wins
+ * over its light neutral fallback. Black scrims and all chromatic fills stay intact.
+ * Token boundaries prevent hover:/disabled: classes from becoming base fills.
+ */
+html[data-universe-theme='cosmos'] :is(
+  [class~='bg-white'], [class^='bg-white/'], [class*=' bg-white/'],
+  [class^='bg-gray-'], [class*=' bg-gray-'],
+  [class^='bg-dark-'], [class*=' bg-dark-']
+):not([class*='dark:bg-']),
+html[data-universe-theme='cosmos'] :is(
+  [class~='dark:bg-white'], [class^='dark:bg-white/'], [class*=' dark:bg-white/'],
+  [class^='dark:bg-gray-'], [class*=' dark:bg-gray-'],
+  [class^='dark:bg-dark-'], [class*=' dark:bg-dark-']
+) {
+  background-color: var(--universe-neutral-fill, var(--universe-surface));
+}
+
+/* Unframed structural wrappers must not become a second 80% sheet. Each element
+ * gets its own fill token so a transparent wrapper cannot affect a child panel.
+ */
+html[data-universe-theme='cosmos'] :where(*) {
+  --universe-neutral-fill: var(--universe-surface);
+}
+
+html[data-universe-theme='cosmos'] :where(div, section, main, article, form, ul):not(:is(
+  [class*='rounded'], [class~='border'], [class~='border-2'],
+  [class~='card'], .glass, .glass-card, .card-glass, .stat-card, .sidebar,
+  .table-container, .dropdown, .modal-content, .dialog-container, .toast
+)) {
+  --universe-neutral-fill: transparent;
+}
+
+/* Inner table paint is supplied by its outer container; row hover stays visible. */
+html[data-universe-theme='cosmos'] :is(
+  table, thead, tbody, tfoot, tr, th, td,
+  .card-header, .card-body, .card-footer,
+  .modal-header, .modal-body, .modal-footer,
+  .dialog-header, .dialog-body, .dialog-footer,
+  .sidebar-header, .sidebar-nav
+) {
+  --universe-neutral-fill: transparent;
+  background-color: transparent;
+}
+
+/* Page roots expose the shared sky. A full-height sidebar is still a panel. */
+html[data-universe-theme='cosmos'] :is(.min-h-screen, .h-screen):not(.sidebar) {
+  --universe-neutral-fill: transparent;
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Small neutral decorations are not panels. White switch knobs stay white. */
+html[data-universe-theme='cosmos'] :is(
+  .stat-icon, .stat-icon-primary, .stat-icon-success, .stat-icon-warning,
+  .stat-icon-danger, .badge-gray, .skeleton, .divider, .progress,
+  [class~='h-4'][class~='w-4'], [class~='h-5'][class~='w-5'],
+  [class~='h-6'][class~='w-6'], [class~='h-8'][class~='w-8'],
+  [class~='h-9'][class~='w-9'], [class~='h-10'][class~='w-10'],
+  [class~='h-12'][class~='w-12']
+) {
+  --universe-neutral-fill: var(--universe-hover);
+}
+
+html[data-universe-theme='cosmos'] :is(
+  .switch-thumb, [role='switch'] > span[class~='bg-white'],
+  span[class~='rounded-full'][class~='bg-white'],
+  [class~='bg-white']:has(> canvas), [class~='bg-white']:has(> img[alt*='QR'])
+) {
+  --universe-neutral-fill: #fff;
+  background-color: #fff;
+}
+
+/* Neutral hover/focus/disabled states remain distinguishable. State selectors
+ * are deliberately separate from base tokens; no element opacity is changed.
+ */
+html[data-universe-theme='cosmos'] :is(
+  [class~='hover:bg-white'], [class^='hover:bg-gray-'], [class*=' hover:bg-gray-'],
+  [class^='hover:bg-dark-'], [class*=' hover:bg-dark-'],
+  [class^='dark:hover:bg-gray-'], [class*=' dark:hover:bg-gray-'],
+  [class^='dark:hover:bg-dark-'], [class*=' dark:hover:bg-dark-'],
+  .btn-secondary, .btn-ghost, .dropdown-item, .sidebar-link:not(.sidebar-link-active),
+  .table tbody tr
+):hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--universe-hover);
+}
+
+html[data-universe-theme='cosmos'] :is(.card-hover, .btn-secondary):hover {
+  border-color: rgb(148 154 163 / 0.44);
+}
+
+html[data-universe-theme='cosmos'] .input:focus {
+  border-color: #ff6708;
+}
+
+html[data-universe-theme='cosmos'] :is(
+  .input, .btn-secondary,
+  [class^='disabled:bg-gray-'], [class*=' disabled:bg-gray-'],
+  [class^='dark:disabled:bg-dark-'], [class*=' dark:disabled:bg-dark-']
+):disabled {
+  background-color: var(--universe-disabled);
+}
+
+/* Borders are neutral unless a component explicitly chooses a semantic color. */
+html[data-universe-theme='cosmos'] :is(
+  [class^='border-gray-'], [class*=' border-gray-']
+):not([class*='dark:border-']),
+html[data-universe-theme='cosmos'] :is(
+  [class^='dark:border-gray-'], [class*=' dark:border-gray-'],
+  [class^='dark:border-dark-'], [class*=' dark:border-dark-']
+) {
+  border-color: var(--universe-border);
+}
+
+/* Bare light neutral text needs a readable dark fallback. Explicit dark colors,
+ * payment brand labels, semantic text and hover colors keep their own utilities.
+ */
+html[data-universe-theme='cosmos'] :is(
+  .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900, .text-gray-950
+):not([class*='dark:text-']) {
+  color: var(--universe-foreground);
+}
+
+html[data-universe-theme='cosmos'] :is(.text-gray-400, .text-gray-500):not([class*='dark:text-']),
+html[data-universe-theme='cosmos'] :is(
+  [class~='dark:text-gray-500'], [class~='dark:text-gray-600'],
+  [class~='dark:text-dark-500'], [class~='dark:text-dark-600']
+) {
+  color: var(--universe-muted);
+}
+
+html[data-universe-theme='cosmos'] .input::placeholder {
+  color: var(--universe-muted);
+  opacity: 1;
+}
+
+html[data-universe-theme='cosmos'] :is(.text-emerald-600, .text-green-600):not([class*='dark:text-']) {
+  color: #34d399;
+}
+
+html[data-universe-theme='cosmos'] :is(.text-amber-600, .text-orange-600):not([class*='dark:text-']) {
+  color: #fbbf24;
+}
+
+html[data-universe-theme='cosmos'] .text-sky-600:not([class*='dark:text-']) {
+  color: #38bdf8;
+}
+
+/* Keep existing full-screen scrims readable without blurring the shared sky. */
+html[data-universe-theme='cosmos'] :is(.modal-overlay, .dialog-overlay, .fixed.inset-0) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
