@@ -3,7 +3,10 @@ import { Group } from 'three'
 import { createCometVisual } from '../cometVisual'
 import type { CometTailView, CometVisualFrame } from '../cometVisualContract'
 import { ParticleEngine, createEngineScratch } from '../ParticleEngine'
-import { SUBJECT_Z } from '../constants'
+import { writeCometFlowBasis } from '../cometFlow'
+import { writeCometTransition } from '../cometTransition'
+import { COALESCE_END } from '../flightTiming'
+import { SCATTER_SECONDS, SUBJECT_Z } from '../constants'
 import type { Choreography } from '../types'
 
 const rendererControl = vi.hoisted(() => ({ fail: false }))
@@ -67,12 +70,12 @@ function harness(light = false) {
     s.glyphTargets[i * 3 + 2] = state.headZ + (i % 3 - 1) * 0.1
   }
   let time = 1
-  const render = (phase = state.phase, progress = state.phaseProgress) => {
+  const render = (phase = state.phase, progress = state.phaseProgress, delta = 1 / 60) => {
     state.phase = phase
     state.phaseProgress = progress
-    time += 1 / 60
+    time += delta
     access.writeEmissionTable()
-    access.integrate(1, time, 1 / 60)
+    access.integrate(Math.min(delta * 60, 2), time, delta)
     access.upload()
     access.publishStats(time * 1000)
   }
@@ -200,19 +203,109 @@ describe('required comet model integration (real production graph)', () => {
     console.info('actual uploaded transition geometry', { gather, scatter, secondHalfSpeedRatio: ratio })
   })
 
-  it('keeps every flight grain visible at its source energy and glyph coverage at one', () => {
+  it('preserves real grain sizes and raw alpha instead of compensating subpixel area', () => {
     for (const light of [false, true]) {
       const h = harness(light)
       h.render('travel', 0.5)
       for (let i = 0; i < h.s.body.alpha.length; i++) {
-        const energy = h.s.colors[i * 4 + 3] * h.s.body.spriteScale[i] ** 2
-        expect(energy).toBeCloseTo(h.s.body.alpha[i], 6)
+        expect(h.s.body.spriteScale[i]).toBeCloseTo(h.s.body.spriteSize[i], 6)
+        expect(h.s.colors[i * 4 + 3]).toBeCloseTo(h.s.body.alpha[i], 6)
+      }
+      expect(new Set(h.s.body.spriteScale).size).toBeGreaterThan(100)
+    }
+  })
+
+  it('uses the shared flow basis before smoothing the body frame', () => {
+    const h = harness()
+    h.render('travel', 0.5)
+    const expected = new Float64Array(9)
+    writeCometFlowBasis(expected, h.s.tailTable)
+    for (let j = 0; j < 9; j++) expect(h.s.bodyBasis[j]).toBeCloseTo(expected[j], 6)
+    expect(h.s.targetBasis).toEqual(expected)
+  })
+
+  it('keeps authored grain alpha and restores glyph coverage at one', () => {
+    for (const light of [false, true]) {
+      const h = harness(light)
+      h.render('travel', 0.5)
+      for (let i = 0; i < h.s.body.alpha.length; i++) {
+        expect(h.s.colors[i * 4 + 3]).toBeCloseTo(h.s.body.alpha[i], 6)
       }
       h.render('gather', 1)
       h.render('hold', 0)
       expect(h.s.body.spriteScale.every(value => value === 1)).toBe(true)
       for (let i = 0; i < h.s.body.alpha.length; i++) expect(h.s.colors[i * 4 + 3]).toBe(1)
     }
+  })
+
+  it('commits gather position, diameter and alpha on the same per-grain clock', () => {
+    const h = harness()
+    h.render('travel', 0.9)
+    h.render('gather', 0)
+    const out = new Float64Array(6)
+    const commits: number[] = []
+    for (const q of [0.15, 0.45, 0.7, 1]) {
+      h.render('gather', q)
+      for (let i = 0; i < h.s.body.alpha.length; i += 7) {
+        const k = i * 3, target = h.s.coreAssignment[i], b = h.s.bodyBasis, offset = target * 3
+        writeCometTransition(out, 'gather', q,
+          h.s.shapeFrom[k], h.s.shapeFrom[k + 1], h.s.shapeFrom[k + 2],
+          h.s.glyphTargets[k] + h.s.iconOrbitOffsets[k],
+          h.s.glyphTargets[k + 1] + h.s.iconOrbitOffsets[k + 1],
+          h.s.glyphTargets[k + 2] + h.s.iconOrbitOffsets[k + 2],
+          h.state.headX + b[0] * h.s.body.offsets[offset] + b[3] * h.s.body.offsets[offset + 1] + b[6] * h.s.body.offsets[offset + 2],
+          h.state.headY + b[1] * h.s.body.offsets[offset] + b[4] * h.s.body.offsets[offset + 1] + b[7] * h.s.body.offsets[offset + 2],
+          h.state.headZ + b[2] * h.s.body.offsets[offset] + b[5] * h.s.body.offsets[offset + 1] + b[8] * h.s.body.offsets[offset + 2],
+          h.state.headX, h.state.headY, h.state.headZ, h.s.tailSeed[i], h.s.shapeAlpha[i], h.s.body.alpha[target])
+        for (let axis = 0; axis < 3; axis++) expect(h.s.positions[k + axis]).toBeCloseTo(out[axis], 5)
+        expect(h.s.colors[i * 4 + 3]).toBeCloseTo(out[3], 6)
+        expect(h.s.body.spriteScale[i]).toBeCloseTo(h.s.body.spriteSize[target] * (1 - out[4]) + out[4], 6)
+        if (q === 0.45) commits.push(out[4])
+      }
+    }
+    expect(Math.max(...commits) - Math.min(...commits)).toBeGreaterThan(0.01)
+  })
+
+  it('uploads dense coalescence inside the frozen 0.682-second interval and preserves the assigned endpoint into flight', () => {
+    const h = harness()
+    h.render('travel', 0.9)
+    h.render('gather', 1)
+    h.render('hold', 1, 3)
+    h.render('scatter', 0)
+    // A stopped nozzle must retain its last real orientation throughout coalescence.
+    h.access.writeEmissionTable = () => { h.s.tailTable.vel.fill(0) }
+    const source = h.s.positions.slice(), previous = h.s.positions.slice()
+    const map = h.s.coreAssignment.slice(), basis = h.s.bodyBasis.slice()
+    const mean: number[] = []
+    let maxStep = 0, earlyDetached = 0
+    for (let step = 1; step <= 1000; step++) {
+      h.render('scatter', step / 1000 * COALESCE_END, COALESCE_END * SCATTER_SECONDS / 1000)
+      let sum = 0
+      for (let i = 0; i < h.s.body.alpha.length; i++) {
+        const k = i * 3
+        const radius = Math.hypot(h.s.positions[k] - h.state.headX, h.s.positions[k + 1], h.s.positions[k + 2] - h.state.headZ)
+        const prior = Math.hypot(previous[k] - h.state.headX, previous[k + 1], previous[k + 2] - h.state.headZ)
+        if (radius > prior + 2e-5) throw new Error(`uploaded outward particle ${i} at ${step}`)
+        maxStep = Math.max(maxStep, Math.hypot(h.s.positions[k] - previous[k], h.s.positions[k + 1] - previous[k + 1], h.s.positions[k + 2] - previous[k + 2]))
+        if (step === 300 && Math.hypot(h.s.positions[k] - source[k], h.s.positions[k + 1] - source[k + 1], h.s.positions[k + 2] - source[k + 2]) > 0.05) earlyDetached++
+        sum += radius
+      }
+      if (step === 500 || step === 920 || step === 1000) mean.push(sum / h.s.body.alpha.length)
+      previous.set(h.s.positions)
+    }
+    expect(COALESCE_END * SCATTER_SECONDS).toBeCloseTo(0.682, 12)
+    expect(h.s.coreAssignment).toEqual(map)
+    expect(h.s.bodyBasis).toEqual(basis)
+    expect(h.s.localReassemblies).toBe(0)
+    expect(earlyDetached).toBeGreaterThan(800)
+    expect(maxStep).toBeLessThan(0.16)
+    expect(mean[1] - mean[2]).toBeLessThan((mean[0] - mean[2]) * 0.12)
+    const endpoint = h.s.positions.slice()
+    h.render('travel', 0)
+    expect(h.s.positions).toEqual(endpoint)
+    expect(h.s.emittedTail.active.some(Boolean)).toBe(false)
+    console.info('dense uploaded coalescence', { duration: COALESCE_END * SCATTER_SECONDS,
+      maxStep, earlyDetached, finalEightPercentShare: (mean[1] - mean[2]) / (mean[0] - mean[2]) })
   })
 
   it('passes an already updated tail pool without copying its arrays', () => {

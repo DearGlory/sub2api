@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCometBody } from '../emittedTail'
-import { writeCometTransition } from '../cometTransition'
+import { assignCometCore, writeCometTransition } from '../cometTransition'
 
 const count = 1024
 const body = createCometBody(count)
@@ -17,13 +17,18 @@ for (let i = 0; i < count; i++) {
   salts[i] = ((Math.imul(i + 17, 0x9e3779b1) >>> 0) / 4294967296)
 }
 
+const assignment = new Uint32Array(count)
+assignCometCore(assignment, new Uint32Array(count), new Uint32Array(count),
+  new Float64Array(count), new Float64Array(count), sources, body.offsets, 0, 0, 0)
+
 function sample(phase: 'gather' | 'scatter', q: number, i: number, glyphShift = 0) {
   const k = i * 3
+  const targetIndex = phase === 'scatter' ? assignment[i] * 3 : k
   const source = phase === 'gather' ? body.offsets : sources
   writeCometTransition(out, phase, q,
     head[0] + source[k], head[1] + source[k + 1], head[2] + source[k + 2],
     head[0] + sources[k] + glyphShift, head[1] + sources[k + 1], head[2] + sources[k + 2],
-    head[0] + body.offsets[k], head[1] + body.offsets[k + 1], head[2] + body.offsets[k + 2],
+    head[0] + body.offsets[targetIndex], head[1] + body.offsets[targetIndex + 1], head[2] + body.offsets[targetIndex + 2],
     head[0], head[1], head[2], salts[i], phase === 'gather' ? 0.025 : 1, 0.025)
   return out
 }
@@ -93,8 +98,8 @@ describe('deterministic internal ejection and gravitational collapse', () => {
     for (let i = 0; i < count; i++) {
       const r0 = Math.hypot(sources[i * 3], sources[i * 3 + 1], sources[i * 3 + 2])
       let previous = Infinity, valid = true
-      for (let step = 0; step <= 100; step++) {
-        const p = sample('scatter', step / 100, i)
+      for (let step = 0; step <= 1000; step++) {
+        const p = sample('scatter', step / 1000, i)
         const radius = Math.hypot(p[0] - head[0], p[1] - head[1], p[2] - head[2])
         if (radius > previous + 1e-5) valid = false
         previous = radius
@@ -105,10 +110,52 @@ describe('deterministic internal ejection and gravitational collapse', () => {
       if (r0 > 5) { outerMoved += moved; outerCount++ }
       if (r0 < 3) { innerMoved += moved; innerCount++ }
     }
-    expect(monotone).toBeGreaterThan(count * 0.98)
+    expect(monotone).toBe(count)
+    expect(new Set(assignment).size).toBe(count)
     expect(outerMoved / outerCount).toBeGreaterThan(innerMoved / innerCount)
     expect(samples[6].depth).toBeGreaterThan(samples[0].depth)
     console.info('radial infall', { samples, ratio, monotone, outerMoved: outerMoved / outerCount, innerMoved: innerMoved / innerCount })
+  })
+
+  it.each([1, 1.15])('bounds unavoidable central reassembly with the real body (scale=%s)', scale => {
+    const targets = Float64Array.from(body.offsets, value => value * scale)
+    const source = sources.slice()
+    // Original centre particles, including an exactly zero and a near-zero source.
+    source.fill(0, 0, 30)
+    source[3] = 1e-12
+    const map = new Uint32Array(count), sourceOrder = new Uint32Array(count), coreOrder = new Uint32Array(count)
+    const sourceRadii = new Float64Array(count), coreRadii = new Float64Array(count)
+    const before = source.slice(), targetBefore = targets.slice()
+    const reassemblies = assignCometCore(map, sourceOrder, coreOrder, sourceRadii, coreRadii,
+      source, targets, 0, 0, 0)
+    expect(source).toEqual(before)
+    expect(targets).toEqual(targetBefore)
+    expect(new Set(map).size).toBe(count)
+    let localRadius = 0, maxStep = 0, outward = 0
+    for (let i = 0; i < count; i++) {
+      const k = i * 3, target = map[i] * 3
+      const local = sourceRadii[i] < coreRadii[map[i]]
+      if (local) { outward++; localRadius = Math.max(localRadius, coreRadii[map[i]]) }
+      let px = source[k], py = source[k + 1], pz = source[k + 2], previousRadius = sourceRadii[i]
+      for (let j = 0; j <= 1000; j++) {
+        writeCometTransition(out, 'scatter', j / 1000,
+          source[k], source[k + 1], source[k + 2], 0, 0, 0,
+          targets[target], targets[target + 1], targets[target + 2], 0, 0, 0, salts[i], 1, 0.2)
+        const radius = Math.hypot(out[0], out[1], out[2])
+        if (!local && radius > previousRadius + 1e-9) throw new Error(`outward outer particle ${i} at ${j}`)
+        if (local && j <= 650 && radius > sourceRadii[i] + 1e-9) throw new Error(`early local expansion ${i}`)
+        if (local && radius > coreRadii[map[i]] + 1e-9) throw new Error(`local volume overshoot ${i}`)
+        maxStep = Math.max(maxStep, Math.hypot(out[0] - px, out[1] - py, out[2] - pz))
+        px = out[0]; py = out[1]; pz = out[2]; previousRadius = radius
+      }
+      expect(Array.from(out.slice(0, 3))).toEqual(Array.from(targets.slice(target, target + 3)))
+    }
+    expect(outward).toBe(reassemblies)
+    expect(outward).toBe(10)
+    expect(localRadius).toBeLessThan(0.6)
+    expect(maxStep).toBeLessThan(0.16)
+    console.info('rank transport with central sources', { scale, outward, localRadius,
+      localVolume: 4 / 3 * Math.PI * localRadius ** 3, maxStep, samples: count * 1000 })
   })
 
   it('lands exactly at source and target, with no endpoint teleport or settling velocity', () => {
@@ -121,7 +168,8 @@ describe('deterministic internal ejection and gravitational collapse', () => {
         const end = sample(phase, 1, i).slice()
         for (let axis = 0; axis < 3; axis++) {
           expect(start[axis]).toBe(head[axis] + source[k + axis])
-          expect(end[axis]).toBe(head[axis] + target[k + axis])
+          const targetIndex = phase === 'scatter' ? assignment[i] * 3 : k
+          expect(end[axis]).toBe(head[axis] + target[targetIndex + axis])
           expect(Math.abs(sample(phase, 0.99999, i)[axis] - end[axis])).toBeLessThan(0.00001)
         }
         expect(start[3]).toBe(phase === 'gather' ? 0.025 : 1)

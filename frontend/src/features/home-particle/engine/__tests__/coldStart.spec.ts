@@ -10,12 +10,12 @@ vi.mock('three', async importOriginal => {
   const actual = await importOriginal<typeof import('three')>()
   return { ...actual, WebGLRenderer: class {
     domElement = document.createElement('canvas')
-    info = { render: { calls: 0, triangles: 0 }, programs: [] as { getUniforms: ReturnType<typeof vi.fn> }[] }
+    info = { render: { calls: 0, triangles: 0 }, programs: [] as { object: object; getUniforms: ReturnType<typeof vi.fn> }[] }
     compile = vi.fn((scene: Scene, _camera: Camera) => {
       // Like installed three r184, compile visits hidden renderables too and
       // leaves first-use uniform/attribute reflection until getUniforms().
       scene.traverse(object => {
-        if ('material' in object) this.info.programs.push({ getUniforms: vi.fn() })
+        if ('material' in object) this.info.programs.push({ object, getUniforms: vi.fn() })
       })
     })
     render = vi.fn()
@@ -72,11 +72,16 @@ function frame(now: number) {
 }
 
 describe('cold start program preparation', () => {
-  it('prepares the real hidden event and first-use reflection before scheduling any animation', () => {
+  it('prepares the real hidden coma/tail programs and first-use reflection before scheduling any animation', () => {
     const { engine, access } = harness()
     const { scene, camera } = engine.debugScene
-    const event = scene.getObjectByName('comet-event-field')!
-    expect(event.visible).toBe(false)
+    const programs = new Map<object, ReturnType<typeof vi.fn>>()
+    const hidden = ['comet-coma-volume', 'comet-tail-volume'].map(name => scene.getObjectByName(name)!)
+    expect(hidden.every(object => object && !object.visible)).toBe(true)
+    expect(engine.tailPoints.geometry.getAttribute('color').array.every(value => value === 0)).toBe(true)
+    scene.traverse(object => {
+      if ('material' in object) programs.set(object, vi.fn())
+    })
     const before = scene.toJSON()
     const compile = vi.mocked(access.renderer.compile)
     const implementation = compile.getMockImplementation()!
@@ -84,13 +89,17 @@ describe('cold start program preparation', () => {
       expect(callbacks.size).toBe(0)
       expect(access.dollySeconds).toBe(0)
       expect(access.lastFrameMs).toBe(0)
-      expect(event.visible).toBe(false)
-      return implementation(...args)
+      expect(hidden.every(object => !object.visible)).toBe(true)
+      const result = implementation(...args)
+      expect(access.renderer.info.programs).toHaveLength(programs.size)
+      return result
     })
     engine.start()
     expect(compile).toHaveBeenCalledTimes(1)
     expect(compile).toHaveBeenCalledWith(scene, camera)
-    expect(access.renderer.info.programs!.length).toBeGreaterThanOrEqual(6)
+    expect(access.renderer.info.programs).toHaveLength(programs.size)
+    expect(programs.has(engine.tailPoints)).toBe(true)
+    for (const object of hidden) expect(programs.has(object)).toBe(true)
     for (const program of access.renderer.info.programs!) expect(program.getUniforms).toHaveBeenCalledTimes(1)
     expect(scene.toJSON()).toEqual(before)
     expect(access.renderer.render).not.toHaveBeenCalled()

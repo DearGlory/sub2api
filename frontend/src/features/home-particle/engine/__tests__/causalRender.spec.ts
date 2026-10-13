@@ -2,7 +2,7 @@ import { BufferAttribute, BufferGeometry, Points, PointsMaterial, Vector3 } from
 import { describe, expect, it } from 'vitest'
 import { createEngineScratch, paletteFor, ParticleEngine } from '../ParticleEngine'
 import { cometVisualFixture } from './cometVisualFixture'
-import { COMET_COMA_RADIUS } from '../cometVisualContract'
+import { writeCometFlowBasis } from '../cometFlow'
 import { LEG_SECONDS, SCATTER_SECONDS } from '../constants'
 import { COALESCE_END, departureSeconds } from '../flightTiming'
 import type { ChoreographyState } from '../types'
@@ -98,15 +98,18 @@ describe('causal render: separate body and emitted tail', () => {
       const sum = [0, 0, 0]
       let count = 0
       for (let i = 0; i < COUNT; i++) {
-        if ((h.scratch.body.spriteSize[i] < 3) !== nucleus) continue
+        if ((h.scratch.body.tone[h.scratch.coreAssignment[i]] >= 0.72) !== nucleus) continue
         count++
         for (let c = 0; c < 3; c++) sum[c]! += h.scratch.colors[i * 4 + c]!
       }
+      expect(count).toBeGreaterThan(0)
       return sum.map(v => v / count)
     }
     const nucleus = average(true), coma = average(false)
-    if (light) expect(nucleus[0]! + nucleus[1]! + nucleus[2]!).toBeLessThan((coma[0]! + coma[1]! + coma[2]!) * 0.7)
-    else expect(nucleus[0]! / nucleus[2]!).toBeGreaterThan(coma[0]! / coma[2]! + 0.12)
+    expect(nucleus.every(Number.isFinite) && coma.every(Number.isFinite)).toBe(true)
+    // Inner grains are brighter gold-white; sheath grains are more orange.
+    expect(nucleus[0]! + nucleus[1]! + nucleus[2]!).toBeGreaterThan(coma[0]! + coma[1]! + coma[2]!)
+    expect(coma[0]! / coma[2]!).toBeGreaterThan(nucleus[0]! / nucleus[2]!)
     h.update('gather', 1)
     h.update('hold', 0)
     const nucleusGlyph = average(true), comaGlyph = average(false)
@@ -119,7 +122,8 @@ describe('causal render: separate body and emitted tail', () => {
     const before = Array.from(h.scratch.colors.filter((_, i) => i % 4 === 3),
       (alpha, i) => alpha * scale.getX(i) ** 2)
     const version = scale.version
-    expect(Math.min(...h.scratch.body.spriteScale)).toBeGreaterThan(1)
+    expect(Math.min(...h.scratch.body.spriteScale)).toBeLessThan(1)
+    expect(new Set(h.scratch.body.spriteScale).size).toBeGreaterThan(100)
     h.update('gather', 0)
     expect(scale.version).toBeGreaterThan(version)
     for (let i = 0; i < COUNT; i++) {
@@ -135,16 +139,18 @@ describe('causal render: separate body and emitted tail', () => {
   it.each([0.62, 0.85, 1])('coalesces every visible logo particle into the nucleus/coma by scatter %s', (p) => {
     const h = renderHarness(false, false)
     h.update('scatter', 0)
+    const source = h.scratch.shapeFrom.slice()
+    expect(h.scratch.positions).toEqual(source)
     h.update('scatter', p)
-    // The contract deliberately enlarges the old 1.02 coma by 1.5; test actual
-    // geometry too, so lowering opacity cannot make this radius check vacuous.
-    expect(extent(h.geometry.getAttribute('position').array, h.geometry.getAttribute('color').array, h.state.headX)).toBeLessThanOrEqual(COMET_COMA_RADIUS)
+    expect(new Set(h.scratch.coreAssignment).size).toBe(COUNT)
     for (let i = 0; i < COUNT; i++) {
-      const k = i * 3
-      expect(Math.hypot(h.scratch.positions[k] - h.state.headX, h.scratch.positions[k + 1], h.scratch.positions[k + 2])).toBeLessThanOrEqual(COMET_COMA_RADIUS)
-      expect(h.scratch.positions[k]).toBeCloseTo(h.state.headX + h.scratch.body.offsets[k], 6)
-      expect(h.scratch.positions[k + 1]).toBe(h.state.headY + h.scratch.body.offsets[k + 1])
-      expect(h.scratch.positions[k + 2]).toBe(h.state.headZ + h.scratch.body.offsets[k + 2])
+      const k = i * 3, target = h.scratch.coreAssignment[i] * 3
+      const b = h.scratch.bodyBasis, offsets = h.scratch.body.offsets
+      for (let axis = 0; axis < 3; axis++) {
+        const head = axis === 0 ? h.state.headX : axis === 1 ? h.state.headY : h.state.headZ
+        expect(h.scratch.positions[k + axis]).toBeCloseTo(head +
+          b[axis] * offsets[target] + b[axis + 3] * offsets[target + 1] + b[axis + 6] * offsets[target + 2], 6)
+      }
     }
     expect(h.pool, 'a separately owned emission pool must exist').toBeDefined()
     expect(extent(h.tailGeometry.getAttribute('position').array, h.tailGeometry.getAttribute('color').array, h.state.headX)).toBe(0)
@@ -159,11 +165,30 @@ describe('causal render: separate body and emitted tail', () => {
     const lengths: number[] = []
     for (let f = 1; f <= 48; f++) {
       h.depart(f / 60)
-      if (f === 6 || f === 18 || f === 48) lengths.push(extent(h.pool!.positions, h.pool!.colors, h.state.headX))
+      if (f === 6 || f === 18 || f === 48) {
+        let travelled = 0
+        for (let i = 0; i < h.pool!.active.length; i++) {
+          if (h.pool!.colors[i * 4 + 3] <= 0.01) continue
+          const k = i * 3
+          travelled = Math.max(travelled, Math.hypot(
+            h.pool!.positions[k] - h.pool!.birthPosition[k],
+            h.pool!.positions[k + 1] - h.pool!.birthPosition[k + 1],
+            h.pool!.positions[k + 2] - h.pool!.birthPosition[k + 2]))
+        }
+        lengths.push(travelled)
+      }
       for (let i = 0; i < h.pool!.active.length; i++) {
         if (!h.pool!.active[i]) continue
         expect(h.pool!.birthTime[i]).toBeGreaterThanOrEqual(0)
-        expect(Math.hypot(h.pool!.birthPosition[i * 3] - (2.56 - h.pool!.birthTime[i] * 2), h.pool!.birthPosition[i * 3 + 1], h.pool!.birthPosition[i * 3 + 2])).toBeLessThan(0.35)
+        const aperture = Reflect.get(h.scratch.emittedTail, 'aperture') as Float32Array
+        const basis = new Float64Array(9)
+        writeCometFlowBasis(basis, h.scratch.tailTable)
+        for (let axis = 0; axis < 3; axis++) {
+          const origin = axis === 0 ? 2.56 - h.pool!.birthTime[i] * 2 : 0
+          const k = i * 3
+          expect(h.pool!.birthPosition[k + axis]).toBeCloseTo(origin + basis[axis] * aperture[k] +
+            basis[axis + 3] * aperture[k + 1] + basis[axis + 6] * aperture[k + 2], 5)
+        }
       }
     }
     expect(lengths[0]).toBeGreaterThan(0)
