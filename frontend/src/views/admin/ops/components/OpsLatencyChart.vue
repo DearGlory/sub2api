@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, BarElement, CategoryScale, Legend, LinearScale, Tooltip } from 'chart.js'
@@ -18,7 +19,7 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+const isDarkMode = computed(() => isDarkSurface())
 const colors = computed(() => ({
   accent: isDarkMode.value ? '#ff8447' : '#ff6708',
   grid: isDarkMode.value ? '#374151' : '#f3f4f6',

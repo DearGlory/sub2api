@@ -64,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { computed, ref, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -120,7 +121,7 @@ onMounted(async () => {
     await nextTick()
     if (!stripeMount.value) return
 
-    const isDark = document.documentElement.classList.contains('dark')
+    const isDark = isDarkSurface()
     const elements = stripe.elements({
       clientSecret: props.clientSecret,
       appearance: { theme: isDark ? 'night' : 'stripe', variables: { borderRadius: '8px' } },

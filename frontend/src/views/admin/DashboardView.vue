@@ -348,6 +348,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -446,7 +447,7 @@ const granularityOptions = computed(() => [
 
 // Dark mode detection
 const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
+  return isDarkSurface()
 })
 
 // Chart colors

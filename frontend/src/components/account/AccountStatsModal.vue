@@ -484,6 +484,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -533,7 +534,7 @@ const stats = ref<AccountUsageStatsResponse | null>(null)
 
 // Dark mode detection
 const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
+  return isDarkSurface()
 })
 
 // Chart colors

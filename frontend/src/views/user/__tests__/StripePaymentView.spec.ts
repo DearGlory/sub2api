@@ -121,6 +121,37 @@ describe('StripePaymentView', () => {
     window.localStorage.clear()
   })
 
+  it.each([
+    { universe: 'cosmos', dark: false, theme: 'night' },
+    { universe: undefined, dark: false, theme: 'stripe' },
+    { universe: undefined, dark: true, theme: 'night' },
+  ])('uses $theme appearance with universe=$universe and dark=$dark', async ({ universe, dark, theme }) => {
+    const root = document.documentElement
+    const originalClass = root.className
+    const originalUniverseTheme = root.dataset.universeTheme
+    root.classList.toggle('dark', dark)
+    if (universe === undefined) delete root.dataset.universeTheme
+    else root.dataset.universeTheme = universe
+    window.localStorage.setItem('theme', dark ? 'dark' : 'light')
+
+    try {
+      mountView()
+      await flushPromises()
+      await flushPromises()
+
+      expect(stripeInstance.elements).toHaveBeenCalledWith({
+        clientSecret: 'pi_secret_42',
+        appearance: { theme, variables: { borderRadius: '8px' } },
+      })
+      expect(root.classList.contains('dark')).toBe(dark)
+      expect(window.localStorage.getItem('theme')).toBe(dark ? 'dark' : 'light')
+    } finally {
+      root.className = originalClass
+      if (originalUniverseTheme === undefined) delete root.dataset.universeTheme
+      else root.dataset.universeTheme = originalUniverseTheme
+    }
+  })
+
   it.each(['alipay', 'wechat_pay', ''])('does not start %s payment after leaving during SDK loading', async (method) => {
     routeState.query.method = method
     let resolveSDK!: (value: typeof stripeInstance) => void
