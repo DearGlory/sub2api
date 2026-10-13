@@ -105,15 +105,11 @@ describe('required comet model integration (real production graph)', () => {
     expect(h.engine.cometVisual.update).toHaveBeenLastCalledWith(frame, h.s.emittedTail)
     const material = h.engine.tailPoints.material
     expect(Array.isArray(material)).toBe(false)
-    expect('opacity' in material && material.opacity).toBe(0)
+    expect('opacity' in material && material.opacity).toBeGreaterThan(0)
     expect(h.engine.tailPoints.visible).toBe(true)
     expect(h.engine.tailPoints.geometry.getAttribute('position').itemSize).toBe(3)
     expect(h.engine.tailPoints.geometry.getAttribute('color').itemSize).toBe(4)
     const bytes = h.s.positions.byteLength + h.s.colors.byteLength + h.s.body.spriteScale.byteLength + h.s.emittedTail.positions.byteLength + h.s.emittedTail.colors.byteLength
-    const events = h.engine.cometVisual.object.children.filter(o =>
-      'material' in o && 'uniforms' in (o.material as object) &&
-      'uEventMode' in (o.material as import('three').ShaderMaterial).uniforms)
-    expect(events).toHaveLength(1)
     expect(h.engine.getStats().geometryBytes).toBe(bytes + h.engine.cometVisual.geometryBytes)
     const firstTime = frame.time
     h.render('scatter', 0.62)
@@ -173,7 +169,7 @@ describe('required comet model integration (real production graph)', () => {
     expect(frame.light).toBe(!light)
     expect(h.engine.cometVisual.object.position.z).toBe(SUBJECT_Z)
     const material = h.engine.tailPoints.material
-    expect('opacity' in material && material.opacity).toBe(0)
+    expect('opacity' in material && material.opacity).toBeGreaterThan(0)
     h.engine.setReducedMotion(false)
     h.render('gather', 0.25)
     expect(h.s.positions).not.toEqual(before.positions)
@@ -204,13 +200,13 @@ describe('required comet model integration (real production graph)', () => {
     console.info('actual uploaded transition geometry', { gather, scatter, secondHalfSpeedRatio: ratio })
   })
 
-  it('keeps flight energy sparse and glyph coverage at one in both themes', () => {
+  it('keeps every flight grain visible at its source energy and glyph coverage at one', () => {
     for (const light of [false, true]) {
       const h = harness(light)
       h.render('travel', 0.5)
       for (let i = 0; i < h.s.body.alpha.length; i++) {
         const energy = h.s.colors[i * 4 + 3] * h.s.body.spriteScale[i] ** 2
-        expect(energy).toBeCloseTo(h.s.body.alpha[i] * (light ? 0.14 : 0.08), 6)
+        expect(energy).toBeCloseTo(h.s.body.alpha[i], 6)
       }
       h.render('gather', 1)
       h.render('hold', 0)

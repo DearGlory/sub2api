@@ -43,6 +43,7 @@ import {
   CanvasTexture,
   Color,
   DynamicDrawUsage,
+  Matrix4,
   NormalBlending,
   PerspectiveCamera,
   Points,
@@ -283,6 +284,12 @@ export function paletteFor(isLightTheme: boolean): ThemePalette {
 interface EngineScratch {
   emittedTail: EmittedTail
   body: ReturnType<typeof createCometBody>
+  /** Last valid flow frame, retained during the stationary glyph phases. */
+  bodyBasis: Float64Array
+  bodyRotation: Quaternion
+  bodyTargetRotation: Quaternion
+  bodyFrame: Matrix4
+  bodyFrameReady: boolean
   positions: Float32Array
   velocities: Float32Array
   /** RGBA vertex colours; alpha is the actual lifetime visibility channel. */
@@ -505,8 +512,13 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
   }
 
   return {
-    emittedTail: new EmittedTail(Math.max(1, Math.floor(count * (1 - HEAD_CORE_SHARE)))),
+    emittedTail: new EmittedTail(Math.max(1, Math.floor(count * 1.35))),
     body: createCometBody(count),
+    bodyBasis: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    bodyRotation: new Quaternion(),
+    bodyTargetRotation: new Quaternion(),
+    bodyFrame: new Matrix4(),
+    bodyFrameReady: false,
     // The opening frame is a wide scatter that the spring pulls into the first
     // comet, so the background assembles itself instead of popping into being.
     positions: createInitialScatterTargets(count),
@@ -1030,10 +1042,9 @@ export class ParticleEngine implements ParticleEngineContract {
     this.tailGeometry.setAttribute('position', new BufferAttribute(this.scratch.emittedTail.positions, 3).setUsage(DynamicDrawUsage))
     this.tailGeometry.setAttribute('color', new BufferAttribute(this.scratch.emittedTail.colors, 4).setUsage(DynamicDrawUsage))
     this.tailMaterial = this.material.clone()
-    // Keep this draw and its pos3/color4 uploads for GPU causal auditing. The
-    // independently emitted volume is the sole visible tail.
-    this.tailMaterial.opacity = 0
-    this.tailMaterial.size = this.palette.pointSize * (this.light ? 1.05 : 3.6)
+    // The causal birth pool is the visible fine-grain tail; colour belongs to it.
+    this.tailMaterial.opacity = this.palette.opacity
+    this.tailMaterial.size = this.palette.pointSize * (this.light ? 0.8 : 0.65)
     // Only the body uses per-point coverage; the tail keeps its own material.
     this.material.onBeforeCompile = shader => {
       shader.vertexShader = `attribute float cometScale;\n${shader.vertexShader}`.replace(
@@ -1172,8 +1183,8 @@ export class ParticleEngine implements ParticleEngineContract {
     this.material.opacity = this.palette.opacity
     this.material.needsUpdate = true
     this.tailMaterial.blending = this.palette.blending
-    this.tailMaterial.size = this.palette.pointSize * (this.light ? 1.05 : 3.6)
-    this.tailMaterial.opacity = 0
+    this.tailMaterial.size = this.palette.pointSize * (this.light ? 0.8 : 0.65)
+    this.tailMaterial.opacity = this.palette.opacity
     this.tailMaterial.needsUpdate = true
     this.renderer.setClearColor(this.palette.background, isLightTheme ? 1 : 0)
     this.starfield.setTheme(isLightTheme)
@@ -1622,7 +1633,6 @@ export class ParticleEngine implements ParticleEngineContract {
     }
 
     const useHoldStep = phase === 'hold' && glyphMix > 0.5
-    const cometMix = 1 - glyphMix
     // Per-point coverage separates the small nucleus from the diffuse coma.
     // Restore the original point footprint as the body becomes a glyph.
     const bodyMaterial = this.points.material as PointsMaterial
@@ -1630,6 +1640,27 @@ export class ParticleEngine implements ParticleEngineContract {
     const table = s.tailTable
     const departure = departureSeconds(phase, state.phaseProgress, LEG_SECONDS, SCATTER_SECONDS)
     const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6
+    const basis = s.bodyBasis
+    if (moving) {
+      s.bodyFrame.set(
+        table.axis[0], table.side1[0], table.side2[0], 0,
+        table.axis[1], table.side1[1], table.side2[1], 0,
+        table.axis[2], table.side1[2], table.side2[2], 0,
+        0, 0, 0, 1)
+      s.bodyTargetRotation.setFromRotationMatrix(s.bodyFrame)
+      if (!s.bodyFrameReady) s.bodyRotation.copy(s.bodyTargetRotation)
+      else s.bodyRotation.slerp(s.bodyTargetRotation, 1 - Math.exp(-Math.max(0, delta) * 12))
+      s.bodyFrameReady = true
+      s.bodyFrame.makeRotationFromQuaternion(s.bodyRotation)
+      const elements = s.bodyFrame.elements
+      for (let axis = 0; axis < 3; axis++) {
+        basis[axis] = elements[axis]
+        basis[axis + 3] = elements[axis + 4]
+        basis[axis + 6] = elements[axis + 8]
+      }
+    }
+    // Keep the last real flow frame at zero speed. On departure, smoothly align
+    // the local body to the new flow without moving its world-space head anchor.
     s.emittedTail.update(delta, departure, departure > 0 && moving && !this.reducedMotion,
       table, state.headX, state.headY, state.headZ, palette.core, palette.accent, this.light)
 
@@ -1639,12 +1670,16 @@ export class ParticleEngine implements ParticleEngineContract {
       const py = positions[idx + 1]
       const pz = positions[idx + 2]
 
-      // All former logo particles belong to the compact body throughout flight.
-      const cometX = state.headX + s.body.offsets[idx]
-      const cometY = state.headY + s.body.offsets[idx + 1]
-      const cometZ = state.headZ + s.body.offsets[idx + 2]
-      // Surface lighting belongs to the mesh; these are sparse coma/dust flecks.
-      const emit = s.body.alpha[i] * (this.light ? 0.14 : 0.08)
+      // A's body offsets use the tail's orthonormal birth frame: x follows
+      // the backward axis, y / z span its cross-section. The world head is
+      // unchanged; only the local fine-grain envelope rotates with the flow.
+      const localX = s.body.offsets[idx]
+      const localY = s.body.offsets[idx + 1]
+      const localZ = s.body.offsets[idx + 2]
+      const cometX = state.headX + basis[0] * localX + basis[3] * localY + basis[6] * localZ
+      const cometY = state.headY + basis[1] * localX + basis[4] * localY + basis[7] * localZ
+      const cometZ = state.headZ + basis[2] * localX + basis[5] * localY + basis[8] * localZ
+      const emit = s.body.alpha[i]
 
       // --- glyph target: the anchor plus its bounded internal drift -----------
       let tx = cometX
@@ -1652,6 +1687,7 @@ export class ParticleEngine implements ParticleEngineContract {
       let tz = cometZ
       let alpha = emit
       let fragmentWarmth = 0
+      let pointGlyphMix = glyphMix
       if (phase === 'gather' || phase === 'scatter') {
         writeCometTransition(s.transitionOut, phase, shapeProgress,
           s.shapeFrom[idx], s.shapeFrom[idx + 1], s.shapeFrom[idx + 2],
@@ -1664,6 +1700,7 @@ export class ParticleEngine implements ParticleEngineContract {
         tz = s.transitionOut[2]
         alpha = s.transitionOut[3]
         fragmentWarmth = s.transitionOut[5]
+        pointGlyphMix = s.transitionOut[4]
       } else if (phase === 'hold') {
         tx = glyph[idx] + s.iconOrbitOffsets[idx]
         ty = glyph[idx + 1] + s.iconOrbitOffsets[idx + 1]
@@ -1717,30 +1754,26 @@ export class ParticleEngine implements ParticleEngineContract {
 
       // --- colour -----------------------------------------------------------
       // Preserve the hold palette; only ejected fragments gain transient warmth.
-      const warm = glyphMix * 0.26 + cometMix * 0.045 + fragmentWarmth
+      // Each atom changes palette only as its own position commits. At mix=1
+      // this is exactly the pre-existing logo palette, not comet gold.
+      const warm = pointGlyphMix * 0.26 + fragmentWarmth
       const depth = Math.max(-1, Math.min(1, (nz - state.headZ) / 1.4)) * this.holdFade
       const shimmer = 0.86 + Math.sin(time * 2.1 + s.tailSeed[i] * 43.0) * 0.05 + depth * 0.08
-      // The ion population is tinted toward the accent and the dust toward the cool
-      // core, which is the one nod to the two-tail structure the brief asks for that
-      // this renderer can afford: one multiply and one compare per particle.
-      const w = warm
-      const lum = (glyphMix * 1.14 + cometMix * s.body.tone[i] + Math.abs(depth) * 0.06) * shimmer * palette.gain
-
-      let cr = (palette.core.r + (palette.accent.r - palette.core.r) * w) * lum
-      let cg = (palette.core.g + (palette.accent.g - palette.core.g) * w) * lum
-      let cb = (palette.core.b + (palette.accent.b - palette.core.b) * w) * lum
-      // A warm compact nucleus sits inside a cool gas envelope. Preserve the
-      // original brand palette exactly as the body resolves into a glyph.
-      const nucleus = s.body.spriteSize[i] < 3
+      const glyphLum = (1.14 + Math.abs(depth) * 0.06) * shimmer * palette.gain
+      const glyphR = (palette.core.r + (palette.accent.r - palette.core.r) * warm) * glyphLum
+      const glyphG = (palette.core.g + (palette.accent.g - palette.core.g) * warm) * glyphLum
+      const glyphB = (palette.core.b + (palette.accent.b - palette.core.b) * warm) * glyphLum
+      const sheath = Math.min(1, Math.max(0, (1 - s.body.tone[i]) * 1.5 + Math.max(0, -localY) * 0.35))
+      const cometLum = (0.78 + s.body.tone[i] * 0.22) * shimmer * palette.gain
+      let cr = ((this.light ? 0.52 - sheath * 0.12 : 1.08) * (1 - pointGlyphMix) * cometLum) + glyphR * pointGlyphMix
+      let cg = ((this.light ? 0.32 - sheath * 0.14 : 0.86 - sheath * 0.43) * (1 - pointGlyphMix) * cometLum) + glyphG * pointGlyphMix
+      let cb = ((this.light ? 0.10 - sheath * 0.05 : 0.52 - sheath * 0.47) * (1 - pointGlyphMix) * cometLum) + glyphB * pointGlyphMix
+      // Flight warmth lives in this point array; glyph colours remain unchanged.
       if (this.light) {
-        const ink = nucleus ? 1 - cometMix * 0.72 : 1
+        const ink = 1 - (1 - pointGlyphMix) * 0.25
         cr *= ink
         cg *= ink
         cb *= ink
-      } else {
-        cr *= 1 + cometMix * (nucleus ? 0.04 : -0.72)
-        cg *= 1 + cometMix * (nucleus ? 0 : -0.18)
-        cb *= 1 + cometMix * (nucleus ? -0.12 : 0.18)
       }
 
       const cap = this.light ? 0.82 : 1.4
@@ -1748,12 +1781,9 @@ export class ParticleEngine implements ParticleEngineContract {
       colors[colorIndex] = cr > cap ? cap : cr
       colors[colorIndex + 1] = cg > cap ? cap : cg
       colors[colorIndex + 2] = cb > cap ? cap : cb
-      const flightScale = 1 + cometMix * (this.light ? 0.35 : s.body.spriteSize[i] - 1)
-      // Keep transition dust compact enough to read as individual moving strands.
-      // The coverage channel remains area-normalised, preserving endpoint energy.
-      const eventCoverage = phase === 'gather' || phase === 'scatter'
-        ? Math.sin(Math.PI * shapeProgress) ** 2 : 0
-      const spriteScale = flightScale + (Math.min(flightScale, 1.5) - flightScale) * eventCoverage
+      const flightScale = 1 + (1 - pointGlyphMix) * (this.light ? 0.18 : Math.max(0, s.body.spriteSize[i] * 0.34 - 1))
+      // Fine-grain transition stays on the same body points, with no event disc.
+      const spriteScale = flightScale
       s.body.spriteScale[i] = spriteScale
       colors[colorIndex + 3] = alpha / (spriteScale * spriteScale)
     }
