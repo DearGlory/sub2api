@@ -1,16 +1,5 @@
-/**
- * Motion primitives for the home page sections.
- *
- * Two rules from DESIGN-LANGUAGE.md shape everything here:
- *   - `prefers-reduced-motion` must always have a branch, and that branch shows the
- *     finished state rather than animating a shorter version of it.
- *   - No spring / bounce / pulse. Reveals are a short fade plus a few pixels of
- *     travel, over `cubic-bezier(0.4, 0, 0.2, 1)`.
- *
- * GSAP is deliberately not used here: it is not a dependency of this app and the
- * two effects the sections need (reveal on scroll, count up) fit in a rAF loop.
- */
-import { onBeforeUnmount, onMounted, ref, toValue } from 'vue'
+/** Scroll-position reveals and one-shot counters; no animation dependency. */
+import { computed, onBeforeUnmount, onMounted, ref, toValue } from 'vue'
 import type { MaybeRefOrGetter, Ref } from 'vue'
 
 /** One-shot value reveal. Long enough to read as counting, short enough to stay out of the way. */
@@ -30,62 +19,153 @@ function easeOutCubic(progress: number): number {
 }
 
 export interface RevealHandle<T extends HTMLElement> {
-  /** Bind with `ref="target"` on the element that should fade in. */
+  /** Bind to a single, normal-flow wrapper; its layout coordinates are the anchor. */
   target: Ref<T | null>
+  /** Compatibility flag: true at the fully visible state, including fallbacks/focus. */
   revealed: Ref<boolean>
+  progress: Ref<number>
+}
+
+interface RevealEntry {
+  measure: () => number
+  apply: (progress: number) => void
+}
+
+// One event subscription and one pending frame for all mounted home wrappers.
+// Each frame finishes every layout read before publishing any style/ref changes.
+const reveals = new Set<RevealEntry>()
+let revealFrame: number | null = null
+let revealMedia: MediaQueryList | null = null
+let removeMediaListener: (() => void) | null = null
+
+function cancelRevealFrame(): void {
+  if (revealFrame !== null) {
+    window.cancelAnimationFrame(revealFrame)
+    revealFrame = null
+  }
+}
+
+function updateReveals(): void {
+  revealFrame = null
+  const measurements = [...reveals].map((entry) => [entry, entry.measure()] as const)
+  measurements.forEach(([entry, progress]) => entry.apply(progress))
+}
+
+function scheduleReveals(): void {
+  if (!revealMedia?.matches && reveals.size && revealFrame === null) {
+    revealFrame = window.requestAnimationFrame(updateReveals)
+  }
+}
+
+function onRevealMediaChange(): void {
+  cancelRevealFrame()
+  if (revealMedia?.matches) reveals.forEach((entry) => entry.apply(1))
+  else scheduleReveals()
+}
+
+function startRevealEvents(): boolean {
+  if (
+    typeof window.matchMedia !== 'function' ||
+    typeof window.requestAnimationFrame !== 'function' ||
+    typeof window.cancelAnimationFrame !== 'function'
+  ) return false
+
+  const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+  // Without a change subscription we cannot honor a live accessibility change.
+  if (typeof media.addEventListener === 'function' && typeof media.removeEventListener === 'function') {
+    media.addEventListener('change', onRevealMediaChange)
+    removeMediaListener = () => media.removeEventListener('change', onRevealMediaChange)
+  } else if (typeof media.addListener === 'function' && typeof media.removeListener === 'function') {
+    media.addListener(onRevealMediaChange)
+    removeMediaListener = () => media.removeListener(onRevealMediaChange)
+  } else return false
+
+  revealMedia = media
+  window.addEventListener('scroll', scheduleReveals, { passive: true })
+  window.addEventListener('resize', scheduleReveals)
+  window.addEventListener('pageshow', scheduleReveals)
+  return true
+}
+
+function stopRevealEvents(): void {
+  cancelRevealFrame()
+  window.removeEventListener('scroll', scheduleReveals)
+  window.removeEventListener('resize', scheduleReveals)
+  window.removeEventListener('pageshow', scheduleReveals)
+  removeMediaListener?.()
+  removeMediaListener = null
+  revealMedia = null
+}
+
+/** Layout top ignores this wrapper's translate/scale, avoiding transform feedback. */
+function layoutViewportTop(element: HTMLElement): number {
+  let top = 0
+  let current: HTMLElement | null = element
+  while (current) {
+    top += current.offsetTop
+    const parent = current.offsetParent as HTMLElement | null
+    if (parent) top += parent.clientTop
+    current = parent
+  }
+  return top - window.scrollY
 }
 
 /**
- * Fades an element in the first time it enters the viewport, then stops observing.
- * Elements that never intersect keep their hidden class but stay in the DOM, so
- * text is still present for assistive tech and for tests.
+ * Reversible position mapping: top 92% -> 70% of the viewport gives 0 -> 1.
+ * No elapsed time, direction state, IO, transition, or timer participates.
+ * Legacy delay milliseconds become 0.1px each, capped at 24px of later entrance.
  */
 export function useReveal<T extends HTMLElement>(delayMs = 0): RevealHandle<T> {
   const target = ref<T | null>(null) as Ref<T | null>
-  const revealed = ref(prefersReducedMotion())
-  let observer: IntersectionObserver | null = null
-  let timer: number | null = null
+  // SSR, pre-mount and missing capabilities all start readable.
+  const progress = ref(1)
+  const revealed = computed(() => progress.value === 1)
+  const stagger = Number.isFinite(delayMs) ? Math.min(Math.max(delayMs, 0) * 0.1, 24) : 0
+  let entry: RevealEntry | null = null
+  let element: T | null = null
+  let initialEndRatio: number | null = null
+
+  const apply = (value: number): void => { progress.value = value }
+  const focusIn = (): void => { apply(1) }
+
+  function measure(): number {
+    if (!element || revealMedia?.matches || element.contains(document.activeElement)) return 1
+    const viewport = window.innerHeight
+    if (!(viewport > 0) || element.offsetHeight === 0) return 1
+    const top = layoutViewportTop(element)
+    const start = viewport * 0.92 - stagger
+    const end = initialEndRatio === null ? viewport * 0.7 - stagger : viewport * initialEndRatio
+    // A mount-visible target gets a stable, shifted entrance band so restoring a
+    // scroll position never hides content already being read. Keep this band on
+    // reversal too: the same position must always yield the same result.
+    const entrance = Math.max(start, end + viewport * 0.22)
+    return Math.min(1, Math.max(0, (entrance - top) / (entrance - end)))
+  }
 
   onMounted(() => {
-    if (revealed.value) return
-
-    const element = target.value
-    if (typeof IntersectionObserver === 'undefined' || !element) {
-      revealed.value = true
-      return
+    element = target.value
+    if (!element || (reveals.size === 0 && !startRevealEvents())) return
+    const viewport = window.innerHeight
+    const top = layoutViewportTop(element)
+    if (viewport > 0 && top < viewport && top + element.offsetHeight > 0) {
+      initialEndRatio = Math.max(0.7 - stagger / viewport, top / viewport)
     }
-
-    observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return
-
-        observer?.disconnect()
-        observer = null
-
-        if (delayMs > 0) {
-          timer = window.setTimeout(() => {
-            timer = null
-            revealed.value = true
-          }, delayMs)
-        } else {
-          revealed.value = true
-        }
-      },
-      { rootMargin: '0px 0px -10% 0px' },
-    )
-    observer.observe(element)
+    entry = { measure, apply }
+    reveals.add(entry)
+    element.addEventListener('focusin', focusIn)
+    element.addEventListener('focusout', scheduleReveals)
+    apply(measure())
   })
 
   onBeforeUnmount(() => {
-    observer?.disconnect()
-    observer = null
-    if (timer !== null) {
-      window.clearTimeout(timer)
-      timer = null
-    }
+    if (!entry) return
+    element?.removeEventListener('focusin', focusIn)
+    element?.removeEventListener('focusout', scheduleReveals)
+    reveals.delete(entry)
+    if (reveals.size === 0) stopRevealEvents()
   })
 
-  return { target, revealed }
+  return { target, revealed, progress }
 }
 
 export interface CountUpHandle {
