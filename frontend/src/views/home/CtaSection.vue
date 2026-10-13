@@ -29,19 +29,20 @@ withDefaults(
   <section data-testid="home-cta" class="relative z-10 px-6 py-20 md:py-28">
     <SectionReveal>
       <div
-        class="mx-auto max-w-4xl rounded-2xl border border-gray-200 bg-white p-8 text-center md:p-12 dark:border-dark-800 dark:bg-dark-900"
+        class="mx-auto max-w-4xl rounded-2xl border border-gray-200 bg-white/60 p-8 text-center md:p-12 dark:border-dark-800 dark:bg-dark-900/60"
       >
         <p
-          class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-300"
+          class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-700 dark:text-dark-300"
         >
           <Icon name="bolt" size="sm" class="text-gray-500 dark:text-dark-400" />
           {{ t('home.sections.cta.eyebrow') }}
         </p>
 
-        <h2 class="mt-6 text-2xl font-semibold tracking-[-0.02em] text-gray-900 md:text-3xl dark:text-white">
-          {{ t('home.cta.title') }}
+        <h2 class="mt-6 text-balance text-2xl font-semibold tracking-[-0.02em] text-gray-900 md:text-3xl dark:text-white">
+          <span class="block">{{ t('home.sections.cta.summary') }}</span>
+          <span class="mt-3 block whitespace-nowrap text-[clamp(1.75rem,8vw,3rem)]">{{ t('home.cta.title') }}</span>
         </h2>
-        <p class="mx-auto mt-4 max-w-2xl text-sm leading-7 text-gray-600 dark:text-dark-400">
+        <p class="mx-auto mt-4 max-w-2xl text-pretty text-sm leading-7 text-gray-600 dark:text-dark-400">
           {{ t('home.cta.description') }}
         </p>
 

@@ -15,12 +15,12 @@ export default {
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
     // User-focused value proposition
-    heroSubtitle: 'One Key, All AI Models',
-    heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',
+    heroSubtitle: '{siteName} provides professional AI API services for developers and teams',
+    heroDescription: 'Access leading models through one service, with clear balances, transparent pricing and traceable requests',
     tags: {
-      subscriptionToApi: 'Subscription to API',
-      stickySession: 'Session Persistence',
-      realtimeBilling: 'Pay As You Go'
+      subscriptionToApi: 'Multiple Models',
+      stickySession: 'Stable Access',
+      realtimeBilling: 'Unified Billing'
     },
     // Pain points section
     painPoints: {
@@ -50,12 +50,12 @@ export default {
       subtitle: 'Three simple steps to stress-free AI access'
     },
     features: {
-      unifiedGateway: 'One-Click Access',
-      unifiedGatewayDesc: 'Get a single API key to call all connected AI models. No separate applications needed.',
-      multiAccount: 'Always Reliable',
-      multiAccountDesc: 'Smart routing across multiple upstream accounts with automatic failover. Say goodbye to errors.',
-      balanceQuota: 'Pay What You Use',
-      balanceQuotaDesc: 'Usage-based billing with quota limits. Full visibility into team consumption.'
+      unifiedGateway: 'Multiple Models, One Account',
+      unifiedGatewayDesc: 'Access leading model services through one account and call the connected models as needed.',
+      multiAccount: 'Stable API Access',
+      multiAccountDesc: 'Requests route to available model services, reducing the impact of upstream disruptions on development and production.',
+      balanceQuota: 'Clear Balances and Billing',
+      balanceQuotaDesc: 'Review prices, balances and spending records. Pay for actual usage and set spending limits.'
     },
     // Comparison section
     comparison: {
@@ -105,14 +105,17 @@ export default {
     },
     // CTA section
     cta: {
-      title: 'Ready to Get Started?',
-      description: 'Sign up now and get free trial credits to experience seamless AI access',
-      button: 'Sign Up Free'
+      title: 'ALL IN ONE',
+      description: 'From account setup to production calls, access professional, stable multi-model AI API services with usage under your control.',
+      button: 'Get Started'
     },
     // Copy for the particle home page's sections (the default branch)
     sections: {
       hero: {
-        badge: 'Subscription to API · Multi-account pool · Pay as you go'
+        title: 'ALL IN ONE',
+        badge: 'Multi-model AI API services · Stable access, unified billing, traceable requests',
+        integration: 'From account setup to production calls, integrate quickly into your products and workflows',
+        assurance: 'Use multiple models reliably, commercially and with control'
       },
       stats: {
         items: {
@@ -136,18 +139,18 @@ export default {
       },
       features: {
         eyebrow: 'Core capabilities',
-        title: 'One key across every upstream',
-        lead: 'Fold scattered subscriptions and accounts into a single API entry point, with price, balance and request history in one console.',
-        compatTitle: 'Protocol compatible',
-        compatDesc: 'Anthropic, OpenAI and Gemini inbound protocols are all served on the same host — point your existing SDK at a new base URL and go.',
+        title: 'One account for multi-model API services',
+        lead: 'From model selection to production calls, manage models, prices, balances and request history in one place and integrate into existing products.',
+        compatTitle: 'Compatible Interfaces',
+        compatDesc: 'Anthropic, OpenAI and Gemini inbound protocols let existing SDKs, automation and backends connect through their supported protocol.',
         capUptime: 'Reliably available',
-        capUptimeDesc: 'Automatic failover across the account pool, so one flaky upstream never stops your traffic.',
-        capControl: 'Quotas under control',
-        capControlDesc: 'Set spending ceilings and rate limits per user and per key.',
+        capUptimeDesc: 'Unified model access reduces the impact of upstream disruptions on development and production calls.',
+        capControl: 'Secure API Keys',
+        capControlDesc: 'Create an API Key for products, scripts or clients, with balances and quotas to control usage.',
         capRecords: 'Records you can audit',
         capRecordsDesc: 'Time, model, usage and outcome are logged per request, so cost is never a mystery.',
         capCompat: 'Easy to adopt',
-        capCompatDesc: 'Works with existing OpenAI and Anthropic call shapes; migration is a base-URL change.',
+        capCompatDesc: 'Common OpenAI and Anthropic interfaces help existing tools and code connect easily.',
         poolActive: 'Account serving traffic',
         poolFailover: 'Failed account removed',
         poolLimit: 'Rate-limited account switched',
@@ -159,17 +162,18 @@ export default {
         title: 'Three steps to your first call',
         lead: 'What you see is your account, balance, models and request history. The scheduling underneath stays out of the way.',
         step1Eyebrow: 'Start',
-        step1Title: 'Open an account with credit',
-        step1Desc: 'Register, get your balance, and check model pricing up front so every call is a known cost.',
+        step1Title: 'Set up your account and balance',
+        step1Desc: 'Open an account, then review model prices, top-ups and your balance so every call is a known cost.',
         step2Eyebrow: 'Call',
-        step2Title: 'Create an API key and send requests',
-        step2Desc: 'Copy the OpenAI-compatible endpoint and wire model access into your product, scripts or automation.',
+        step2Title: 'Create an API Key and call models',
+        step2Desc: 'Copy the OpenAI-compatible endpoint and connect models to your product, scripts, clients or automation.',
         step3Eyebrow: 'Track',
         step3Title: 'Review spend and request logs',
         step3Desc: 'Usage, cost, errors and latency are all recorded, which makes budgeting and debugging straightforward.'
       },
       cta: {
-        eyebrow: 'Ready out of the box'
+        eyebrow: 'Ready out of the box',
+        summary: 'Multiple models, unified billing, traceable requests'
       }
     },
     footer: {

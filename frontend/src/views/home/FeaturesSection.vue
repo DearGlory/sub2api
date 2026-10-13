@@ -84,15 +84,12 @@ const capabilities: Capability[] = [
   { icon: 'terminal', titleKey: 'home.sections.features.capCompat', descKey: 'home.sections.features.capCompatDesc' },
 ]
 
-/**
- * What the account pool absorbs. Resolved once rather than per render, since
- * `t()` is not free and these strings never change at runtime.
- */
+/** Translate at render time so switching locales also updates the proof visual. */
 const poolRows = [
   { key: 'home.sections.features.poolActive', accent: true },
   { key: 'home.sections.features.poolFailover', accent: false },
   { key: 'home.sections.features.poolLimit', accent: false },
-].map((row) => ({ ...row, label: t(row.key) }))
+]
 
 </script>
 
@@ -102,7 +99,7 @@ const poolRows = [
       <SectionReveal>
         <div class="max-w-2xl">
           <p
-            class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-300"
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-300"
           >
             <Icon name="cube" size="sm" class="text-gray-500 dark:text-dark-400" />
             {{ t('home.sections.features.eyebrow') }}
@@ -116,21 +113,27 @@ const poolRows = [
         </div>
       </SectionReveal>
 
-      <!-- Bento: 1px gaps reveal the container surface as hairline dividers. -->
-      <SectionReveal :delay="60">
-        <div
-          class="mt-10 grid gap-px overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 md:grid-cols-3 dark:border-dark-800 dark:bg-dark-800"
+      <!-- Each card reveals independently; child borders keep the grid transparent. -->
+      <div
+        class="mt-10 grid overflow-hidden rounded-2xl border border-gray-200 md:grid-cols-3 dark:border-dark-800"
+      >
+        <SectionReveal
+          v-for="(feature, index) in bentoFeatures"
+          :key="feature.id"
+          :delay="index * 60"
+          class="min-w-0 border-gray-200 dark:border-dark-800"
+          :class="[
+            feature.span,
+            index > 0 ? 'border-t' : '',
+            index === 1 ? 'md:border-t-0 md:border-l' : '',
+            index === 3 ? 'md:border-l' : '',
+          ]"
         >
-          <div
-            v-for="feature in bentoFeatures"
-            :key="feature.id"
-            class="group relative flex min-w-0 flex-col bg-white p-6 transition-colors duration-200 hover:bg-gray-50 md:p-7 dark:bg-dark-900 dark:hover:bg-dark-800"
-            :class="feature.span"
-          >
+          <div class="group relative flex h-full min-w-0 flex-col bg-white/60 p-6 transition-colors duration-200 hover:bg-gray-50/60 md:p-7 dark:bg-dark-900/60 dark:hover:bg-dark-800/60">
             <div class="mb-5 flex items-center justify-between gap-4">
               <span class="flex items-center gap-2.5">
                 <span
-                  class="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 font-mono text-xs text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-400"
+                  class="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-transparent font-mono text-xs text-gray-500 dark:border-dark-700 dark:bg-transparent dark:text-dark-400"
                 >
                   {{ feature.num }}
                 </span>
@@ -150,7 +153,7 @@ const poolRows = [
               <div
                 v-for="name in platformPreview"
                 :key="name"
-                class="truncate rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-center font-mono text-[11px] text-gray-600 dark:border-dark-800 dark:bg-dark-950 dark:text-dark-400"
+                class="truncate rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-center font-mono text-[11px] text-gray-600 dark:border-dark-800 dark:bg-transparent dark:text-dark-400"
               >
                 {{ name }}
               </div>
@@ -167,14 +170,14 @@ const poolRows = [
                   class="h-1.5 w-1.5 shrink-0 rounded-full"
                   :class="row.accent ? 'bg-primary-500 dark:bg-primary-400' : 'bg-gray-300 dark:bg-dark-600'"
                 />
-                <span class="truncate">{{ row.label }}</span>
+                <span class="text-pretty leading-5">{{ t(row.key) }}</span>
               </div>
             </div>
 
             <!-- Proof visual 3: a metered invoice line. -->
             <div
               v-else-if="feature.id === 'metered-billing'"
-              class="mt-6 flex items-baseline gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-dark-800 dark:bg-dark-950"
+              class="mt-6 flex items-baseline gap-2 rounded-lg border border-gray-200 bg-transparent px-4 py-3 dark:border-dark-800 dark:bg-transparent"
             >
               <span class="font-mono text-xl font-semibold tabular-nums text-gray-900 dark:text-white">
                 {{ t('home.sections.features.billingExample') }}
@@ -187,15 +190,15 @@ const poolRows = [
             <!-- Proof visual 4: a request line, in mono. -->
             <div
               v-else
-              class="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono text-[11px] leading-6 text-gray-600 dark:border-dark-800 dark:bg-dark-950 dark:text-dark-400"
+              class="mt-6 rounded-lg border border-gray-200 bg-transparent p-4 font-mono text-[11px] leading-6 text-gray-600 dark:border-dark-800 dark:bg-transparent dark:text-dark-400"
             >
               <p><span class="text-gray-900 dark:text-dark-100">POST</span> /v1/messages</p>
               <p>model: <span class="text-gray-900 dark:text-dark-100">claude-sonnet-4-5</span></p>
               <p>anthropic · openai · gemini</p>
             </div>
           </div>
-        </div>
-      </SectionReveal>
+        </SectionReveal>
+      </div>
 
       <!-- Supporting properties -->
       <div class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -205,18 +208,18 @@ const poolRows = [
           :delay="index * 40"
         >
           <div
-            class="h-full rounded-xl border border-gray-200 bg-white p-5 transition-colors duration-200 hover:border-gray-300 dark:border-dark-800 dark:bg-dark-900 dark:hover:border-dark-700"
+            class="h-full rounded-xl border border-gray-200 bg-white/60 p-5 transition-colors duration-200 hover:border-gray-300 dark:border-dark-800 dark:bg-dark-900/60 dark:hover:border-dark-700"
           >
             <span
-              class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-300"
+              class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-transparent text-gray-500 dark:border-dark-700 dark:bg-transparent dark:text-dark-300"
             >
               <Icon :name="capability.icon" size="md" />
             </span>
             <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
               {{ t(capability.titleKey) }}
             </h3>
-            <p class="mt-2 text-xs leading-6 text-gray-500 dark:text-dark-400">
-              {{ t(capability.descKey) }}
+            <p class="mt-2 text-pretty text-xs leading-6 text-gray-500 dark:text-dark-400">
+              {{ t(capability.descKey).replace('API Key', 'API\u00a0Key') }}
             </p>
           </div>
         </SectionReveal>
@@ -224,3 +227,14 @@ const poolRows = [
     </div>
   </section>
 </template>
+
+<style scoped>
+h2 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+  word-break: normal;
+}
+</style>
