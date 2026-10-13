@@ -6,11 +6,18 @@ import type { EmissionTable } from './ParticleEngine'
  * No camera, retained orientation, table mutation or per-call allocation.
  */
 export function writeCometFlowBasis(out: Float64Array, table: EmissionTable): void {
-  const phase = table.xyz[2] * 0.028 + table.xyz[0] * 0.065
-  const x = table.axis[0] / Math.hypot(table.axis[0], 0.006)
-  const y = 0.32 + 0.06 * Math.sin(phase) + table.axis[1] * 0.2
+  writeCometFlowBasisFromAxis(out, table.xyz[0], table.xyz[2], table.axis[0], table.axis[1], table.axis[2])
+}
+
+/** Same wind/roll frame for an exact path tangent, independent of actual speed. */
+export function writeCometFlowBasisFromAxis(
+  out: Float64Array, headX: number, headZ: number, axisX: number, axisY: number, axisZ: number
+): void {
+  const phase = headZ * 0.028 + headX * 0.065
+  const x = axisX / Math.hypot(axisX, 0.006)
+  const y = 0.32 + 0.06 * Math.sin(phase) + axisY * 0.2
   // A finite depth component keeps both the jet and its aperture genuinely 3D.
-  const z = -0.34 + 0.1 * table.axis[2]
+  const z = -0.34 + 0.1 * axisZ
   const length = Math.hypot(x, y, z)
   const ax = x / length, ay = y / length, az = z / length
   // cross(world-up, axis) is well conditioned: z is strictly negative.

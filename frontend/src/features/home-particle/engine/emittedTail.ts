@@ -82,7 +82,8 @@ export class EmittedTail {
   }
 
   update(delta: number, departure: number, canEmit: boolean, table: EmissionTable,
-    headX: number, headY: number, headZ: number, core: Color, accent: Color, light: boolean): void {
+    headX: number, headY: number, headZ: number, core: Color, accent: Color, light: boolean,
+    birthBasis?: Float64Array): void {
     // The palette arguments remain in the shared API; comet colour is independent of logo colour.
     void core; void accent
     const dt = Number.isFinite(delta) ? Math.max(0, delta) : 0
@@ -135,9 +136,9 @@ export class EmittedTail {
     this.credit += emissionDelta * this.count / 2.1 * (0.76 + 0.65 * pulse)
     let births = Math.floor(this.credit + 1e-9)
     this.credit -= births
-    // All births in this batch share this table, but never the body's smoothed buffer.
-    const basis = this.flowBasis
-    if (births > 0) writeCometFlowBasis(basis, table)
+    // Only new births consult this frame; older grains retain their world trajectory.
+    const basis = birthBasis ?? this.flowBasis
+    if (births > 0 && !birthBasis) writeCometFlowBasis(basis, table)
     const phase = clock * 2.1 + table.xyz[2] * 0.018
     let searched = 0
     while (births > 0 && searched < this.count) {

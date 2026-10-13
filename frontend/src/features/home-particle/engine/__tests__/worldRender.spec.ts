@@ -2,7 +2,9 @@ import { BufferAttribute, BufferGeometry, PerspectiveCamera, Points, PointsMater
 import { describe, expect, it, vi } from 'vitest'
 import { createEngineScratch, fillEmissionTable, paletteFor, ParticleEngine } from '../ParticleEngine'
 import { cometVisualFixture } from './cometVisualFixture'
-import { writeCometFlowBasis } from '../cometFlow'
+import { writeCometFlowBasis, writeCometFlowBasisFromAxis } from '../cometFlow'
+import { createChoreography, sampleHeadDirection } from '../choreography'
+import { COALESCE_END } from '../flightTiming'
 import { cameraTravelAt, glyphStopZ } from '../spaceMotion'
 import { CAMERA_FOV, GATHER_SECONDS, HOLD_SECONDS, LEG_SECONDS, SCATTER_SECONDS, SUBJECT_Z } from '../constants'
 import type { BrandTargets, ChoreographyState, CometPhase } from '../types'
@@ -88,6 +90,91 @@ function harness(leg = 0, light = false) {
 const worldAnchor = (h: ReturnType<typeof harness>) => new Vector3(h.state.toX, 0, glyphStopZ(h.state.legIndex, timing)).applyMatrix4(h.points.matrixWorld)
 
 describe('world-space rendering', () => {
+  for (const [cadence, steps] of [
+    ['60fps', [1 / 60]], ['30fps', [1 / 30]], ['mixed', [1 / 120, 1 / 30, 1 / 60, 1 / 45]],
+  ] as const) {
+    it.each([0, 1])(`coalesces into the next departure frame before moving (${cadence}, leg %s)`, leg => {
+      const h = harness(leg)
+      const options = { ...timing, brandCount: 1, amplitudeX: 2.56, swayY: 0, swayZ: 0 }
+      const choreography = createChoreography(options)
+      h.engine.choreography = choreography
+      let clock = 0, frame = 0
+      const renderAt = (seconds: number) => {
+        const delta = seconds - clock
+        choreography.update(delta)
+        clock = seconds
+        h.engine.advanceClock(0)
+        fillEmissionTable(h.scratch.tailTable, choreography, h.scratch.probePoint)
+        h.render(clock, delta)
+      }
+      const advanceTo = (seconds: number) => {
+        while (clock < seconds - 1e-12) renderAt(Math.min(seconds, clock + steps[frame++ % steps.length]!))
+      }
+      renderAt(leg * cycle + LEG_SECONDS - 0.1)
+      const arrival = h.scratch.bodyBasis.slice()
+      advanceTo(leg * cycle + LEG_SECONDS + GATHER_SECONDS + HOLD_SECONDS - 0.01)
+      const source = h.scratch.positions.slice()
+      const birthTimes = h.scratch.emittedTail.birthTime.slice()
+      // The same wind helper converts the exact upcoming path tangent into the target frame.
+      const direction = sampleHeadDirection(leg, 'scatter', 0, options)
+      const target = new Float64Array(9)
+      writeCometFlowBasisFromAxis(target, choreography.state.headX, choreography.state.headZ,
+        -direction.x, -direction.y, -direction.z)
+      expect(arrival[0] * target[0] + arrival[1] * target[1] + arrival[2] * target[2]).toBeLessThan(0)
+      const scatterStart = leg * cycle + LEG_SECONDS + GATHER_SECONDS + HOLD_SECONDS
+      // Cross the real clock seam by a sub-pixel epsilon to avoid beat subtraction roundoff.
+      renderAt(scatterStart + 1e-10)
+      expect(choreography.state.phase).toBe('scatter')
+      expect(h.scratch.positions).toEqual(source)
+      expect(h.points.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0])
+      const version = h.engine.geometry.getAttribute('position').version
+      for (const progress of [0, 0.3, 0.6, COALESCE_END]) {
+        advanceTo(scatterStart + SCATTER_SECONDS * progress)
+        for (let k = 0; k < 9; k++) expect(h.scratch.bodyBasis[k], `target basis at scatter ${progress}`).toBeCloseTo(target[k], 10)
+        expect(h.scratch.tailTable.vel.slice(0, 3)).toEqual(new Float32Array(3))
+        expect(h.scratch.emittedTail.birthTime).toEqual(birthTimes)
+        expect(h.scratch.emittedTail.active.some(Boolean)).toBe(false)
+      }
+      expect(h.engine.geometry.getAttribute('position').version).toBeGreaterThan(version)
+      const docked = h.scratch.positions.slice()
+      for (let i = 0; i < count; i++) {
+        const k = h.scratch.coreAssignment[i] * 3
+        for (let axis = 0; axis < 3; axis++) {
+          const head = axis === 0 ? choreography.state.headX : axis === 1 ? choreography.state.headY : choreography.state.headZ
+          expect(docked[i * 3 + axis]).toBeCloseTo(head + target[axis] * h.scratch.body.offsets[k] +
+            target[axis + 3] * h.scratch.body.offsets[k + 1] + target[axis + 6] * h.scratch.body.offsets[k + 2], 5)
+        }
+      }
+      const departureStart = scatterStart + SCATTER_SECONDS * COALESCE_END
+      // Tiny true motion can round the historical Float32 X difference to zero.
+      renderAt(departureStart + 0.0005)
+      const previous = h.scratch.bodyBasis.slice()
+      for (let k = 0; k < 9; k++) expect(previous[k]).toBeCloseTo(target[k], 4)
+      for (let k = 0; k < docked.length; k++) expect(Math.abs(h.scratch.positions[k]! - docked[k]!)).toBeLessThan(0.001)
+      let priorBasis = previous
+      for (const elapsed of [0.001, 0.01, 0.05, 0.1, 0.3]) {
+        advanceTo(departureStart + elapsed)
+        const basis = h.scratch.bodyBasis
+        expect(basis[0] * target[0] + basis[1] * target[1] + basis[2] * target[2]).toBeGreaterThan(0.999)
+        expect(basis[0] * priorBasis[0] + basis[1] * priorBasis[1] + basis[2] * priorBasis[2]).toBeGreaterThan(0.999)
+        const pool = h.scratch.emittedTail
+        const aperture = Reflect.get(pool, 'aperture') as Float32Array
+        for (let i = 0; i < pool.count; i++) {
+          if (!pool.active[i] || pool.age[i] !== 0) continue
+          expect(pool.birthTime[i]).toBeGreaterThan(0)
+          const k = i * 3
+          for (let axis = 0; axis < 3; axis++) {
+            const head = axis === 0 ? choreography.state.headX : axis === 1 ? choreography.state.headY : choreography.state.headZ
+            expect(pool.birthPosition[k + axis]).toBeCloseTo(head + basis[axis] * aperture[k] +
+              basis[axis + 3] * aperture[k + 1] + basis[axis + 6] * aperture[k + 2], 5)
+          }
+        }
+        priorBasis = basis.slice()
+      }
+      expect(h.scratch.emittedTail.active.some(Boolean)).toBe(true)
+    })
+  }
+
   it.each([0, 1, 300])('holds the geometry anchor through gather, hold and early scatter on leg %s', leg => {
     const h = harness(leg)
     const anchorZ = glyphStopZ(leg, timing)

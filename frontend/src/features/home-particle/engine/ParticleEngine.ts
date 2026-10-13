@@ -74,11 +74,11 @@ import {
 
 import { createBrandTargetSource } from './brandTargets'
 import { EmittedTail, createCometBody } from './emittedTail'
-import { createChoreography, type Point3 } from './choreography'
+import { createChoreography, sampleHeadDirection, type Point3 } from './choreography'
 import { createCometVisual } from './cometVisual'
 import type { CometVisual, CometVisualFrame } from './cometVisualContract'
 import { assignCometCore, transitionGlyphMix, writeCometTransition } from './cometTransition'
-import { writeCometFlowBasis } from './cometFlow'
+import { writeCometFlowBasis, writeCometFlowBasisFromAxis } from './cometFlow'
 import {
   AMPLITUDE_X,
   BRANDS,
@@ -120,6 +120,7 @@ import { createStarfield } from './starfield'
 import type {
   BrandTargetSource,
   Choreography,
+  ChoreographyOptions,
   CometPhase,
   EngineStats,
   ParticleEngineContract,
@@ -285,9 +286,13 @@ export function paletteFor(isLightTheme: boolean): ThemePalette {
 interface EngineScratch {
   emittedTail: EmittedTail
   body: ReturnType<typeof createCometBody>
-  /** Last valid flow frame, retained during the stationary glyph phases. */
+  /** Current flow frame; the upcoming frame is latched before scatter infall. */
   bodyBasis: Float64Array
   targetBasis: Float64Array
+  /** Exact direction sampling uses the same timings and the state's live X amplitude. */
+  flowMotionOptions: ChoreographyOptions
+  /** Keeps departure births and the body on the analytic path after a scatter seam. */
+  departureFrameReady: boolean
   /** Persistent particle → body identity; assigned only at the scatter seam. */
   coreAssignment: Uint32Array
   sourceOrder: Uint32Array
@@ -525,6 +530,8 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
     body: createCometBody(count),
     bodyBasis: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
     targetBasis: new Float64Array(9),
+    flowMotionOptions: { ...SPACE_TIMING, brandCount: 1, amplitudeX: AMPLITUDE_X, swayY: 0, swayZ: 0 },
+    departureFrameReady: false,
     coreAssignment: Uint32Array.from({ length: count }, (_, i) => i),
     sourceOrder: new Uint32Array(count),
     coreOrder: new Uint32Array(count),
@@ -1573,6 +1580,7 @@ export class ParticleEngine implements ParticleEngineContract {
       if (phase === 'gather' || phase === 'scatter') {
         s.shapeFrom.set(positions)
         if (phase === 'gather') {
+          s.departureFrameReady = false
           // The prior upload was still in flight. Move its internal shape onto
           // the exact stop anchor before morphing, so the centre stops in X/Z
           // together even when the frame crosses the arrival boundary.
@@ -1584,6 +1592,21 @@ export class ParticleEngine implements ParticleEngineContract {
         }
         for (let i = 0; i < count; i++) s.shapeAlpha[i] = colors[i * 4 + 3]
         if (phase === 'scatter') {
+          s.flowMotionOptions.amplitudeX = Math.abs(state.toX)
+          const direction = sampleHeadDirection(state.legIndex, 'scatter', 0, s.flowMotionOptions, s.probePoint)
+          writeCometFlowBasisFromAxis(s.targetBasis, state.toX, glyphStopZ(state.legIndex, SPACE_TIMING),
+            -direction.x, -direction.y, -direction.z)
+          // The glyph source is already latched: changing its invisible target frame
+          // cannot move q=0. Every atom now docks into the upcoming orientation.
+          s.bodyBasis.set(s.targetBasis)
+          s.bodyFrame.set(
+            s.targetBasis[0], s.targetBasis[3], s.targetBasis[6], 0,
+            s.targetBasis[1], s.targetBasis[4], s.targetBasis[7], 0,
+            s.targetBasis[2], s.targetBasis[5], s.targetBasis[8], 0,
+            0, 0, 0, 1)
+          s.bodyRotation.setFromRotationMatrix(s.bodyFrame)
+          s.bodyTargetRotation.copy(s.bodyRotation)
+          s.bodyFrameReady = s.departureFrameReady = true
           s.localReassemblies = assignCometCore(s.coreAssignment, s.sourceOrder, s.coreOrder,
             s.sourceRadii, s.coreRadii, s.shapeFrom, s.body.offsets,
             state.headX, state.headY, state.headZ)
@@ -1668,7 +1691,19 @@ export class ParticleEngine implements ParticleEngineContract {
     const departure = departureSeconds(phase, state.phaseProgress, LEG_SECONDS, SCATTER_SECONDS)
     const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6
     const basis = s.bodyBasis
-    if (moving) {
+    if (s.departureFrameReady && departure > 0 && moving) {
+      // Use the analytic tangent after launch: Float32 historical differences may
+      // still have zero X or Z. Actual velocity remains untouched for birth gating
+      // and inheritance. Wind phase follows the real world head continuously.
+      const direction = sampleHeadDirection(state.legIndex, phase, state.phaseProgress, s.flowMotionOptions, s.probePoint)
+      writeCometFlowBasisFromAxis(basis, state.headX, state.headZ, -direction.x, -direction.y, -direction.z)
+      s.bodyFrame.set(
+        basis[0], basis[3], basis[6], 0,
+        basis[1], basis[4], basis[7], 0,
+        basis[2], basis[5], basis[8], 0,
+        0, 0, 0, 1)
+      s.bodyRotation.setFromRotationMatrix(s.bodyFrame)
+    } else if (moving && !s.departureFrameReady) {
       const targetBasis = s.targetBasis
       writeCometFlowBasis(targetBasis, table)
       s.bodyFrame.set(
@@ -1688,10 +1723,11 @@ export class ParticleEngine implements ParticleEngineContract {
         basis[axis + 6] = elements[axis + 8]
       }
     }
-    // Keep the last real flow frame at zero speed. On departure, smoothly align
-    // the local body to the new flow without moving its world-space head anchor.
+    // After scatter, births use the body's exact flow frame. The pool retains
+    // each birth frame in world space and still requires real nonzero velocity.
     s.emittedTail.update(delta, departure, departure > 0 && moving && !this.reducedMotion,
-      table, state.headX, state.headY, state.headZ, palette.core, palette.accent, this.light)
+      table, state.headX, state.headY, state.headZ, palette.core, palette.accent, this.light,
+      s.departureFrameReady ? basis : undefined)
 
     for (let i = 0; i < count; i++) {
       const idx = i * 3

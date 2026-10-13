@@ -2,7 +2,6 @@ import { BufferAttribute, BufferGeometry, Points, PointsMaterial, Vector3 } from
 import { describe, expect, it } from 'vitest'
 import { createEngineScratch, paletteFor, ParticleEngine } from '../ParticleEngine'
 import { cometVisualFixture } from './cometVisualFixture'
-import { writeCometFlowBasis } from '../cometFlow'
 import { LEG_SECONDS, SCATTER_SECONDS } from '../constants'
 import { COALESCE_END, departureSeconds } from '../flightTiming'
 import type { ChoreographyState } from '../types'
@@ -184,8 +183,7 @@ describe('causal render: separate body and emitted tail', () => {
         const k = i * 3
         if (h.pool!.age[i] === 0) {
           const aperture = Reflect.get(h.scratch.emittedTail, 'aperture') as Float32Array
-          const basis = new Float64Array(9)
-          writeCometFlowBasis(basis, h.scratch.tailTable)
+          const basis = h.scratch.bodyBasis
           for (let axis = 0; axis < 3; axis++) {
             const origin = axis === 0 ? 2.56 - h.pool!.birthTime[i] * 2 : 0
             expect(h.pool!.birthPosition[k + axis]).toBeCloseTo(origin + basis[axis] * aperture[k] +
