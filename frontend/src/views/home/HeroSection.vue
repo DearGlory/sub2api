@@ -19,6 +19,10 @@ import SectionReveal from './SectionReveal.vue'
 
 const { t } = useI18n()
 
+// Keep Chinese clauses together, including their punctuation. English remains
+// one wrapping span so narrow screens can still break naturally between words.
+const heroPhrases = (message: string) => message.split(/(?<=[，、])/u)
+
 withDefaults(
   defineProps<{
     siteName: string
@@ -53,14 +57,14 @@ withDefaults(
             {{ t('home.sections.hero.title') }}
           </h1>
 
-          <p class="mx-auto mt-4 max-w-xl text-pretty text-lg font-medium leading-8 text-gray-800 sm:text-xl lg:mx-0 dark:text-dark-100">
-            {{ t('home.heroSubtitle', { siteName }) }}
+          <p class="hero-copy mx-auto mt-4 max-w-xl text-pretty text-lg font-medium leading-8 text-gray-800 sm:text-xl lg:mx-0 dark:text-dark-100">
+            <span v-for="(phrase, index) in heroPhrases(t('home.heroSubtitle', { siteName }))" :key="index" class="hero-phrase">{{ phrase }}</span>
           </p>
 
-          <div class="mx-auto mt-4 max-w-xl space-y-2 text-pretty text-sm leading-7 text-gray-600 lg:mx-0 dark:text-dark-400">
-            <p>{{ t('home.heroDescription') }}</p>
-            <p>{{ t('home.sections.hero.integration') }}</p>
-            <p>{{ t('home.sections.hero.assurance') }}</p>
+          <div class="hero-copy mx-auto mt-4 max-w-xl space-y-2 text-pretty text-sm leading-7 text-gray-600 lg:mx-0 dark:text-dark-400">
+            <p><span v-for="(phrase, index) in heroPhrases(t('home.heroDescription'))" :key="index" class="hero-phrase">{{ phrase }}</span></p>
+            <p><span v-for="(phrase, index) in heroPhrases(t('home.sections.hero.integration'))" :key="index" class="hero-phrase">{{ phrase }}</span></p>
+            <p><span v-for="(phrase, index) in heroPhrases(t('home.sections.hero.assurance'))" :key="index" class="hero-phrase">{{ phrase }}</span></p>
           </div>
 
           <!-- Capability chips: reuse the three claims the old landing page already made. -->
@@ -150,22 +154,50 @@ withDefaults(
 </template>
 
 <style scoped>
+.hero-phrase {
+  display: inline-block;
+  max-width: 100%;
+}
+
 /* Flat surface + 1px border + 12px radius. No glow, no tilt, no gradient. */
 .terminal-container {
+  --terminal-bg: rgba(255, 255, 255, 0.60);
+  --terminal-border: rgba(15, 17, 19, 0.12);
+  --terminal-hover-border: rgba(15, 17, 19, 0.20);
+  --terminal-divider: rgba(15, 17, 19, 0.08);
+  --terminal-muted: #4b5563;
+  --terminal-cmd: #111827;
+  --terminal-text: #374151;
+  --terminal-comment: #475569;
+  --terminal-success: #047857;
   width: 100%;
   max-width: 420px;
 }
 
+:global(.dark) {
+  .terminal-container {
+    --terminal-bg: rgba(15, 17, 19, 0.60);
+    --terminal-border: rgba(255, 255, 255, 0.08);
+    --terminal-hover-border: rgba(255, 255, 255, 0.16);
+    --terminal-divider: rgba(255, 255, 255, 0.06);
+    --terminal-muted: #9ca3af;
+    --terminal-cmd: #e4e4e7;
+    --terminal-text: #d4d4d8;
+    --terminal-comment: #94a3b8;
+    --terminal-success: #6ee7b7;
+  }
+}
+
 .terminal-window {
-  background: rgba(15, 17, 19, 0.60);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
   border-radius: 12px;
   overflow: hidden;
   transition: border-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .terminal-window:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--terminal-hover-border);
 }
 
 .terminal-header {
@@ -173,7 +205,7 @@ withDefaults(
   align-items: center;
   padding: 12px 16px;
   background: transparent;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--terminal-divider);
 }
 
 .terminal-buttons {
@@ -194,10 +226,7 @@ withDefaults(
   text-align: center;
   font-family: theme('fontFamily.mono');
   font-size: 12px;
-  /* Measured on the card's own #0f1113: #71717a lands at 3.78:1, below the 4.5 AA
-     floor for 12px text. #9ca3af is the same hue at 7.45:1 — still clearly the
-     quietest thing in the card, but actually readable at this size. */
-  color: #9ca3af;
+  color: var(--terminal-muted);
   margin-right: 46px;
 }
 
@@ -242,26 +271,23 @@ withDefaults(
 }
 
 .code-prompt {
-  color: #a1a1aa;
+  color: var(--terminal-muted);
   font-weight: 600;
 }
 .code-cmd {
-  color: #e4e4e7;
+  color: var(--terminal-cmd);
 }
 .code-flag {
-  color: #a1a1aa;
+  color: var(--terminal-muted);
 }
 .code-url {
-  color: #d4d4d8;
+  color: var(--terminal-text);
 }
 .code-comment {
-  /* #71717a measured 3.91:1 on the card's #0f1113 — a comment is meant to recede,
-     but not below readability at 13px. #94a3b8 keeps the "quiet annotation" role at
-     7.38:1 and reads as a comment, not as dim grey text. */
-  color: #94a3b8;
+  color: var(--terminal-comment);
 }
 .code-success {
-  color: #6ee7b7;
+  color: var(--terminal-success);
   background: transparent;
   border: 1px solid rgba(16, 185, 129, 0.14);
   padding: 2px 8px;
@@ -269,7 +295,7 @@ withDefaults(
   font-weight: 500;
 }
 .code-response {
-  color: #d4d4d8;
+  color: var(--terminal-text);
 }
 
 /* Steady block, never blinking (DESIGN-LANGUAGE bans flashing cursors). */
