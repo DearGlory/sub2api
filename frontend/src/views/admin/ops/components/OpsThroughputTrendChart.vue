@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Title, Tooltip } from 'chart.js'
@@ -43,7 +44,7 @@ watch(
   }
 )
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+const isDarkMode = computed(() => isDarkSurface())
 const colors = computed(() => ({
   accent: isDarkMode.value ? '#ff8447' : '#ff6708',
   accentAlpha: isDarkMode.value ? '#ff844730' : '#ff670820',

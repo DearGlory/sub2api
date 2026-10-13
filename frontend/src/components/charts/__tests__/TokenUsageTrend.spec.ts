@@ -21,11 +21,49 @@ vi.mock('vue-i18n', async () => {
 vi.mock('vue-chartjs', () => ({
   Line: {
     props: ['data', 'options'],
-    template: '<div class="chart-data">{{ JSON.stringify(data) }}</div>',
+    template: '<div class="chart-data">{{ JSON.stringify(data) }}</div><div class="chart-options">{{ JSON.stringify(options) }}</div>',
   },
 }))
 
 describe('TokenUsageTrend', () => {
+  it.each([
+    { universe: 'cosmos', dark: false, text: '#e5e7eb', grid: '#374151' },
+    { universe: undefined, dark: false, text: '#374151', grid: '#e5e7eb' },
+    { universe: undefined, dark: true, text: '#e5e7eb', grid: '#374151' },
+  ])('uses surface colors with universe=$universe and dark=$dark', ({ universe, dark, text, grid }) => {
+    const root = document.documentElement
+    const originalClass = root.className
+    const originalUniverseTheme = root.dataset.universeTheme
+    root.classList.toggle('dark', dark)
+    if (universe === undefined) delete root.dataset.universeTheme
+    else root.dataset.universeTheme = universe
+    const wrapper = mount(TokenUsageTrend, {
+      props: {
+        trendData: [{
+          date: '2026-05-08', requests: 1, input_tokens: 500, output_tokens: 100,
+          cache_creation_tokens: 0, cache_read_tokens: 1500, cost: 0.01, actual_cost: 0.005,
+        }],
+      },
+    })
+
+    try {
+      const options = JSON.parse(wrapper.find('.chart-options').text())
+      expect(options.plugins.legend.labels.color).toBe(text)
+      expect(options.scales.x.ticks.color).toBe(text)
+      expect(options.scales.y.ticks.color).toBe(text)
+      expect(options.scales.x.grid.color).toBe(grid)
+      const data = JSON.parse(wrapper.find('.chart-data').text())
+      expect(data.datasets[0].borderColor).toBe('#ff6708')
+      expect(data.datasets[1].borderColor).toBe('#10b981')
+      expect(root.classList.contains('dark')).toBe(dark)
+    } finally {
+      wrapper.unmount()
+      root.className = originalClass
+      if (originalUniverseTheme === undefined) delete root.dataset.universeTheme
+      else root.dataset.universeTheme = originalUniverseTheme
+    }
+  })
+
   it('calculates cache hit rate against all prompt tokens', () => {
     const wrapper = mount(TokenUsageTrend, {
       props: {

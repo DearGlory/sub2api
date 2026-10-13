@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -31,7 +32,7 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+const isDarkMode = computed(() => isDarkSurface())
 const colors = computed(() => ({
   accent: isDarkMode.value ? '#ff8447' : '#ff6708',
   accentAlpha: isDarkMode.value ? '#ff844730' : '#ff670820',

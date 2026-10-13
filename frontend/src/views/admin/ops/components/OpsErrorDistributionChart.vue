@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, ArcElement, Legend, Tooltip } from 'chart.js'
@@ -21,7 +22,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+const isDarkMode = computed(() => isDarkSurface())
 const colors = computed(() => ({
   blue: '#3b82f6',
   red: '#ef4444',

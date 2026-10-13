@@ -19,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -55,7 +56,7 @@ const props = defineProps<{
 }>()
 
 const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
+  return isDarkSurface()
 })
 
 const chartColors = computed(() => ({

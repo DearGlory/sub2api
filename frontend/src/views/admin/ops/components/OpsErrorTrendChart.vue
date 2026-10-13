@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -34,7 +35,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+const isDarkMode = computed(() => isDarkSurface())
 const colors = computed(() => ({
   red: '#ef4444',
   redAlpha: '#ef444420',
