@@ -273,11 +273,17 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		reasoningEffort := extractOpenAIReasoningEffortFromBody(body, mappedModel)
 		// 国产模型默认 effort 补充：也要用 mappedModel 判定是否是 passback-required 上游。
 		reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, body, mappedModel)
+		// 变换副本只交给 passthrough，并立刻清掉本帧上的别名。
+		// canonicalImageIntentBody 仍是 failover hint，handler 持有的原始 body 不动。
+		passthroughBody := originalBody
+		body = nil
+		originalBody = nil
+		requestView = openAIRequestView{}
 		return s.forwardOpenAIPassthrough(
 			ctx,
 			c,
 			account,
-			originalBody,
+			&passthroughBody,
 			canonicalImageIntentBody,
 			reqModel,
 			attemptImageIntentInvalidated,

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
@@ -127,7 +128,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	ctx context.Context,
 	c *gin.Context,
 	account *Account,
-	body []byte,
+	bodySlot *[]byte,
 	canonicalImageIntentBody []byte,
 	reqModel string,
 	attemptImageIntentInvalidated bool,
@@ -135,6 +136,13 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	reqStream bool,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
+	if bodySlot == nil {
+		return nil, errors.New("openai passthrough body slot is nil")
+	}
+	// 调用方槽位立刻清空。跨账号 failover 的原始 body 在 handler / canonical
+	// 参数里，不在这个槽位。
+	body := *bodySlot
+	*bodySlot = nil
 	requestedModel := reqModel
 	upstreamPassthroughModel := ""
 	if isOpenAIResponsesCompactPath(c) {
@@ -363,6 +371,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	responseID := ""
 	imageCount := 0
 	var imageOutputSizes []string
+	var serviceTier *string
+	var responseReplay *openAIPassthroughReplay
+	var retainedReplays []*openAIPassthroughReplay
+	defer func() {
+		if relErr := releaseOpenAIPassthroughReplays(retainedReplays); relErr != nil {
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] compact replay cleanup failed: %v", relErr)
+		}
+	}()
 	for {
 		actualModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
 		if actualModel == "" {
@@ -378,6 +394,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 
 		upstreamStart := time.Now()
 		resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
+		// Do 返回后传输层重试已经结束。先丢掉请求上的 GetBody，
+		// 4xx 同账号重试用的是循环里的 body，不是这条已发送请求。
+		releaseOpenAIPassthroughUpstreamRequest(upstreamReq)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
 			// Transport-level failure (proxy/DNS/TCP/TLS — no HTTP response). Convert to
@@ -447,27 +466,47 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			s.noteOpenAICodexTurnStateProvenance(c, account)
 		}
 
+		// service_tier 是计费短字段，必须在丢掉 body 之前抽出。
+		// compact signal 只有 isExplicitOpenAICompactContext 才会产生，
+		// 普通成功响应不落盘，也不为不会发生的 retry 留整包。
+		serviceTier = extractOpenAIServiceTierFromBody(body)
+		if !isExplicitOpenAICompactContext(c) {
+			body = nil
+		} else {
+			replay, parkErr := s.parkOpenAIPassthroughCompactReplay(body)
+			body = nil
+			if parkErr != nil {
+				_ = resp.Body.Close()
+				return nil, parkErr
+			}
+			responseReplay = replay
+			retainedReplays = append(retainedReplays, replay)
+		}
+		readErr := func(handleErr error) (bool, error) {
+			decision := s.decideOpenAIPassthroughReadError(
+				ctx, resp, c, account, requestedModel, responseReplay, handleErr, compactModelFallbackRetried,
+			)
+			if decision.retry {
+				body = decision.body
+				upstreamPassthroughModel = decision.fallbackModel
+				compactModelFallbackRetried = true
+				return true, nil
+			}
+			if decision.err != nil {
+				return false, decision.err
+			}
+			return false, handleErr
+		}
 		if reqStream {
 			result, handleErr := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime, reqModel, upstreamPassthroughModel)
 			if handleErr != nil {
-				if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
-					c, account, requestedModel, body, handleErr, compactModelFallbackRetried, resp,
-				); retry {
-					body = retryBody
-					upstreamPassthroughModel = fallbackModel
-					compactModelFallbackRetried = true
+				retry, err := readErr(handleErr)
+				if err != nil {
+					return nil, err
+				}
+				if retry {
 					continue
 				}
-				if signal, ok := asOpenAICompactFallbackSignal(handleErr); ok {
-					_ = resp.Body.Close()
-					compactResp, compactBody := openAICompactFallbackErrorResponse(resp, signal)
-					if shouldFailoverOpenAIPassthroughResponse(account, compactResp.StatusCode, compactBody) {
-						return nil, s.handleFailoverErrorResponsePassthrough(ctx, compactResp, c, account, body, compactBody)
-					}
-					return nil, s.handleErrorResponsePassthrough(ctx, compactResp, c, account, body, compactBody)
-				}
-				_ = resp.Body.Close()
-				return nil, handleErr
 			}
 			usage = result.usage
 			firstTokenMs = result.firstTokenMs
@@ -477,34 +516,28 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		} else {
 			result, handleErr := s.handleNonStreamingResponsePassthrough(ctx, resp, c, account, reqModel, upstreamPassthroughModel)
 			if handleErr != nil {
-				if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
-					c, account, requestedModel, body, handleErr, compactModelFallbackRetried, resp,
-				); retry {
-					body = retryBody
-					upstreamPassthroughModel = fallbackModel
-					compactModelFallbackRetried = true
+				retry, err := readErr(handleErr)
+				if err != nil {
+					return nil, err
+				}
+				if retry {
 					continue
 				}
-				if signal, ok := asOpenAICompactFallbackSignal(handleErr); ok {
-					_ = resp.Body.Close()
-					compactResp, compactBody := openAICompactFallbackErrorResponse(resp, signal)
-					if shouldFailoverOpenAIPassthroughResponse(account, compactResp.StatusCode, compactBody) {
-						return nil, s.handleFailoverErrorResponsePassthrough(ctx, compactResp, c, account, body, compactBody)
-					}
-					return nil, s.handleErrorResponsePassthrough(ctx, compactResp, c, account, body, compactBody)
-				}
-				_ = resp.Body.Close()
-				return nil, handleErr
 			}
 			usage = result.usage
 			responseID = strings.TrimSpace(result.responseID)
 			imageCount = result.imageCount
 			imageOutputSizes = result.imageOutputSizes
 		}
+		body = nil
+		if relErr := releaseOpenAIPassthroughReplays(retainedReplays); relErr != nil {
+			// Billing is already known. Cleanup stays reserved and the defer
+			// retries it; a close or remove error must not drop the result.
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] compact replay cleanup failed after response: %v", relErr)
+		}
 		break
 	}
 	defer func() { _ = resp.Body.Close() }()
-	serviceTier := extractOpenAIServiceTierFromBody(body)
 	s.bindHTTPResponseAccount(ctx, c, account, responseID)
 
 	// 排除 spark 影子:其 codex_* 仅由 QueryUsage(/wham/usage bengalfox)更新(外审第7轮 P1)。
@@ -611,11 +644,12 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	// DeepSeek / Kimi 原生 Responses 端点为无状态实现（见 normalizeDeepSeekResponsesRequestBody）。
 	body = normalizeDeepSeekResponsesRequestBody(account, body)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
+	pkghttputil.BindReleasableRequestBody(req, body)
 
 	// 透传客户端请求头（安全白名单）。
 	allowTimeoutHeaders := s.isOpenAIPassthroughTimeoutHeadersAllowed()
