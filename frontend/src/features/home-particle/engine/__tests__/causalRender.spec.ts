@@ -163,6 +163,7 @@ describe('causal render: separate body and emitted tail', () => {
     expect(h.pool).toBeDefined()
     expect(h.pool!.active.some(Boolean)).toBe(false)
     const lengths: number[] = []
+    const birthPositions = new Float32Array(h.pool!.birthPosition.length).fill(NaN)
     for (let f = 1; f <= 48; f++) {
       h.depart(f / 60)
       if (f === 6 || f === 18 || f === 48) {
@@ -180,14 +181,22 @@ describe('causal render: separate body and emitted tail', () => {
       for (let i = 0; i < h.pool!.active.length; i++) {
         if (!h.pool!.active[i]) continue
         expect(h.pool!.birthTime[i]).toBeGreaterThanOrEqual(0)
-        const aperture = Reflect.get(h.scratch.emittedTail, 'aperture') as Float32Array
-        const basis = new Float64Array(9)
-        writeCometFlowBasis(basis, h.scratch.tailTable)
-        for (let axis = 0; axis < 3; axis++) {
-          const origin = axis === 0 ? 2.56 - h.pool!.birthTime[i] * 2 : 0
-          const k = i * 3
-          expect(h.pool!.birthPosition[k + axis]).toBeCloseTo(origin + basis[axis] * aperture[k] +
-            basis[axis + 3] * aperture[k + 1] + basis[axis + 6] * aperture[k + 2], 5)
+        const k = i * 3
+        if (h.pool!.age[i] === 0) {
+          const aperture = Reflect.get(h.scratch.emittedTail, 'aperture') as Float32Array
+          const basis = new Float64Array(9)
+          writeCometFlowBasis(basis, h.scratch.tailTable)
+          for (let axis = 0; axis < 3; axis++) {
+            const origin = axis === 0 ? 2.56 - h.pool!.birthTime[i] * 2 : 0
+            expect(h.pool!.birthPosition[k + axis]).toBeCloseTo(origin + basis[axis] * aperture[k] +
+              basis[axis + 3] * aperture[k + 1] + basis[axis + 6] * aperture[k + 2], 5)
+            birthPositions[k + axis] = h.pool!.birthPosition[k + axis]
+          }
+        } else {
+          for (let axis = 0; axis < 3; axis++) {
+            expect(Number.isFinite(birthPositions[k + axis])).toBe(true)
+            expect(h.pool!.birthPosition[k + axis]).toBe(birthPositions[k + axis])
+          }
         }
       }
     }
