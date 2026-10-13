@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCometBody } from '../emittedTail'
 import { writeCometTransition } from '../cometTransition'
-import { COMET_COMA_RADIUS } from '../cometVisualContract'
 
 const count = 1024
 const body = createCometBody(count)
@@ -48,53 +47,39 @@ function distribution(phase: 'gather' | 'scatter', q: number) {
 }
 
 describe('deterministic internal ejection and gravitational collapse', () => {
-  it('ejects with increasing outward speed and genuine depth before target attraction', () => {
-    const samples = [0, 0.05, 0.15, 0.25].map(q => distribution('gather', q))
-    for (let j = 1; j < samples.length; j++) {
-      expect(samples[j].median).toBeGreaterThan(samples[j - 1].median)
-      expect(samples[j].max).toBeGreaterThan(samples[j - 1].max)
-      expect(samples[j].depth).toBeGreaterThan(samples[j - 1].depth)
+  it('peels individual grains at staggered times, drifts locally, then captures into the glyph', () => {
+    let detached = 0, attached = 0, drifting = 0
+    for (let i = 0; i < count; i++) {
+      const source = sample('gather', 0, i).slice()
+      const early = sample('gather', 0.12, i).slice()
+      const middle = sample('gather', 0.32, i).slice()
+      const late = sample('gather', 0.9, i).slice()
+      const drift = Math.hypot(early[0] - source[0], early[1] - source[1], early[2] - source[2])
+      if (drift > 0.005) detached++
+      else attached++
+      if (Math.hypot(middle[0] - source[0], middle[1] - source[1], middle[2] - source[2]) > 0.02) drifting++
+      expect(late[3]).toBeGreaterThanOrEqual(early[3])
     }
-    expect((samples[3].median - samples[2].median) / 0.1)
-      .toBeGreaterThan((samples[2].median - samples[1].median) / 0.1 * 1.25)
-    expect(samples[3].depth).toBeGreaterThan(3)
-    expect(samples[3].median).toBeGreaterThan(samples[0].median + 0.8)
+    expect(detached).toBeGreaterThan(count * 0.1)
+    expect(attached).toBeGreaterThan(count * 0.1)
+    expect(drifting).toBeGreaterThan(count * 0.8)
     for (let i = 0; i < count; i += 17) {
       const before = sample('gather', 0.15, i).slice()
       expect(sample('gather', 0.15, i, 100)).toEqual(before)
     }
-    console.info('gather radial evidence', samples)
+    console.info('atomization stagger', { detached, attached, drifting })
   })
 
-  it('has outward individual radial velocity at .05/.1/.15/.25, with a broad volume instead of a shell', () => {
-    const velocities: number[] = []
-    for (const q of [0.05, 0.1, 0.15, 0.25]) {
-      const speeds: number[] = []
-      const radii: number[] = []
-      for (let i = 0; i < count; i++) {
-        const before = sample('gather', q - 0.0001, i).slice()
-        const p = sample('gather', q, i).slice()
-        const after = sample('gather', q + 0.0001, i)
-        const x = p[0] - head[0], y = p[1] - head[1], z = p[2] - head[2]
-        const radius = Math.hypot(x, y, z)
-        const speed = ((after[0] - before[0]) * x + (after[1] - before[1]) * y + (after[2] - before[2]) * z) / radius / (0.0002 * 1.4)
-        expect(speed).toBeGreaterThan(0)
-        speeds.push(speed)
-        radii.push(radius)
-      }
-      speeds.sort((a, b) => a - b)
-      radii.sort((a, b) => a - b)
-      velocities.push(speeds[count / 2])
-      expect(radii[Math.floor(count * 0.9)] - radii[Math.floor(count * 0.1)]).toBeGreaterThan(0.8)
-    }
-    expect(velocities[1]).toBeGreaterThan(velocities[0])
-    expect(velocities[2]).toBeGreaterThan(velocities[1])
-    expect(velocities[3]).toBeGreaterThan(velocities[2])
-    expect(distribution('gather', 0.1).depth).toBeGreaterThan(distribution('gather', 0).depth)
-    console.info('gather median radial velocity, world units/s at .05/.1/.15/.25', velocities)
+  it('maintains an open 3D grain volume, without a synchronous radial shock front', () => {
+    const early = distribution('gather', 0.12)
+    const midway = distribution('gather', 0.32)
+    expect(early.depth).toBeGreaterThan(0.1)
+    expect(midway.depth).toBeGreaterThan(early.depth)
+    expect(midway.max - midway.median).toBeGreaterThan(0.3)
+    expect(midway.median - distribution('gather', 0).median).toBeLessThan(1)
   })
 
-  it('contracts statistical radii monotonically, with a faster second half and a tilted spiral', () => {
+  it('pulls outer atoms inward first, accelerating in the second half without orbital motion', () => {
     const q = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1]
     const samples = q.map(value => distribution('scatter', value))
     for (let j = 1; j < samples.length; j++) {
@@ -104,9 +89,26 @@ describe('deterministic internal ejection and gravitational collapse', () => {
     }
     const ratio = (samples[3].mean - samples[6].mean) / (samples[0].mean - samples[3].mean)
     expect(ratio).toBeGreaterThanOrEqual(1.8)
-    expect(samples[3].depth).toBeGreaterThan(samples[0].depth + 1)
-    expect(samples[6].max).toBeLessThanOrEqual(COMET_COMA_RADIUS)
-    console.info('scatter radial evidence', { samples, secondHalfSpeedRatio: ratio })
+    let monotone = 0, outerMoved = 0, innerMoved = 0, outerCount = 0, innerCount = 0
+    for (let i = 0; i < count; i++) {
+      const r0 = Math.hypot(sources[i * 3], sources[i * 3 + 1], sources[i * 3 + 2])
+      let previous = Infinity, valid = true
+      for (let step = 0; step <= 100; step++) {
+        const p = sample('scatter', step / 100, i)
+        const radius = Math.hypot(p[0] - head[0], p[1] - head[1], p[2] - head[2])
+        if (radius > previous + 1e-5) valid = false
+        previous = radius
+      }
+      if (valid) monotone++
+      const p = sample('scatter', 0.3, i)
+      const moved = r0 - Math.hypot(p[0] - head[0], p[1] - head[1], p[2] - head[2])
+      if (r0 > 5) { outerMoved += moved; outerCount++ }
+      if (r0 < 3) { innerMoved += moved; innerCount++ }
+    }
+    expect(monotone).toBeGreaterThan(count * 0.98)
+    expect(outerMoved / outerCount).toBeGreaterThan(innerMoved / innerCount)
+    expect(samples[6].depth).toBeGreaterThan(samples[0].depth)
+    console.info('radial infall', { samples, ratio, monotone, outerMoved: outerMoved / outerCount, innerMoved: innerMoved / innerCount })
   })
 
   it('lands exactly at source and target, with no endpoint teleport or settling velocity', () => {

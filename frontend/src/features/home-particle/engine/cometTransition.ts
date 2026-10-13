@@ -9,11 +9,6 @@ function smooth(q: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
-function smoothAttitude(q: number): number {
-  const t = unit(q)
-  return t * t * (3 - 2 * t)
-}
-
 /** Gravity accelerates until the final eight percent, then settles with C1 continuity. */
 export function collapseProgress(q: number): number {
   const t = unit(q)
@@ -64,71 +59,69 @@ export function writeCometTransition(
   const z = sourceZ - headZ
   const sourceRadius = Math.hypot(x, y, z)
   if (gather) {
-    // Fixed radial launch directions come from the hashed volume samples, never
-    // the glyph. The rare central sample gets a deterministic volumetric direction.
-    const azimuth = salt * 43.17
-    const polar = Math.sin(salt * 71.73)
-    const planar = Math.sqrt(1 - polar * polar)
-    const dx = sourceRadius > 1e-9 ? x / sourceRadius : Math.cos(azimuth) * planar
-    const dy = sourceRadius > 1e-9 ? y / sourceRadius : Math.sin(azimuth) * planar
-    const dz = sourceRadius > 1e-9 ? z / sourceRadius : polar
-    const elapsed = t * GATHER_SECONDS
-    const powered = Math.min(elapsed, GATHER_SECONDS * 0.25)
-    const coast = Math.max(0, elapsed - powered)
-    const drag = 2.1
-    const acceleration = 24 + salt * 35
-    // Constant pressure acceleration with linear drag, followed by ballistic drag.
-    const launchVelocity = acceleration / drag * (1 - Math.exp(-drag * powered))
-    const distance = acceleration / drag * (powered - (1 - Math.exp(-drag * powered)) / drag) +
-      launchVelocity * (1 - Math.exp(-drag * coast)) / drag
-    const capture = smooth((t - (0.28 + salt * 0.035)) / (0.72 - salt * 0.035))
-    const bx = sourceX + dx * distance
-    const by = sourceY + dy * distance
-    const bz = sourceZ + dz * distance
+    // Surface atoms detach first, with overlapping, hashed release times. The
+    // interior stays intact while nearby grains peel off; no common blast front.
+    const layer = sourceRadius / (sourceRadius + 0.45)
+    const delay = 0.015 + 0.15 * (1 - layer) + salt * 0.12
+    const elapsed = Math.max(0, t - delay) * GATHER_SECONDS
+    const azimuth = salt * 43.17 + x * 2.7 + z * 1.9
+    const polar = Math.sin(salt * 71.73 + y * 3.1)
+    const planar = Math.sqrt(Math.max(0, 1 - polar * polar))
+    const radial = sourceRadius > 1e-9 ? 0.36 / sourceRadius : 0
+    const dx = x * radial + Math.cos(azimuth) * planar
+    const dy = y * radial + Math.sin(azimuth) * planar
+    const dz = z * radial + polar
+    const inverse = 1 / Math.hypot(dx, dy, dz)
+    // Short acceleration then free drift; each atom has a detached interval
+    // before glyph attraction. This cannot create a synchronised expanding shell.
+    const distance = (0.9 + salt * 0.8) * (elapsed - 0.09 * (1 - Math.exp(-elapsed / 0.09)))
+    const captureStart = delay + 0.23
+    const capture = smooth((t - captureStart) / (1 - captureStart))
+    const bx = sourceX + dx * inverse * distance
+    const by = sourceY + dy * inverse * distance
+    const bz = sourceZ + dz * inverse * distance
     out[0] = bx + (glyphX - bx) * capture
     out[1] = by + (glyphY - by) * capture
     out[2] = bz + (glyphZ - bz) * capture
-    // Pressure opens the cloud before cooling. Keep individual dust strands
-    // readable through mid-burst; normalised point area limits overlap energy.
-    const reveal = smooth(t / 0.085)
-    const cooling = 1 - smooth((t - 0.24) / 0.48)
-    const fragmentAlpha = sourceAlpha + (0.38 + salt * 0.22 - sourceAlpha) * reveal * cooling
-    out[3] = fragmentAlpha + (1 - fragmentAlpha) * capture
+    const released = smooth(elapsed / 0.22)
+    const grainAlpha = sourceAlpha + (Math.max(sourceAlpha, 0.16 + salt * 0.1) - sourceAlpha) * released
+    out[3] = grainAlpha + (1 - grainAlpha) * capture
     out[4] = capture
-    out[5] = salt > 0.9 ? reveal * cooling * (1 - capture) * 0.5 : 0
     return
   }
 
-  const c = collapseProgress(t)
-  const remain = 1 - c
+  // Outer glyph layers release first, with a small independent timing variation.
+  const delay = 0.18 * (1 - unit(sourceRadius / 6)) + salt * 0.018
+  const c = collapseProgress((t - delay) / (1 - delay))
   const cx = coreX - headX
   const cy = coreY - headY
   const cz = coreZ - headZ
   const coreRadius = Math.hypot(cx, cy, cz)
-  const sourceAngle = Math.atan2(y, x)
-  const coreAngle = Math.atan2(cy, cx)
-  const sourceLatitude = Math.atan2(z, Math.hypot(x, y))
-  const coreLatitude = Math.atan2(cz, Math.hypot(cx, cy))
-  // Integrated positive angular velocity; it never multiplies a shrinking radius
-  // envelope. Large-radius orbits know nothing about the final core orientation.
-  const spin = (1.8 + salt * 0.8) * (0.15 * t + 0.85 * t * t * t)
-  const orbitAngle = sourceAngle + spin
   const radius = sourceRadius + (coreRadius - sourceRadius) * c
-  // Dock attitude only within 1.2 units of the final radius. Passing through
-  // the latitude pole makes the azimuth change spatially C1-continuous, including
-  // source angles across +/-pi; no branch-selected full turn can pop the orbit.
-  const settleStart = Math.max(0.72, 1 - 1.2 / Math.max(sourceRadius, 1.2))
-  const settle = unit((c - settleStart) / (1 - settleStart))
-  const orbitLatitude = sourceLatitude + Math.sin(orbitAngle) * Math.sin(Math.PI * t) * 0.62
-  const angle = settle <= 0.5 ? orbitAngle : coreAngle
-  const latitude = settle <= 0.5
-    ? orbitLatitude + (Math.PI / 2 - orbitLatitude) * smoothAttitude(settle * 2)
-    : Math.PI / 2 + (coreLatitude - Math.PI / 2) * smoothAttitude(settle * 2 - 1)
-  const planarRadius = radius * Math.cos(latitude)
-  out[0] = headX + Math.cos(angle) * planarRadius
-  out[1] = headY + Math.sin(angle) * planarRadius
-  out[2] = headZ + Math.sin(latitude) * radius
-  const coverage = (1 - 0.52 * smooth(t / 0.48)) * (1 - smooth((c - 0.76) / 0.24))
-  out[3] = coreAlpha + (sourceAlpha - coreAlpha) * coverage
-  out[4] = remain
+  const sourceInverse = sourceRadius > 1e-9 ? 1 / sourceRadius : 0
+  const coreInverse = coreRadius > 1e-9 ? 1 / coreRadius : 0
+  const sx = x * sourceInverse, sy = y * sourceInverse, sz = z * sourceInverse
+  // Preserve the original radial ray until the atom reaches the compact nucleus.
+  // Only that small volume resolves the final grain position: no orbital spin,
+  // shared pole, or large-radius angular sweep.
+  const compact = Math.max(coreRadius * 1.35, 0.28)
+  const resolveStart = Math.max(0, 1 - compact / Math.max(sourceRadius - coreRadius, compact))
+  const resolve = smooth((c - resolveStart) / (1 - resolveStart))
+  const dot = sx * cx * coreInverse + sy * cy * coreInverse + sz * cz * coreInverse
+  // Decorrelated local bend keeps antipodal endpoints away from a zero vector.
+  const ax = Math.sin(salt * 127.1 + 0.3)
+  const ay = Math.cos(salt * 269.5 + 0.7)
+  const az = Math.sin(salt * 183.3 + 1.1)
+  const projection = ax * sx + ay * sy + az * sz
+  const bend = Math.max(0, -dot) * resolve * (1 - resolve)
+  const dx = sx * (1 - resolve) + cx * coreInverse * resolve + (ax - sx * projection) * bend
+  const dy = sy * (1 - resolve) + cy * coreInverse * resolve + (ay - sy * projection) * bend
+  const dz = sz * (1 - resolve) + cz * coreInverse * resolve + (az - sz * projection) * bend
+  const length = Math.hypot(dx, dy, dz)
+  const scale = length > 1e-12 ? radius / length : 0
+  out[0] = headX + dx * scale
+  out[1] = headY + dy * scale
+  out[2] = headZ + dz * scale
+  out[3] = sourceAlpha + (coreAlpha - sourceAlpha) * c
+  out[4] = 1 - c
 }
