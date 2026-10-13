@@ -23,6 +23,7 @@ export class UniverseStarfield {
   private previousTime: number | null = null
   private elapsed = 0
   private active = false
+  private ready = false
   private disposed = false
   private reducedMotion: boolean
 
@@ -46,6 +47,7 @@ export class UniverseStarfield {
       })
       this.scene.add(this.stars.object)
       this.resize()
+      this.ready = true
     } catch (error) {
       this.dispose()
       throw error
@@ -78,13 +80,20 @@ export class UniverseStarfield {
 
   resize(): void {
     if (this.disposed || !this.renderer) return
-    const width = Math.max(1, this.options.container.clientWidth || window.innerWidth)
-    const height = Math.max(1, this.options.container.clientHeight || window.innerHeight)
-    this.camera.aspect = width / height
-    this.camera.updateProjectionMatrix()
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.options.quality.maxDpr))
-    this.renderer.setSize(width, height)
-    if (this.active && this.reducedMotion) this.render(0)
+    try {
+      const width = Math.max(1, this.options.container.clientWidth || window.innerWidth)
+      const height = Math.max(1, this.options.container.clientHeight || window.innerHeight)
+      this.camera.aspect = width / height
+      this.camera.updateProjectionMatrix()
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.options.quality.maxDpr))
+      this.renderer.setSize(width, height)
+      if (this.active && this.reducedMotion) this.render(0)
+    } catch (error) {
+      // During construction the caller owns the fallback; afterwards report it
+      // through onError, including resize failures while the tab is paused.
+      if (!this.ready) throw error
+      this.fail()
+    }
   }
 
   getStats() {
