@@ -16,7 +16,7 @@
   <div
     v-else-if="compactHomeEnabled"
     data-testid="compact-home"
-    class="home-compact-sky dark relative isolate flex min-h-screen flex-col bg-transparent text-white"
+    class="dark relative isolate flex min-h-screen flex-col bg-transparent text-white"
   >
     <header class="border-b border-gray-200 px-4 py-4 sm:px-6 dark:border-dark-800">
       <nav class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 sm:gap-4">
@@ -334,20 +334,3 @@ onMounted(() => {
   }
 })
 </script>
-
-<style scoped>
-.home-compact-sky::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: url('@/features/home-particle/assets/space/stars-milkyway.webp') center / cover no-repeat;
-}
-
-@media (max-width: 900px), (max-resolution: 1.5dppx) {
-  .home-compact-sky::before {
-    background-image: url('@/features/home-particle/assets/space/stars-milkyway-lite.webp');
-  }
-}
-</style>

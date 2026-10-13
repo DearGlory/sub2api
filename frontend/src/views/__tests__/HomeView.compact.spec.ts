@@ -84,7 +84,7 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome({ compact_home_enabled: true })
     const compact = wrapper.get('[data-testid="compact-home"]')
 
-    expect(compact.classes()).toEqual(expect.arrayContaining(['home-compact-sky', 'dark', 'bg-transparent', 'text-white']))
+    expect(compact.classes()).toEqual(expect.arrayContaining(['dark', 'bg-transparent', 'text-white']))
     const actions = compact.findAllComponents(RouterLinkStub)
     expect(actions).toHaveLength(2)
     for (const action of actions) {

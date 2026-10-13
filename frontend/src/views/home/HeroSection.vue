@@ -61,7 +61,7 @@ withDefaults(
             <span v-for="(phrase, index) in heroPhrases(t('home.heroSubtitle', { siteName }))" :key="index" class="hero-phrase">{{ phrase }}</span>
           </p>
 
-          <div class="hero-copy mx-auto mt-4 max-w-xl space-y-2 text-pretty text-sm leading-7 text-gray-600 lg:mx-0 dark:text-dark-400">
+          <div class="hero-copy mx-auto mt-4 max-w-xl space-y-2 text-pretty text-sm leading-7 text-gray-600 lg:mx-0 dark:text-dark-200">
             <p><span v-for="(phrase, index) in heroPhrases(t('home.heroDescription'))" :key="index" class="hero-phrase">{{ phrase }}</span></p>
             <p><span v-for="(phrase, index) in heroPhrases(t('home.sections.hero.integration'))" :key="index" class="hero-phrase">{{ phrase }}</span></p>
             <p><span v-for="(phrase, index) in heroPhrases(t('home.sections.hero.assurance'))" :key="index" class="hero-phrase">{{ phrase }}</span></p>

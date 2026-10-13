@@ -61,6 +61,14 @@ describe('home sections', () => {
     expect(wrapper.text()).toContain(copy.heroDescription)
     expect(wrapper.text()).toContain(copy.sections.hero.integration)
     expect(wrapper.text()).toContain(copy.sections.hero.assurance)
+    const supportingCopy = wrapper.get('div.hero-copy')
+    expect(supportingCopy.classes()).toContain('dark:text-dark-200')
+    expect(supportingCopy.classes()).not.toContain('dark:text-dark-400')
+    expect(supportingCopy.findAll('p').map((paragraph) => paragraph.text())).toEqual([
+      copy.heroDescription,
+      copy.sections.hero.integration,
+      copy.sections.hero.assurance,
+    ])
     expect(wrapper.text()).toContain(copy.sections.hero.badge)
     await wrapper.setProps({ siteName: 'Updated Gateway', siteSubtitle: 'Updated subtitle' })
     expect(wrapper.text()).toContain('Updated Gateway')
