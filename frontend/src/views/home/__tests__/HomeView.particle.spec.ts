@@ -33,7 +33,10 @@ vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
-    useI18n: () => ({ t: (key: string) => key }),
+    useI18n: () => ({
+      t: (key: string, values?: Record<string, unknown>) =>
+        values ? `${key} ${Object.values(values).join(' ')}` : key,
+    }),
   }
 })
 
