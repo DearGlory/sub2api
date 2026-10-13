@@ -268,7 +268,7 @@ describe('closed, rigid comet fracture geometry', () => {
       const particleBytes = scratch.positions.byteLength + scratch.colors.byteLength + scratch.body.spriteScale.byteLength
         + scratch.emittedTail.positions.byteLength + scratch.emittedTail.colors.byteLength
       const total = visualBytes + starBytes + particleBytes
-      expect(visual.object.children).toHaveLength(4)
+      expect(visual.object.children.map(o => o.name)).toEqual(['comet-coma-volume', 'comet-tail-volume'])
       expect(visual.geometryBytes).toBe(visualBytes)
       expect(total).toBeLessThanOrEqual(3500000)
       expect(draws).toBeLessThanOrEqual(10)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { BufferAttribute, BufferGeometry, Points, PointsMaterial, Vector3 } from 'three'
+import { BufferAttribute, BufferGeometry, PerspectiveCamera, Points, PointsMaterial, Vector3 } from 'three'
 import { createEngineScratch, fillEmissionTable, paletteFor, ParticleEngine } from '../ParticleEngine'
+import { writeCometFlowBasis } from '../cometFlow'
 import { cometVisualFixture } from './cometVisualFixture'
 import type { ChoreographyState } from '../types'
 
@@ -25,11 +26,12 @@ function flight(light = false) {
   const tailGeometry = new BufferGeometry()
   tailGeometry.setAttribute('position', new BufferAttribute(pool.positions, 3))
   tailGeometry.setAttribute('color', new BufferAttribute(pool.colors, 4))
+  const camera = new PerspectiveCamera()
   const engine = Object.assign(Object.create(ParticleEngine.prototype) as {
     integrate(step: number, time: number, delta: number): void; upload(): void
   }, {
     ...cometVisualFixture(light),
-    scratch, particleCount: count, choreography: { state }, geometry, tailGeometry,
+    scratch, camera, particleCount: count, choreography: { state }, geometry, tailGeometry,
     palette: paletteFor(light), light, reducedMotion: false,
     points: new Points(geometry, new PointsMaterial({ size: paletteFor(light).pointSize })), tailPoints: new Points(tailGeometry),
     renderedPhase: 'travel', renderedHead: new Vector3(state.headX, state.headY, state.headZ), holdFade: 0,
@@ -44,12 +46,12 @@ function flight(light = false) {
   }
   update()
   update()
-  return { scratch, pool, state, update, tailGeometry }
+  return { scratch, pool, state, update, tailGeometry, camera }
 }
 
 describe('rendered independent tail birth and death', () => {
   it('uploads a transparent death frame, then reuses only at the current nozzle', () => {
-    const { pool, state, update } = flight()
+    const { scratch, pool, state, update } = flight()
     pool.age[0] = pool.life[0] - 0.0001
     pool.positions.set([-30, 18, 3], 0)
     update()
@@ -62,7 +64,15 @@ describe('rendered independent tail birth and death', () => {
     expect(pool.birthTime[0]).toBeGreaterThan(oldBirth)
     expect(pool.age[0]).toBe(0)
     expect(pool.colors[3]).toBe(0)
-    expect(Math.hypot(pool.positions[0] - 7, pool.positions[1] - 1, pool.positions[2])).toBeLessThan(0.2)
+    const basis = new Float64Array(9)
+    writeCometFlowBasis(basis, scratch.tailTable)
+    const head = [state.headX, state.headY, state.headZ]
+    for (let j = 0; j < 3; j++) {
+      const expected = head[j]! + basis[j]! * pool.aperture[0]! +
+        basis[j + 3]! * pool.aperture[1]! + basis[j + 6]! * pool.aperture[2]!
+      expect(pool.birthPosition[j]).toBe(Math.fround(expected))
+      expect(pool.positions[j]).toBe(pool.birthPosition[j])
+    }
   })
 
   it.each([false, true])('writes lifetime transparency into the final colour attribute (light=%s)', light => {
@@ -78,15 +88,32 @@ describe('rendered independent tail birth and death', () => {
     expect(colors[0]).toBeGreaterThan(0)
   })
 
-  it('preserves world-space velocity after a turn instead of rotating the born plume', () => {
-    const { scratch, pool, update } = flight()
-    const before = pool.positions.slice(0, 3)
-    const velocity = pool.birthVelocity.slice(0, 3)
-    scratch.tailTable.xyz.fill(100)
-    scratch.tailTable.vel.fill(-20)
-    scratch.tailTable.axis.fill(0)
-    update(0.01)
-    for (let j = 0; j < 3; j++) expect(pool.positions[j] - before[j]).toBeCloseTo(velocity[j] * 0.01, 5)
+  it('preserves birth acceleration and the same world trajectory through two different future inputs', () => {
+    const a = flight(), b = flight()
+    const birth = a.pool.birthPosition.slice(0, 3)
+    const velocity = a.pool.birthVelocity.slice(0, 3)
+    const acceleration = a.pool.birthAcceleration.slice(0, 3)
+    expect(Math.hypot(...acceleration)).toBeGreaterThan(0.1)
+    const bornAt = a.pool.birthTime[0]
+    for (const dt of [0.17, 0.29]) {
+      b.state.headX += 400; b.state.headY -= 80; b.state.headZ -= 600
+      b.camera.position.set(1000 * dt, -900, 250)
+      b.camera.rotation.set(dt, 0.8, 1.7)
+      b.scratch.tailTable.xyz.fill(100)
+      b.scratch.tailTable.vel.fill(-20)
+      b.scratch.tailTable.axis.set([0, 0, 1])
+      const age = a.pool.age[0]! + dt
+      a.update(dt); b.update(dt)
+      for (let j = 0; j < 3; j++) {
+        expect(a.pool.positions[j]).toBe(Math.fround(birth[j]! + velocity[j]! * age + 0.5 * acceleration[j]! * age * age))
+        expect(b.pool.positions[j]).toBe(a.pool.positions[j])
+        expect(b.pool.birthPosition[j]).toBe(birth[j])
+        expect(b.pool.birthVelocity[j]).toBe(velocity[j])
+        expect(b.pool.birthAcceleration[j]).toBe(acceleration[j])
+      }
+      expect(b.pool.birthTime[0]).toBe(bornAt)
+      expect(b.pool.colors.slice(0, 4)).toEqual(a.pool.colors.slice(0, 4))
+    }
   })
 
   it('lets the emitted tail die in place while the separate body gathers into the logo', () => {

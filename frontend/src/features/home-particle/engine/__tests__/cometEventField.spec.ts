@@ -9,21 +9,26 @@ function frame(phase: CometVisualFrame['phase'], progress: number): CometVisualF
   return { phase, progress, time: 31, delta: 1 / 60, headX: 2.56, headY: -0.2, headZ: 180,
     glyphMix: 0.4, departure: 0, light: false, reducedMotion: false }
 }
-function eventOf(visual: ReturnType<typeof createCometVisual>) {
-  const events = visual.object.children.filter(o => o instanceof Mesh &&
-    o.material instanceof ShaderMaterial && 'uEventMode' in o.material.uniforms)
-  expect(events, 'a real event mesh must exist in the production graph; baseline has none').toHaveLength(1)
-  return events[0] as Mesh<import('three').BoxGeometry, ShaderMaterial>
+function gasOf(visual: ReturnType<typeof createCometVisual>) {
+  const meshes = visual.object.children.filter((o): o is Mesh<import('three').BoxGeometry, ShaderMaterial> =>
+    o instanceof Mesh && o.material instanceof ShaderMaterial)
+  expect(meshes.map(o => o.name)).toEqual(['comet-coma-volume', 'comet-tail-volume'])
+  for (const mesh of meshes) {
+    expect(mesh.material.uniforms.uEventMode).toBeUndefined()
+    expect(mesh.material.uniforms.uFracture).toBeUndefined()
+  }
+  return meshes
 }
 
-describe('production event field graph', () => {
-  it('requires one local box with real uniforms and accounts for every attribute and index', () => {
+describe('production gas graph and isolated legacy event factory', () => {
+  it('requires only gas boxes without event/surface uniforms and accounts for every attribute and index', () => {
     const visual = createCometVisual(options)
     try {
-      const mesh = eventOf(visual)
-      expect(mesh.geometry.type).toBe('BoxGeometry')
-      expect(mesh.parent).toBe(visual.object)
-      expect(mesh.material.uniforms.uHead.value).toBeInstanceOf(Vector3)
+      for (const mesh of gasOf(visual)) {
+        expect(mesh.geometry.type).toBe('BoxGeometry')
+        expect(mesh.parent).toBe(visual.object)
+        expect(mesh.material.uniforms.uCenter.value).toBeInstanceOf(Vector3)
+      }
       let bytes = 0
       visual.object.traverse(o => { if (o instanceof Mesh) {
         bytes += o.geometry.index?.array.byteLength ?? 0
@@ -101,7 +106,7 @@ describe('production event field graph', () => {
     const { createCometEventField } = await import('../cometEventField')
     const event = createCometEventField(options)
     const visual = createCometVisual(options)
-    const mesh = eventOf(visual)
+    const meshes = gasOf(visual)
     const pool = new EmittedTail(32)
     visual.object.position.z = -60
     visual.object.add(event.mesh)
@@ -117,19 +122,24 @@ describe('production event field graph', () => {
     visual.update(f, pool)
     f.light = true
     visual.update(f, pool)
-    expect(mesh.material.uniforms.uLightTheme.value).toBe(1)
+    for (const mesh of meshes) expect(mesh.material.uniforms.uLightTheme.value).toBe(1)
+    event.update(f)
+    expect(event.mesh.material.uniforms.uLightTheme.value).toBe(1)
     f.reducedMotion = true
     visual.update(f, pool)
-    expect(mesh.visible).toBe(false)
-    expect(mesh.material.uniforms.uEventMode.value).toBe(0)
-    expect(mesh.material.uniforms.uEventStrength.value).toBe(0)
+    event.update(f)
+    expect(event.mesh.visible).toBe(false)
+    expect(event.mesh.material.uniforms.uEventMode.value).toBe(0)
+    expect(event.mesh.material.uniforms.uEventStrength.value).toBe(0)
+    const gasDisposals = meshes.flatMap(mesh => [vi.spyOn(mesh.geometry, 'dispose'), vi.spyOn(mesh.material, 'dispose')])
     const gd = vi.spyOn(event.mesh.geometry, 'dispose'), md = vi.spyOn(event.mesh.material, 'dispose')
     event.dispose(); event.dispose(); event.update(frame('gather', 0.2))
     expect(gd).toHaveBeenCalledTimes(1)
     expect(md).toHaveBeenCalledTimes(1)
     expect(event.mesh.visible).toBe(false)
     expect(event.mesh.parent).toBeNull()
-    visual.dispose()
+    visual.dispose(); visual.dispose()
+    for (const dispose of gasDisposals) expect(dispose).toHaveBeenCalledTimes(1)
     expect(visual.object.children).toHaveLength(0)
   })
 })

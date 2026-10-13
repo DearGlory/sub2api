@@ -1,6 +1,7 @@
 import type { Color } from 'three'
 import type { EmissionTable } from './ParticleEngine'
 import { COMET_VOLUME_SCALE } from './cometVisualContract'
+import { writeCometFlowBasis } from './cometFlow'
 
 function noise(i: number, salt: number): number {
   let n = Math.imul(i ^ salt, 0x45d9f3b)
@@ -12,10 +13,10 @@ function noise(i: number, salt: number): number {
 function writeAperture(out: Float32Array, i: number, sheath: boolean): number {
   const t = Math.pow(noise(i, 277), 1.25)
   const angle = noise(i, 307) * Math.PI * 2
-  const radius = sheath ? 0.48 + 0.52 * Math.sqrt(noise(i, 337)) : 0.56 * Math.sqrt(noise(i, 337))
-  const width = (0.1 + 0.96 * Math.pow(Math.sin(Math.PI * t), 0.7)) * (1 - 0.33 * t)
+  const radius = sheath ? 0.46 + 0.54 * Math.sqrt(noise(i, 337)) : 0.48 * Math.sqrt(noise(i, 337))
+  const width = (0.075 + 0.67 * Math.pow(Math.sin(Math.PI * t), 0.85)) * (1 - 0.5 * t)
   const k = i * 3
-  out[k] = ((sheath ? -0.75 : -0.55) + (sheath ? 3.05 : 2.45) * t) * COMET_VOLUME_SCALE
+  out[k] = ((sheath ? -0.85 : -0.72) + (sheath ? 3.7 : 3.25) * t) * COMET_VOLUME_SCALE
   out[k + 1] = width * radius * Math.cos(angle) * COMET_VOLUME_SCALE
   out[k + 2] = width * radius * Math.sin(angle) * COMET_VOLUME_SCALE
   return t
@@ -32,9 +33,11 @@ export class EmittedTail {
   readonly life: Float32Array
   /** 0 = free, 1 = alive, 2 = transparent retirement upload. */
   readonly active: Uint8Array
-  private readonly aperture: Float32Array
+  /** Birth-local samples also serve diagnostic reconstruction of the actual aperture. */
+  readonly aperture: Float32Array
   private readonly ejection: Float32Array
-  private readonly birthAcceleration: Float32Array
+  readonly birthAcceleration: Float32Array
+  private readonly flowBasis = new Float64Array(9)
   private readonly birthStrength: Float32Array
   private readonly ion: Float32Array
   private readonly grain: Float32Array
@@ -62,18 +65,16 @@ export class EmittedTail {
       const ion = noise(i, 103) < 0.42
       this.ion[i] = ion ? 0.72 + noise(i, 109) * 0.28 : noise(i, 109) * 0.16
       this.grain[i] = noise(i, 113)
-      writeAperture(this.aperture, i, noise(i, 71) < 0.44)
-      // Lifetime remains below the logo hold. Length comes from ejection speed,
-      // not a lingering fog or larger sprites. Cold grains run slightly farther.
-      this.life[i] = 1.65 + noise(i, 131) * 1.2
-      const speed = 7.4 + noise(i, 173) * (ion ? 6.2 : 4.8)
-      const skirt = noise(i, 193) < 0.2
-      const spread = (skirt ? 0.13 : 0.045) * Math.pow(noise(i, 197), 1.3)
+      writeAperture(this.aperture, i, !ion && noise(i, 71) < 0.62)
+      // Faster cold grains outlive the broad warm skirt, leaving a thin far spine.
+      this.life[i] = ion ? 2.15 + noise(i, 131) * 0.7 : 1.55 + noise(i, 131) * 0.8
+      const speed = ion ? 14 + noise(i, 173) * 4 : 10 + noise(i, 173) * 3.5
+      const skirt = !ion && noise(i, 193) < 0.22
+      const spread = (skirt ? 0.085 : ion ? 0.012 : 0.033) * Math.pow(noise(i, 197), 1.3)
       const angle = noise(i, 229) * Math.PI * 2
       this.ejection[k] = speed
       this.ejection[k + 1] = speed * spread * Math.cos(angle)
-      // side2 points down for the normal X/Z flight basis. Both streams overlap.
-      this.ejection[k + 2] = speed * (spread * Math.sin(angle) + (ion ? -0.025 : 0.018))
+      this.ejection[k + 2] = speed * spread * Math.sin(angle)
     }
   }
 
@@ -124,10 +125,14 @@ export class EmittedTail {
     // only at birth, and the resulting packets advect down the tail with age.
     const clock = Number.isFinite(departure) ? departure : 0
     const pulse = Math.pow(Math.max(0, Math.sin(clock * 8.7 + 0.55 * Math.sin(clock * 3.1))), 6)
-    const strength = 0.58 + 0.42 * pulse
-    this.credit += emissionDelta * this.count / 2.25 * (0.88 + 0.32 * pulse)
+    const strength = 0.42 + 0.58 * pulse
+    this.credit += emissionDelta * this.count / 2.1 * (0.76 + 0.65 * pulse)
     let births = Math.floor(this.credit + 1e-9)
     this.credit -= births
+    // All births in this batch share this table, but never the body's smoothed buffer.
+    const basis = this.flowBasis
+    if (births > 0) writeCometFlowBasis(basis, table)
+    const phase = clock * 2.1 + table.xyz[2] * 0.018
     let searched = 0
     while (births > 0 && searched < this.count) {
       const i = this.cursor
@@ -135,8 +140,15 @@ export class EmittedTail {
       searched++
       if (this.active[i] !== 0) continue
       const k = i * 3, c = i * 4
-      const jet = 1 + 0.16 * pulse * (0.5 + this.grain[i])
-      const curl = 0.22 - 0.62 * this.ion[i]
+      const jet = 1 + 0.23 * pulse * (0.5 + this.grain[i])
+      // Several narrow ribbons cross through the warm skirt. Their transverse
+      // velocity/force is frozen here, not rotated or pulsed along the live tail.
+      const strand = phase + Math.floor(this.grain[i] * 5) * 2.399963
+      const ribbon = this.ion[i] > 0.5 ? 0.15 : 0.3
+      const side1 = this.ejection[k + 1] + ribbon * Math.cos(strand)
+      const side2 = this.ejection[k + 2] + ribbon * Math.sin(strand)
+      const force1 = 0.12 * Math.cos(strand + 0.7)
+      const force2 = 0.12 * Math.sin(strand + 0.7)
       this.birthTime[i] = departure
       this.birthStrength[i] = strength
       this.age[i] = 0
@@ -144,13 +156,11 @@ export class EmittedTail {
       for (let j = 0; j < 3; j++) {
         const head = j === 0 ? headX : j === 1 ? headY : headZ
         this.positions[k + j] = this.birthPosition[k + j] = head +
-          table.axis[j] * this.aperture[k] + table.side1[j] * this.aperture[k + 1] +
-          table.side2[j] * this.aperture[k + 2]
+          basis[j] * this.aperture[k] + basis[j + 3] * this.aperture[k + 1] +
+          basis[j + 6] * this.aperture[k + 2]
         this.birthVelocity[k + j] = table.vel[j] * 0.25 + jet * (
-          table.axis[j] * this.ejection[k] + table.side1[j] * this.ejection[k + 1] +
-          table.side2[j] * this.ejection[k + 2])
-        this.birthAcceleration[k + j] = table.side2[j] * curl +
-          table.side1[j] * (this.grain[i] - 0.5) * 0.08
+          basis[j] * this.ejection[k] + basis[j + 3] * side1 + basis[j + 6] * side2)
+        this.birthAcceleration[k + j] = basis[j + 3] * force1 + basis[j + 6] * force2
       }
       this.colors[c] = 1
       this.colors[c + 1] = 0.62
@@ -174,12 +184,13 @@ export function createCometBody(count: number) {
     const k = i * 3
     // Uneven strands leave black interstices without a solid shell or smooth disc.
     const grain = noise(i, 367)
-    const texture = 0.48 + 0.52 * Math.abs(Math.sin(offsets[k] * 8 + offsets[k + 1] * 13) *
-      Math.cos(offsets[k + 2] * 11 - offsets[k] * 5))
-    alpha[i] = (sheath ? 0.3 : 0.68) * texture * (0.7 + 0.3 * grain) * (1 - 0.45 * t)
+    const angle = Math.atan2(offsets[k + 2], offsets[k + 1])
+    const seams = Math.pow(Math.abs(Math.sin(angle * 3 + offsets[k] * 0.58)), 0.7)
+    const texture = (0.18 + 0.82 * seams) * (0.65 + 0.35 * noise(i, 379))
+    alpha[i] = (sheath ? 0.34 : 0.68) * texture * (0.7 + 0.3 * grain) * (1 - 0.6 * t)
     // tone >= .72 is the gold-white inner population; lower values are orange gold.
     tone[i] = sheath ? 0.24 + 0.34 * grain : 0.76 + 0.24 * grain
-    spriteSize[i] = 0.42 + 0.32 * grain + (grain > 0.985 ? 0.24 : 0)
+    spriteSize[i] = 0.34 + 0.3 * grain + (grain > 0.99 ? 0.26 : 0)
   }
   return { offsets, alpha, tone, spriteSize, spriteScale }
 }

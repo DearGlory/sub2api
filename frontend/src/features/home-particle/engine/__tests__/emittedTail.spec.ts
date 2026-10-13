@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BufferAttribute, BufferGeometry, Color } from 'three'
 import type { EmissionTable } from '../ParticleEngine'
 import { createCometBody, EmittedTail } from '../emittedTail'
+import { writeCometFlowBasis } from '../cometFlow'
 
 const core = new Color('#abcdef'), accent = new Color('#123456')
 function table(): EmissionTable {
@@ -51,31 +52,36 @@ describe('reference comet body', () => {
 })
 
 describe('reference emitted grains', () => {
-  it('starts empty, uploads a transparent birth over the full coma aperture, and rotates births in 3D', () => {
-    const a = new EmittedTail(24000), b = new EmittedTail(24000)
-    expect(a.birthTime.every(t => t === -1)).toBe(true)
-    expect(a.colors.every(v => v === 0)).toBe(true)
-    const basis = table()
-    basis.axis.set([0, 0, 1]); basis.side1.set([1, 0, 0]); basis.side2.set([0, 1, 0]); basis.vel.set([0, 0, -2])
-    step(a, 0.3, 0.3)
-    step(b, 0.3, 0.3, true, basis, [9, 3, -12000])
-    let born = 0, radius = 0, upper = 0, lower = 0
-    for (let i = 0; i < a.count; i++) {
-      if (!a.active[i]) continue
-      born++
-      const k = i * 3
-      expect(b.birthPosition[k]! - 9).toBeCloseTo(a.birthPosition[k + 1]!, 4)
-      expect(b.birthPosition[k + 1]! - 3).toBeCloseTo(a.birthPosition[k + 2]!, 4)
-      expect(b.birthPosition[k + 2]! + 12000).toBeCloseTo(a.birthPosition[k]!, 3)
-      expect(a.colors[i * 4 + 3]).toBe(0)
-      radius = Math.max(radius, Math.hypot(a.birthPosition[k + 1]!, a.birthPosition[k + 2]!))
-      if (a.birthPosition[k + 2]! > 0.5) upper++
-      if (a.birthPosition[k + 2]! < -0.5) lower++
+  it('reconstructs every transparent birth from its actual local aperture and the shared world basis', () => {
+    for (const direction of [-1, 1]) {
+      const p = new EmittedTail(24000), source = table(), flow = new Float64Array(9)
+      source.axis.set([direction * 0.1, 0, -0.995])
+      source.vel.set([-direction, 0, 10])
+      source.xyz.set([9, 3, -12000])
+      writeCometFlowBasis(flow, source)
+      expect(p.birthTime.every(t => t === -1)).toBe(true)
+      step(p, 0.3, 0.3, true, source, [9, 3, -12000])
+      let born = 0, radius = 0
+      const signs = new Uint32Array(4)
+      for (let i = 0; i < p.count; i++) {
+        if (!p.active[i]) continue
+        born++
+        const k = i * 3
+        for (let j = 0; j < 3; j++) {
+          const expected = [9, 3, -12000][j]! + flow[j]! * p.aperture[k]! +
+            flow[j + 3]! * p.aperture[k + 1]! + flow[j + 6]! * p.aperture[k + 2]!
+          expect(p.birthPosition[k + j]).toBe(Math.fround(expected))
+          expect(p.positions[k + j]).toBe(p.birthPosition[k + j])
+        }
+        expect(p.colors[i * 4 + 3]).toBe(0)
+        radius = Math.max(radius, Math.hypot(p.aperture[k + 1]!, p.aperture[k + 2]!))
+        signs[(p.aperture[k + 1]! > 0 ? 2 : 0) + (p.aperture[k + 2]! > 0 ? 1 : 0)]!++
+      }
+      expect(born).toBeGreaterThan(2000)
+      expect(radius).toBeGreaterThan(0.9)
+      expect(radius).toBeLessThan(1.1)
+      expect(Math.min(...signs)).toBeGreaterThan(500)
     }
-    expect(born).toBeGreaterThan(2000)
-    expect(radius).toBeGreaterThan(1.35)
-    expect(upper).toBeGreaterThan(100)
-    expect(lower).toBeGreaterThan(100)
   })
 
   it('keeps old world trajectories and colours identical when the head, basis and departure change', () => {
@@ -127,22 +133,35 @@ describe('reference emitted grains', () => {
       births.push(p.age.reduce((n, age, i) => n + (age === 0 && p.active[i] === 1 ? 1 : 0), 0))
     }
     const along: number[] = [], across: number[] = [], alphas: number[] = []
-    let coldZ = 0, cold = 0, warmZ = 0, warm = 0
+    const flow = new Float64Array(9)
+    writeCometFlowBasis(flow, table())
+    const halves = { cold: [0, 0], warm: [0, 0] }
+    const widths = { cold: [] as number[], warm: [] as number[] }
     for (let i = 0; i < p.count; i++) {
       if (p.active[i] !== 1 || p.colors[i * 4 + 3]! < 0.035) continue
-      along.push(p.positions[i * 3]! + 5.6)
-      across.push(Math.hypot(p.positions[i * 3 + 1]!, p.positions[i * 3 + 2]!))
+      // Remove the emitter's independently inherited translation before measuring
+      // width in the birth flow. World Y/Z now contain real longitudinal travel.
+      const age = p.age[i]!, k = i * 3
+      const x = p.positions[k]! + 2 * p.birthTime[i]! + 0.5 * age
+      const y = p.positions[k + 1]!, z = p.positions[k + 2]!
+      const longitudinal = x * flow[0]! + y * flow[1]! + z * flow[2]!
+      const u = x * flow[3]! + y * flow[4]! + z * flow[5]!
+      const v = x * flow[6]! + y * flow[7]! + z * flow[8]!
+      along.push(longitudinal)
+      across.push(Math.hypot(u, v))
       alphas.push(p.colors[i * 4 + 3]!)
-      if (p.age[i]! < 0.6) continue
-      if (p.colors[i * 4 + 2]! > p.colors[i * 4]!) { coldZ += p.positions[i * 3 + 2]!; cold++ }
-      else { warmZ += p.positions[i * 3 + 2]!; warm++ }
+      if (age < 0.6 || age > 1.4) continue
+      const kind = p.colors[i * 4 + 2]! > p.colors[i * 4]! ? 'cold' : 'warm'
+      halves[kind][v < 0 ? 0 : 1]!++
+      widths[kind].push(Math.hypot(u, v))
     }
     expect(along.length).toBeGreaterThan(18000)
-    expect(quantile(along, 0.95)).toBeGreaterThan(22)
-    expect(quantile(across, 0.95)).toBeLessThan(2.7)
-    expect(coldZ / cold).toBeLessThan(warmZ / warm - 0.5)
-    expect(Math.max(...births) / Math.min(...births)).toBeGreaterThan(1.2)
-    expect(quantile(alphas, 0.5)).toBeGreaterThan(0.12)
+    expect(quantile(along, 0.95)).toBeGreaterThan(30)
+    expect(quantile(across, 0.95)).toBeLessThan(1.5)
+    for (const values of Object.values(halves)) expect(Math.min(...values) / (values[0]! + values[1]!)).toBeGreaterThan(0.3)
+    expect(quantile(widths.cold, 0.9)).toBeLessThan(quantile(widths.warm, 0.9) * 0.7)
+    expect(Math.max(...births) / Math.min(...births)).toBeGreaterThan(1.5)
+    expect(quantile(alphas, 0.5)).toBeGreaterThan(0.1)
   })
 
   it('retires transparently without teleporting and empties before a three second hold ends', () => {
