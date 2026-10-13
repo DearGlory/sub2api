@@ -42,20 +42,29 @@ function bindCounter(counter: Counter, el: Element | ComponentPublicInstance | n
   <section data-testid="home-stats" class="relative z-10 border-y border-gray-200 dark:border-dark-800">
     <div class="mx-auto max-w-6xl px-6 py-12">
       <div
-        class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 md:grid-cols-4 dark:border-dark-800 dark:bg-dark-800"
+        class="grid grid-cols-2 overflow-hidden rounded-xl border border-gray-200 md:grid-cols-4 dark:border-dark-800"
       >
-        <SectionReveal v-for="counter in counters" :key="counter.key">
-          <div class="h-full bg-white px-5 py-6 text-center dark:bg-dark-900">
+        <SectionReveal
+          v-for="(counter, index) in counters"
+          :key="counter.key"
+          :delay="index * 60"
+          class="min-w-0 border-gray-200 dark:border-dark-800"
+          :class="[
+            index % 2 === 1 ? 'border-l' : '',
+            index > 1 ? 'border-t md:border-t-0 md:border-l' : '',
+          ]"
+        >
+          <div class="flex h-full flex-col bg-white/60 px-5 py-6 text-center dark:bg-dark-900/60">
             <span
               :ref="(el) => bindCounter(counter, el)"
               class="block font-mono text-2xl font-semibold tabular-nums text-gray-900 md:text-3xl dark:text-white"
             >
               {{ counter.display.value }}{{ counter.suffix }}
             </span>
-            <span class="mt-2 block text-sm font-medium text-gray-700 dark:text-dark-200">
+            <span class="mt-2 flex min-h-10 items-center justify-center text-balance text-sm font-medium leading-5 text-gray-700 dark:text-dark-200">
               {{ t(`home.sections.stats.items.${counter.key}.label`) }}
             </span>
-            <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-dark-400">
+            <span class="mt-1 block min-h-10 text-pretty text-xs leading-5 text-gray-500 dark:text-dark-400">
               {{ t(`home.sections.stats.items.${counter.key}.hint`) }}
             </span>
           </div>

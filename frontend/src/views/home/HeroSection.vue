@@ -15,6 +15,7 @@
 import { useI18n } from 'vue-i18n'
 
 import Icon from '@/components/icons/Icon.vue'
+import SectionReveal from './SectionReveal.vue'
 
 const { t } = useI18n()
 
@@ -40,42 +41,44 @@ withDefaults(
     <div class="mx-auto w-full max-w-6xl">
       <div class="flex flex-col items-center gap-14 lg:flex-row lg:items-center lg:gap-16">
         <!-- Copy -->
-        <div class="min-w-0 flex-1 text-center lg:text-left">
+        <SectionReveal class="w-full min-w-0 flex-1 text-center lg:text-left">
           <p
-            class="inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900/70 dark:text-dark-300"
+            class="inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/60 px-3 py-1.5 text-xs font-medium leading-5 text-gray-600 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-300"
           >
             <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500 dark:bg-primary-400" />
-            <span class="truncate">{{ t('home.sections.hero.badge') }}</span>
+            <span class="min-w-0 text-pretty">{{ t('home.sections.hero.badge') }}</span>
           </p>
 
-          <h1 class="mt-6 text-4xl font-semibold tracking-[-0.03em] text-gray-900 sm:text-5xl lg:text-6xl dark:text-white">
-            {{ siteName }}
+          <h1 class="mt-6 whitespace-nowrap text-[clamp(2rem,9vw,3rem)] font-semibold tracking-[-0.03em] text-gray-900 lg:text-6xl dark:text-white">
+            {{ t('home.sections.hero.title') }}
           </h1>
 
-          <p class="mt-4 text-lg font-medium text-gray-800 sm:text-xl dark:text-dark-100">
-            {{ t('home.heroSubtitle') }}
+          <p class="mx-auto mt-4 max-w-xl text-pretty text-lg font-medium leading-8 text-gray-800 sm:text-xl lg:mx-0 dark:text-dark-100">
+            {{ t('home.heroSubtitle', { siteName }) }}
           </p>
 
-          <p class="mx-auto mt-4 max-w-xl text-sm leading-7 text-gray-600 lg:mx-0 dark:text-dark-400">
-            {{ t('home.heroDescription') }}
-          </p>
+          <div class="mx-auto mt-4 max-w-xl space-y-2 text-pretty text-sm leading-7 text-gray-600 lg:mx-0 dark:text-dark-400">
+            <p>{{ t('home.heroDescription') }}</p>
+            <p>{{ t('home.sections.hero.integration') }}</p>
+            <p>{{ t('home.sections.hero.assurance') }}</p>
+          </div>
 
           <!-- Capability chips: reuse the three claims the old landing page already made. -->
           <ul class="mt-7 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
             <li
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-200"
             >
               <Icon name="swap" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.subscriptionToApi') }}
             </li>
             <li
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-200"
             >
               <Icon name="shield" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.stickySession') }}
             </li>
             <li
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900 dark:text-dark-200"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-200"
             >
               <Icon name="chartBar" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.realtimeBilling') }}
@@ -102,13 +105,13 @@ withDefaults(
             </a>
           </div>
 
-          <p v-if="siteSubtitle" class="mt-6 text-xs text-gray-500 dark:text-dark-400">
+          <p v-if="siteSubtitle" class="mx-auto mt-6 max-w-xl text-pretty text-xs leading-5 text-gray-500 lg:mx-0 dark:text-dark-400">
             {{ siteSubtitle }}
           </p>
-        </div>
+        </SectionReveal>
 
         <!-- Product visual: a real request against the gateway's own endpoint. -->
-        <div class="flex w-full min-w-0 flex-1 justify-center lg:w-auto lg:justify-end">
+        <SectionReveal :delay="60" class="flex w-full min-w-0 flex-1 justify-center lg:w-auto lg:justify-end">
           <div class="terminal-container">
             <div class="terminal-window">
               <div class="terminal-header">
@@ -140,7 +143,7 @@ withDefaults(
               </div>
             </div>
           </div>
-        </div>
+        </SectionReveal>
       </div>
     </div>
   </section>
@@ -154,7 +157,7 @@ withDefaults(
 }
 
 .terminal-window {
-  background: #0f1113;
+  background: rgba(15, 17, 19, 0.60);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   overflow: hidden;
@@ -169,7 +172,7 @@ withDefaults(
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: transparent;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -259,7 +262,8 @@ withDefaults(
 }
 .code-success {
   color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.14);
+  background: transparent;
+  border: 1px solid rgba(16, 185, 129, 0.14);
   padding: 2px 8px;
   border-radius: 6px;
   font-weight: 500;

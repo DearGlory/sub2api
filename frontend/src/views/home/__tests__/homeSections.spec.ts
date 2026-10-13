@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { mount, RouterLinkStub } from '@vue/test-utils'
+import { baseCompile } from '@intlify/message-compiler'
+import { createI18n, type MessageFunction } from 'vue-i18n'
 
-import en from '@/i18n/locales/en'
+import en from '@/i18n/locales/en/landing'
+import zh from '@/i18n/locales/zh/landing'
 import CtaSection from '../CtaSection.vue'
 import FeaturesSection from '../FeaturesSection.vue'
 import HeroSection from '../HeroSection.vue'
@@ -9,30 +12,29 @@ import HowItWorksSection from '../HowItWorksSection.vue'
 import StatsSection from '../StatsSection.vue'
 import { HOME_STATS } from '../homeSections.data'
 
-/**
- * `t` resolves against the real English locale rather than echoing the key
- * back, so this spec doubles as a key check: a typo renders as a literal
- * unresolved key string and fails the assertions below.
- *
- * (The suite aliases vue-i18n to its runtime-only build, which ships no message
- * compiler, so a plain `createI18n` cannot format string messages here.)
- */
-vi.mock('vue-i18n', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('vue-i18n')>()
+/** Compile the real locale strings for the runtime-only i18n build used by Vitest. */
+interface CompiledMessages {
+  [key: string]: MessageFunction<string> | CompiledMessages
+}
 
-  const lookup = (key: string): string => {
-    let current: unknown = en
-    for (const segment of key.split('.')) {
-      if (current === null || typeof current !== 'object') return key
-      current = (current as Record<string, unknown>)[segment]
-    }
-    return typeof current === 'string' ? current : key
-  }
+function compileMessages(messages: Record<string, unknown>): CompiledMessages {
+  return Object.fromEntries(Object.entries(messages).map(([key, value]) => [
+    key,
+    typeof value === 'string'
+      ? new Function(`return ${baseCompile(value).code}`)() as MessageFunction<string>
+      : compileMessages(value as Record<string, unknown>),
+  ]))
+}
 
-  return { ...actual, useI18n: () => ({ t: lookup }) }
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  fallbackLocale: 'en',
+  messages: { en: compileMessages(en), zh: compileMessages(zh) },
 })
 
 const global = {
+  plugins: [i18n],
   stubs: {
     RouterLink: RouterLinkStub,
     Icon: { template: '<span data-testid="icon" />' },
@@ -42,6 +44,35 @@ const global = {
 const messages = en.home
 
 describe('home sections', () => {
+  beforeEach(() => {
+    i18n.global.locale.value = 'en'
+  })
+
+  it.each(['en', 'zh'] as const)('renders translated copy and reactive site settings in %s', async (locale) => {
+    i18n.global.locale.value = locale
+    const copy = { en, zh }[locale].home
+    const wrapper = mount(HeroSection, {
+      global,
+      props: { siteName: 'Acme Gateway', siteSubtitle: 'Custom subtitle' },
+    })
+    expect(wrapper.get('h1').text()).toBe('ALL IN ONE')
+    expect(wrapper.text()).toContain(i18n.global.t('home.heroSubtitle', { siteName: 'Acme Gateway' }))
+    expect(wrapper.text()).not.toContain('{siteName}')
+    expect(wrapper.text()).toContain(copy.heroDescription)
+    expect(wrapper.text()).toContain(copy.sections.hero.integration)
+    expect(wrapper.text()).toContain(copy.sections.hero.assurance)
+    expect(wrapper.text()).toContain(copy.sections.hero.badge)
+    await wrapper.setProps({ siteName: 'Updated Gateway', siteSubtitle: 'Updated subtitle' })
+    expect(wrapper.text()).toContain('Updated Gateway')
+    expect(wrapper.text()).toContain('Updated subtitle')
+    expect(wrapper.text()).not.toContain('Acme Gateway')
+
+    const cta = mount(CtaSection, { global })
+    expect(cta.get('h2').text()).toContain('ALL IN ONE')
+    expect(cta.text()).toContain(copy.sections.cta.summary)
+    expect(cta.text()).not.toMatch(/免费|free trial|sign up free/i)
+  })
+
   it('renders the hero with the site name, value line and both actions', () => {
     const wrapper = mount(HeroSection, {
       global,
@@ -57,7 +88,7 @@ describe('home sections', () => {
     const hero = wrapper.get('[data-testid="home-hero"]')
     expect(hero.text()).toContain('Acme Gateway')
     expect(hero.text()).toContain('Gateway subtitle')
-    expect(hero.text()).toContain(messages.heroSubtitle)
+    expect(hero.text()).toContain(i18n.global.t('home.heroSubtitle', { siteName: 'Acme Gateway' }))
     expect(hero.text()).toContain(messages.heroDescription)
     // Three capability chips.
     expect(wrapper.findAll('li')).toHaveLength(3)

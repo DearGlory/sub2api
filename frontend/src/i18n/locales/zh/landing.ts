@@ -15,12 +15,12 @@ export default {
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
     // 新增：面向用户的价值主张
-    heroSubtitle: '一个密钥，畅用多个 AI 模型',
-    heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
+    heroSubtitle: '{siteName} 提供面向开发者与团队的专业 AI API 调用服务',
+    heroDescription: '统一接入主流模型能力，余额清晰、价格透明、记录可查',
     tags: {
-      subscriptionToApi: '订阅转 API',
-      stickySession: '会话保持',
-      realtimeBilling: '按量计费'
+      subscriptionToApi: '多模型接入',
+      stickySession: '稳定调用',
+      realtimeBilling: '统一计费'
     },
     // 用户痛点区块
     painPoints: {
@@ -50,12 +50,12 @@ export default {
       subtitle: '简单三步，开始省心使用 AI'
     },
     features: {
-      unifiedGateway: '一键接入',
-      unifiedGatewayDesc: '获取一个 API 密钥，即可调用所有已接入的 AI 模型，无需分别申请。',
-      multiAccount: '稳定可靠',
-      multiAccountDesc: '智能调度多个上游账号，自动切换和负载均衡，告别频繁报错。',
-      balanceQuota: '用多少付多少',
-      balanceQuotaDesc: '按实际使用量计费，支持设置配额上限，团队用量一目了然。'
+      unifiedGateway: '多模型能力聚合',
+      unifiedGatewayDesc: '主流模型能力统一接入，一个账号即可按需调用已接入的模型。',
+      multiAccount: '稳定调用体验',
+      multiAccountDesc: '请求自动接入可用模型服务，降低上游波动对日常开发和业务调用的影响。',
+      balanceQuota: '余额与计费清晰',
+      balanceQuotaDesc: '价格、余额与消费记录清楚可查，按实际用量计费，支持设置额度上限。'
     },
     // 优势对比
     comparison: {
@@ -105,14 +105,17 @@ export default {
     },
     // CTA 区块
     cta: {
-      title: '准备好开始了吗？',
-      description: '注册即可获得免费试用额度，体验一站式 AI 服务',
-      button: '免费注册'
+      title: 'ALL IN ONE',
+      description: '从账号开通到正式调用，提供专业、稳定、可控的多模型 AI API 服务。',
+      button: '立即开始'
     },
     // 粒子首页的分区文案（首页默认分支）
     sections: {
       hero: {
-        badge: '订阅转 API · 多账号池 · 按量计费'
+        title: 'ALL IN ONE',
+        badge: '多模型 AI API 服务 · 稳定调用、统一计费、记录可查',
+        integration: '从账号开通到正式调用，快速接入现有产品与工作流',
+        assurance: '稳定、商业化、可控地使用多模型能力'
       },
       stats: {
         items: {
@@ -136,18 +139,18 @@ export default {
       },
       features: {
         eyebrow: '核心能力',
-        title: '一个密钥，覆盖全部上游',
-        lead: '把分散的订阅与账号收敛成一条统一的 API 入口，价格、余额和调用记录都在同一个控制台里。',
-        compatTitle: '协议兼容',
-        compatDesc: '同时提供 Anthropic、OpenAI 与 Gemini 三种入站协议，现有 SDK 与工具改一个 base URL 即可接入。',
+        title: '一个账号，接入多模型 API 服务',
+        lead: '从模型选择到正式调用，统一管理模型、价格、余额与调用记录，快速接入现有产品。',
+        compatTitle: '兼容现有接口',
+        compatDesc: '提供 Anthropic、OpenAI 与 Gemini 入站协议，现有 SDK、自动化工作流与业务后端可按协议接入。',
         capUptime: '稳定可用',
-        capUptimeDesc: '多账号池自动切换，单个上游波动不会中断你的业务。',
-        capControl: '配额可控',
-        capControlDesc: '按用户、按密钥设置额度上限与速率限制。',
+        capUptimeDesc: '多模型服务统一接入，降低上游波动对日常开发和产品调用的影响。',
+        capControl: '安全调用密钥',
+        capControlDesc: '为产品、脚本或客户端创建 API Key，配合余额与额度控制使用。',
         capRecords: '记录可查',
         capRecordsDesc: '时间、模型、用量与结果逐条留痕，成本一目了然。',
         capCompat: '接入友好',
-        capCompatDesc: '兼容 OpenAI 与 Anthropic 的既有调用方式，迁移成本极低。',
+        capCompatDesc: '兼容常见 OpenAI 与 Anthropic 调用方式，方便现有工具和代码接入。',
         poolActive: '当前账号正常调度',
         poolFailover: '异常账号自动摘除',
         poolLimit: '触发限制自动切换',
@@ -159,17 +162,18 @@ export default {
         title: '三步开始调用',
         lead: '面向使用者呈现的是账号、余额、模型与调用记录；底层调度留在幕后，不打扰你。',
         step1Eyebrow: '开始',
-        step1Title: '开通账号与额度',
-        step1Desc: '注册后获取账号额度，查看模型价格与余额，让每一次调用都清楚可控。',
+        step1Title: '开通账号与余额',
+        step1Desc: '开通账号后查看模型价格、充值与余额，让每一次调用都清楚可控。',
         step2Eyebrow: '调用',
-        step2Title: '创建 API Key 并发起请求',
-        step2Desc: '复制兼容 OpenAI 的调用地址，把模型能力接入你的产品、脚本或自动化工作流。',
+        step2Title: '创建 API Key 并调用',
+        step2Desc: '复制兼容 OpenAI 的调用地址，把模型能力接入产品、脚本、客户端或自动化工作流。',
         step3Eyebrow: '追踪',
         step3Title: '查看消费与调用记录',
         step3Desc: '用量、消费、错误与延迟都有记录，方便控制成本并排查调用问题。'
       },
       cta: {
-        eyebrow: '开箱即用'
+        eyebrow: '开箱即用',
+        summary: '多模型集成、统一计费、记录可查'
       }
     },
     footer: {
