@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BufferAttribute, BufferGeometry, Color } from 'three'
-import type { EmissionTable } from '../ParticleEngine'
+import { createEngineScratch, type EmissionTable } from '../ParticleEngine'
 import { createCometBody, EmittedTail } from '../emittedTail'
 import { writeCometFlowBasis } from '../cometFlow'
 
@@ -36,8 +36,9 @@ describe('reference comet body', () => {
     const span = ranges[0]!.map(pair => pair[1]! - pair[0]!)
     expect(span[0]! / span[1]!).toBeGreaterThan(2.5)
     expect(span[1]! / span[2]!).toBeCloseTo(1, 1)
-    expect(quantile(Array.from(body.spriteSize), 0.98)).toBeLessThan(0.8)
-    expect(Math.max(...body.spriteSize)).toBeLessThan(1)
+    expect(quantile(Array.from(body.spriteSize), 0.98)).toBeLessThan(0.9)
+    expect(quantile(Array.from(body.spriteSize), 0.02)).toBeGreaterThan(0.45)
+    expect(Math.max(...body.spriteSize)).toBeLessThan(1.05)
     expect(Math.max(...body.alpha)).toBeLessThan(0.7)
     expect(body.spriteScale.every(value => value === 1)).toBe(true)
     expect(Object.values(body).every(array => array.every(Number.isFinite))).toBe(true)
@@ -45,7 +46,7 @@ describe('reference comet body', () => {
     for (let i = 0; i < body.tone.length; i++) {
       if (body.tone[i]! >= 0.72) continue
       const k = i * 3
-      octants[(body.offsets[k]! > 1.3 ? 4 : 0) + (body.offsets[k + 1]! > 0 ? 2 : 0) + (body.offsets[k + 2]! > 0 ? 1 : 0)]!++
+      octants[(body.offsets[k]! > 0.336 ? 4 : 0) + (body.offsets[k + 1]! > 0 ? 2 : 0) + (body.offsets[k + 2]! > 0 ? 1 : 0)]!++
     }
     expect(Math.min(...octants)).toBeGreaterThan(500)
   })
@@ -78,8 +79,8 @@ describe('reference emitted grains', () => {
         signs[(p.aperture[k + 1]! > 0 ? 2 : 0) + (p.aperture[k + 2]! > 0 ? 1 : 0)]!++
       }
       expect(born).toBeGreaterThan(2000)
-      expect(radius).toBeGreaterThan(0.9)
-      expect(radius).toBeLessThan(1.1)
+      expect(radius).toBeGreaterThan(0.38)
+      expect(radius).toBeLessThan(0.47)
       expect(Math.min(...signs)).toBeGreaterThan(500)
     }
   })
@@ -118,14 +119,15 @@ describe('reference emitted grains', () => {
     }
     expect(warm / alphas.length).toBeGreaterThan(0.4)
     expect(cold / alphas.length).toBeGreaterThan(0.25)
-    expect(quantile(alphas, 0.5)).toBeGreaterThan(0.2)
+    expect(quantile(alphas, 0.9)).toBeGreaterThan(0.3)
+    expect(quantile(alphas, 0.9) / quantile(alphas, 0.1)).toBeGreaterThan(3)
     expect(geometry.getAttribute('position').array).toBe(p.positions)
     expect(geometry.getAttribute('color').itemSize).toBe(4)
     geometry.dispose()
   })
 
   it('forms a dense long shallow dual plume with pulse packets instead of a short smoke ball', () => {
-    const p = new EmittedTail(24000)
+    const p = createEngineScratch(18000, 48).emittedTail
     const births: number[] = []
     for (let f = 1; f <= 168; f++) {
       const t = f / 60

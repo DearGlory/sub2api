@@ -16,9 +16,12 @@ function writeAperture(out: Float32Array, i: number, sheath: boolean): number {
   const radius = sheath ? 0.46 + 0.54 * Math.sqrt(noise(i, 337)) : 0.48 * Math.sqrt(noise(i, 337))
   const width = (0.075 + 0.67 * Math.pow(Math.sin(Math.PI * t), 0.85)) * (1 - 0.5 * t)
   const k = i * 3
-  out[k] = ((sheath ? -0.85 : -0.72) + (sheath ? 3.7 : 3.25) * t) * COMET_VOLUME_SCALE
-  out[k + 1] = width * radius * Math.cos(angle) * COMET_VOLUME_SCALE
-  out[k + 2] = width * radius * Math.sin(angle) * COMET_VOLUME_SCALE
+  // Keep the resting mass close to the head. The born jet supplies the long
+  // luminous extension; glyph atoms must not dock several world units away.
+  const scale = COMET_VOLUME_SCALE * 0.42
+  out[k] = (((sheath ? -0.85 : -0.72) + (sheath ? 3.7 : 3.25) * t) * COMET_VOLUME_SCALE - 0.5) * 0.42
+  out[k + 1] = width * radius * Math.cos(angle) * scale
+  out[k + 2] = width * radius * Math.sin(angle) * scale
   return t
 }
 
@@ -107,25 +110,28 @@ export class EmittedTail {
           0.5 * this.birthAcceleration[k + j] * age * age
       }
       const u = age / this.life[i]
-      const fade = Math.pow(1 - u, 1.15) * Math.min(1, age / 0.025)
-      const cool = this.ion[i] * (1 - Math.exp(-age * 4.5))
-      const white = this.grain[i] > 0.93 ? 0.42 : 0
-      const r = 1 + (0.14 - 1) * cool
-      const g = 0.49 + (0.47 - 0.49) * cool + white * (1 - u)
-      const b = 0.085 + (0.94 - 0.085) * cool + white * (1 - u)
-      const ink = light ? 0.48 : 1
+      const fade = Math.pow(1 - u, 1.05) * Math.min(1, age / 0.025)
+      // Hot grains extend the white-gold spine beyond the compact docking body.
+      // Ions cool sooner, while interleaved dust keeps the warm outer envelope.
+      const hot = Math.exp(-age * 3.2)
+      const cool = this.ion[i] * (1 - Math.exp(-age * 6))
+      const white = this.grain[i] > 0.93 ? 0.16 : 0
+      const r = 1 + (0.10 - 1) * cool
+      const g = 0.53 + 0.4 * hot + (0.56 - 0.53) * cool + white * (1 - u)
+      const b = 0.075 + 0.65 * hot + (1 - 0.075) * cool + white * (1 - u)
+      const ink = light ? 0.48 : 1.3
       this.colors[c] = r * ink
       this.colors[c + 1] = g * ink
       this.colors[c + 2] = b * ink
-      // Fine sprites spend alpha on actual grains, never an area compensation.
-      this.colors[c + 3] = fade * this.birthStrength[i] * (0.5 + 0.38 * this.grain[i])
+      // Coverage and alpha remain independent; dark gaps survive between grains.
+      this.colors[c + 3] = fade * this.birthStrength[i] * (0.12 + 0.86 * this.grain[i] * this.grain[i])
     }
 
     // Irregular multi-frequency jets: density, speed and brightness are decided
     // only at birth, and the resulting packets advect down the tail with age.
     const clock = Number.isFinite(departure) ? departure : 0
     const pulse = Math.pow(Math.max(0, Math.sin(clock * 8.7 + 0.55 * Math.sin(clock * 3.1))), 6)
-    const strength = 0.42 + 0.58 * pulse
+    const strength = 0.64 + 0.36 * pulse
     this.credit += emissionDelta * this.count / 2.1 * (0.76 + 0.65 * pulse)
     let births = Math.floor(this.credit + 1e-9)
     this.credit -= births
@@ -185,12 +191,12 @@ export function createCometBody(count: number) {
     // Uneven strands leave black interstices without a solid shell or smooth disc.
     const grain = noise(i, 367)
     const angle = Math.atan2(offsets[k + 2], offsets[k + 1])
-    const seams = Math.pow(Math.abs(Math.sin(angle * 3 + offsets[k] * 0.58)), 0.7)
-    const texture = (0.18 + 0.82 * seams) * (0.65 + 0.35 * noise(i, 379))
-    alpha[i] = (sheath ? 0.34 : 0.68) * texture * (0.7 + 0.3 * grain) * (1 - 0.6 * t)
+    const seams = Math.pow(Math.abs(Math.sin(angle * 3 + offsets[k] * 1.38)), 0.7)
+    const texture = (0.14 + 0.86 * seams) * (0.55 + 0.45 * noise(i, 379))
+    alpha[i] = (sheath ? 0.56 : 0.64) * texture * (0.28 + 0.72 * grain * grain) * (1 - 0.3 * t)
     // tone >= .72 is the gold-white inner population; lower values are orange gold.
     tone[i] = sheath ? 0.24 + 0.34 * grain : 0.76 + 0.24 * grain
-    spriteSize[i] = 0.34 + 0.3 * grain + (grain > 0.99 ? 0.26 : 0)
+    spriteSize[i] = 0.48 + 0.4 * grain + (grain > 0.99 ? 0.16 : 0)
   }
   return { offsets, alpha, tone, spriteSize, spriteScale }
 }

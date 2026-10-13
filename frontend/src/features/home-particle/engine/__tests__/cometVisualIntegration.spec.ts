@@ -184,7 +184,10 @@ describe('required comet model integration (real production graph)', () => {
     h.render('travel', 1)
     const gather = [0, 0.05, 0.15, 0.25].map(q => { h.render('gather', q); return radial(h) })
     expect(gather[3].median - gather[2].median).toBeGreaterThan((gather[2].median - gather[1].median) * 1.25)
-    expect(gather[3].depth).toBeGreaterThan(3)
+    // Detachment grows the compact nucleus in depth; an absolute 3-unit floor
+    // encoded the old oversized docking body and masked the real-brand rebound.
+    expect(gather[3].depth).toBeGreaterThan(gather[0].depth)
+    expect(gather[0].max).toBeLessThan(2)
     h.render('gather', 1)
     h.render('hold', 1)
     const shape = h.s.positions.slice()
