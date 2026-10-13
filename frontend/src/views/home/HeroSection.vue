@@ -47,7 +47,7 @@ withDefaults(
         <!-- Copy -->
         <SectionReveal class="w-full min-w-0 flex-1 text-center lg:text-left">
           <p
-            class="inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/60 px-3 py-1.5 text-xs font-medium leading-5 text-gray-600 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-300"
+            class="inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-accent-950/80 px-3 py-1.5 text-xs font-medium leading-5 text-gray-600 dark:border-dark-800 dark:text-dark-300"
           >
             <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500 dark:bg-primary-400" />
             <span class="min-w-0 text-pretty">{{ t('home.sections.hero.badge') }}</span>
@@ -70,19 +70,19 @@ withDefaults(
           <!-- Capability chips: reuse the three claims the old landing page already made. -->
           <ul class="mt-7 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
             <li
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-200"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-accent-950/80 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:text-dark-200"
             >
               <Icon name="swap" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.subscriptionToApi') }}
             </li>
             <li
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-200"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-accent-950/80 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:text-dark-200"
             >
               <Icon name="shield" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.stickySession') }}
             </li>
             <li
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-200"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-accent-950/80 px-3 py-2 text-xs font-medium text-gray-700 dark:border-dark-800 dark:text-dark-200"
             >
               <Icon name="chartBar" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.tags.realtimeBilling') }}
@@ -102,7 +102,7 @@ withDefaults(
               :href="docUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="btn btn-secondary gap-1.5"
+              class="btn gap-1.5 border border-dark-700 bg-accent-950/80 text-gray-200 hover:border-dark-600"
             >
               <Icon name="book" size="sm" />
               {{ t('home.viewDocs') }}
@@ -161,31 +161,17 @@ withDefaults(
 
 /* Flat surface + 1px border + 12px radius. No glow, no tilt, no gradient. */
 .terminal-container {
-  --terminal-bg: rgba(255, 255, 255, 0.60);
-  --terminal-border: rgba(15, 17, 19, 0.12);
-  --terminal-hover-border: rgba(15, 17, 19, 0.20);
-  --terminal-divider: rgba(15, 17, 19, 0.08);
-  --terminal-muted: #4b5563;
-  --terminal-cmd: #111827;
-  --terminal-text: #374151;
-  --terminal-comment: #475569;
-  --terminal-success: #047857;
+  --terminal-bg: rgba(15, 17, 19, 0.8);
+  --terminal-border: rgba(255, 255, 255, 0.08);
+  --terminal-hover-border: rgba(255, 255, 255, 0.16);
+  --terminal-divider: rgba(255, 255, 255, 0.06);
+  --terminal-muted: #9ca3af;
+  --terminal-cmd: #e4e4e7;
+  --terminal-text: #d4d4d8;
+  --terminal-comment: #94a3b8;
+  --terminal-success: #6ee7b7;
   width: 100%;
   max-width: 420px;
-}
-
-:global(.dark) {
-  .terminal-container {
-    --terminal-bg: rgba(15, 17, 19, 0.60);
-    --terminal-border: rgba(255, 255, 255, 0.08);
-    --terminal-hover-border: rgba(255, 255, 255, 0.16);
-    --terminal-divider: rgba(255, 255, 255, 0.06);
-    --terminal-muted: #9ca3af;
-    --terminal-cmd: #e4e4e7;
-    --terminal-text: #d4d4d8;
-    --terminal-comment: #94a3b8;
-    --terminal-success: #6ee7b7;
-  }
 }
 
 .terminal-window {
@@ -242,32 +228,7 @@ withDefaults(
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  opacity: 0;
-  animation: line-appear 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-.line-1 {
-  animation-delay: 60ms;
-}
-.line-2 {
-  animation-delay: 140ms;
-}
-.line-3 {
-  animation-delay: 220ms;
-}
-.line-4 {
-  animation-delay: 300ms;
-}
-
-@keyframes line-appear {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  opacity: 1;
 }
 
 .code-prompt {
@@ -304,12 +265,5 @@ withDefaults(
   width: 8px;
   height: 15px;
   background: #52525b;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .code-line {
-    animation: none;
-    opacity: 1;
-  }
 }
 </style>

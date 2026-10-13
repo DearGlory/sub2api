@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, RouterLinkStub } from '@vue/test-utils'
 
 import HomeView from '../../HomeView.vue'
+import SectionReveal from '../SectionReveal.vue'
+import heroSource from '../HeroSection.vue?raw'
 
 const { appStore, authStore } = vi.hoisted(() => ({
   appStore: {
@@ -75,6 +77,7 @@ describe('HomeView default particle home branch', () => {
     authStore.checkAuth.mockClear()
     appStore.fetchPublicSettings.mockClear()
     localStorage.clear()
+    document.documentElement.classList.remove('dark')
     // Unlike the compact-mode spec, this one gives matchMedia a complete
     // MediaQueryList: HomeView only mounts the particle canvas when the platform
     // can actually register a motion-preference listener (see
@@ -89,6 +92,57 @@ describe('HomeView default particle home branch', () => {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(() => false),
     } as unknown as MediaQueryList)
+  })
+
+  it.each(['light', 'dark'])('keeps the default home dark for saved %s while preserving the theme toggle', async (theme) => {
+    localStorage.setItem('theme', theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    const wrapper = mountHome()
+    const home = wrapper.get('[data-testid="home-particle"]')
+
+    expect(home.classes()).toEqual(expect.arrayContaining(['dark', 'bg-transparent', 'text-white']))
+    expect(localStorage.getItem('theme')).toBe(theme)
+    expect(document.documentElement.classList.contains('dark')).toBe(theme === 'dark')
+    await wrapper.get('header button').trigger('click')
+    expect(localStorage.getItem('theme')).toBe(theme === 'dark' ? 'light' : 'dark')
+    expect(document.documentElement.classList.contains('dark')).toBe(theme !== 'dark')
+    expect(home.classes()).toContain('dark')
+    expect(wrapper.find('[data-testid="home-particle-background"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it.each([
+    { authenticated: false, admin: false, destination: '/login' },
+    { authenticated: true, admin: false, destination: '/dashboard' },
+    { authenticated: true, admin: true, destination: '/admin/dashboard' },
+  ])('keeps the orange header action routed to $destination', ({ authenticated, admin, destination }) => {
+    authStore.isAuthenticated = authenticated
+    authStore.isAdmin = admin
+    authStore.user = authenticated ? { email: 'ada@example.com' } : null
+    const wrapper = mountHome()
+    const action = wrapper.get('header').getComponent(RouterLinkStub)
+    expect(action.props('to')).toBe(destination)
+    expect(action.classes()).toContain('btn-primary')
+    if (authenticated) {
+      expect(action.get('span').text()).toBe('A')
+      expect(action.get('span').classes()).toContain('btn-primary')
+    }
+    wrapper.unmount()
+  })
+
+  it('keeps twenty scroll units and alpha on the surface instead of its content', () => {
+    const wrapper = mountHome({ doc_url: 'https://docs.example.com' })
+    expect(wrapper.findAllComponents(SectionReveal)).toHaveLength(20)
+    for (const id of ['home-hero', 'home-stats', 'home-features', 'home-how-it-works', 'home-cta']) {
+      const section = wrapper.get(`[data-testid="${id}"]`)
+      expect(section.findAll('[class~="bg-accent-950/80"]').length).toBeGreaterThan(0)
+      expect(section.html()).not.toMatch(/bg-(?:white|gray-\d+|dark-\d+)\/60|opacity-\d+/)
+    }
+    expect(heroSource).toContain('--terminal-bg: rgba(15, 17, 19, 0.8)')
+    expect(heroSource).toContain('--terminal-success: #6ee7b7')
+    expect(heroSource).not.toContain(':global(.dark)')
+    expect(heroSource).not.toContain('opacity: 0')
+    wrapper.unmount()
   })
 
   it('renders the particle home when no admin override is set', () => {

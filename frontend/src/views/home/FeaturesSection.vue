@@ -11,9 +11,8 @@
  *
  * Design language applied strictly here: no glow, no gradient, no gradient
  * text, no `blur-3xl` orbs and no coloured icon tiles. Hierarchy comes from a
- * 1px border and the surface step (white on gray-50 in light, dark-900 on
- * dark-950 in dark). The single accent appears only on real state — the live
- * dot and the focus ring — never as decoration.
+ * 1px border and the translucent cosmos surface. The single accent appears only
+ * on real state — the live dot and the focus ring — never as decoration.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -99,7 +98,7 @@ const poolRows = [
       <SectionReveal>
         <div class="max-w-2xl">
           <p
-            class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-300"
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-accent-950/80 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:text-dark-300"
           >
             <Icon name="cube" size="sm" class="text-gray-500 dark:text-dark-400" />
             {{ t('home.sections.features.eyebrow') }}
@@ -129,7 +128,7 @@ const poolRows = [
             index === 3 ? 'md:border-l' : '',
           ]"
         >
-          <div class="group relative flex h-full min-w-0 flex-col bg-white/60 p-6 transition-colors duration-200 hover:bg-gray-50/60 md:p-7 dark:bg-dark-900/60 dark:hover:bg-dark-800/60">
+          <div class="group relative flex h-full min-w-0 flex-col bg-accent-950/80 p-6 transition-colors duration-200 md:p-7">
             <div class="mb-5 flex items-center justify-between gap-4">
               <span class="flex items-center gap-2.5">
                 <span
@@ -208,7 +207,7 @@ const poolRows = [
           :delay="index * 40"
         >
           <div
-            class="h-full rounded-xl border border-gray-200 bg-white/60 p-5 transition-colors duration-200 hover:border-gray-300 dark:border-dark-800 dark:bg-dark-900/60 dark:hover:border-dark-700"
+            class="h-full rounded-xl border border-gray-200 bg-accent-950/80 p-5 transition-colors duration-200 hover:border-gray-300 dark:border-dark-800 dark:hover:border-dark-700"
           >
             <span
               class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-transparent text-gray-500 dark:border-dark-700 dark:bg-transparent dark:text-dark-300"
