@@ -10,7 +10,7 @@ export function installReferenceProbe() {
   const liveVisible = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return o.material.visible }
   const plain = x => ArrayBuffer.isView(x) ? Array.from(x) : x?.toArray ? x.toArray() : x
   function gpu(o) {
-    const visibility = []; e.scene.traverse(x => { if (x.geometry) { visibility.push([x, x.visible]); x.visible = x === o } })
+    const visibility = []; e.scene.traverse(x => { if (x.geometry) { visibility.push([x, x.visible, x.frustumCulled]); x.visible = x === o; x.frustumCulled = false } })
     try {
       e.renderer.render(e.scene, e.camera)
       const gl = e.renderer.getContext(), pr = e.renderer.properties.get(o.material).currentProgram, program = pr?.program
@@ -28,7 +28,7 @@ export function installReferenceProbe() {
         if (u.size === 1) uniforms[u.name] = plain(gl.getUniform(program, gl.getUniformLocation(program, u.name)))
       }
       return { status: Object.values(attributes).every(a => a.exact) ? 'observed' : 'instrument-invalid', attributes, uniforms, vertex: gl.getShaderSource(pr.vertexShader), fragment: gl.getShaderSource(pr.fragmentShader) }
-    } finally { for (const [x, visible] of visibility) x.visible = visible; e.renderer.render(e.scene, e.camera) }
+    } finally { for (const [x, visible, cull] of visibility) { x.visible = visible; x.frustumCulled = cull } e.renderer.render(e.scene, e.camera) }
   }
   function points(o, audit) {
     const p = o.geometry.getAttribute('position'), c = o.geometry.getAttribute('color'), positions = [], projected = []
@@ -57,6 +57,7 @@ export function installReferenceProbe() {
           if (stamps[i] !== pool.birthTime[i] && pool.age[i] <= dt * 1.01) {
             stamps[i] = pool.birthTime[i]; bin.births++
             const birth = { i, stamp: stamps[i], t: e.dollySeconds, head: h, source: world(xyz(pool.birthPosition, i), tail), velocity: xyz(pool.birthVelocity, i), age: pool.age[i], life: pool.life[i], leg: s.legIndex }
+            birth.acceleration = pool.birthAcceleration ? xyz(pool.birthAcceleration, i) : [0, 0, 0]
             bin.speedSum += Math.hypot(...birth.velocity)
             if (history.births.length < 120000) history.births.push(birth)
             if (tracked.size < 64) tracked.set(i, birth)
@@ -82,13 +83,16 @@ export function installReferenceProbe() {
     if (kind === 'alpha0') tail.material.opacity = 0
     else if (kind === 'flat') { const a = tail.geometry.getAttribute('position'); for (let i = 0; i < a.count; i++) a.array[i * 3 + 2] = a.array[2]; a.needsUpdate = true }
     else if (kind === 'disc') {
-      // A real scene mesh made from an actual existing mesh, not a renamed fixture.
-      let template; e.scene.traverse(o => { if (o.isMesh && !template) template = o })
-      if (!template) throw Error('instrument-invalid: disc control requires mesh constructor source')
-      const m = template.clone(), g = template.geometry.clone(), a = g.getAttribute('position'), count = a.count
-      for (let i = 0; i < count; i++) { const angle = (i % 3 === 0 ? 0 : Math.floor(i / 3) + (i % 3 === 2 ? 1 : 0)) / Math.ceil(count / 3) * Math.PI * 2; const r = i % 3 === 0 ? 0 : 3; a.setXYZ(i, r * Math.cos(angle), r * Math.sin(angle), 0) }
-      g.setIndex(null); g.deleteAttribute('normal'); a.needsUpdate = true; g.computeBoundingSphere()
-      m.geometry = g; m.material = template.material.clone(); m.material.onBeforeCompile = shader => { shader.vertexShader = 'void main(){gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}'; shader.fragmentShader = 'void main(){gl_FragColor=vec4(1.0,1.0,1.0,1.0);}' }; m.material.customProgramCacheKey = () => 'reference-disc-destruction'; m.material.needsUpdate = true; m.visible = true; m.frustumCulled = false; m.position.copy(v.set(...head())); m.rotation.set(0,0,0); m.scale.set(1,1,1); e.scene.add(m); saved.mesh = m
+      // Import the same served Three module used by the live engine; two-sided fan.
+      const { Mesh, BufferGeometry, Float32BufferAttribute, MeshBasicMaterial, DoubleSide } = window.__REFERENCE_THREE
+      const g = new BufferGeometry(), vertices = []
+      for (let i = 0; i < 64; i++) {
+        const a = i / 64 * Math.PI * 2, b = (i + 1) / 64 * Math.PI * 2
+        vertices.push(0, 0, 0, 3 * Math.cos(a), 3 * Math.sin(a), 0, 3 * Math.cos(b), 3 * Math.sin(b), 0)
+      }
+      g.setAttribute('position', new Float32BufferAttribute(vertices, 3)); g.computeBoundingSphere()
+      const m = new Mesh(g, new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide, depthTest: false, depthWrite: false, toneMapped: false }))
+      m.name = 'judge-visible-disc'; m.frustumCulled = false; m.position.copy(v.set(...head())); m.quaternion.copy(e.camera.quaternion); e.scene.add(m); saved.mesh = m
     } else if (kind !== 'static') throw Error('unknown destructive control')
     e.renderer.render(e.scene, e.camera)
     return { kind, mesh: saved.mesh?.uuid }

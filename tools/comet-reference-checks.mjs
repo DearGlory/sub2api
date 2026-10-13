@@ -54,7 +54,7 @@ export function motionCheck(a, b) {
 export function lifecycle(history) {
   const births = new Map(history.births.map(b => [b.i + ':' + b.stamp, b])), drift = [], offsets = [], series = [], bins = new Map()
   for (const b of history.births) offsets.push(distance(b.source, b.head))
-  for (const p of history.trajectories) { const b = births.get(p.i + ':' + p.stamp); if (b) drift.push(distance(p.position, b.source.map((v,j) => v+b.velocity[j]*p.age))) }
+  for (const p of history.trajectories) { const b = births.get(p.i + ':' + p.stamp); if (b) drift.push(distance(p.position, b.source.map((v,j) => v+b.velocity[j]*p.age+.5*(b.acceleration?.[j]||0)*p.age*p.age))) }
   for (const b of history.bins.filter(b => b.phase === 'travel')) { const key = Math.floor(b.t * 10); const bin = bins.get(key) || { t: key / 10, births: 0, speedSum: 0, alpha: 0, frames: 0 }; bin.births += b.births; bin.speedSum += b.speedSum; bin.alpha += b.alpha; bin.frames++; bins.set(key, bin) }
   for (const b of bins.values()) series.push({ t: b.t, births: b.births, meanBirthSpeed: b.births ? b.speedSum/b.births : null, meanTailAlpha: b.alpha/b.frames })
   const birthSpeeds = series.filter(b => b.meanBirthSpeed !== null).map(b => b.meanBirthSpeed), retiredVisible = history.retirements.filter(r => r.alpha !== 0).length
