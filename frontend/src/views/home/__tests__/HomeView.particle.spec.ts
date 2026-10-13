@@ -94,7 +94,7 @@ describe('HomeView default particle home branch', () => {
     } as unknown as MediaQueryList)
   })
 
-  it.each(['light', 'dark'])('keeps the default home dark for saved %s while preserving the theme toggle', async (theme) => {
+  it.each(['light', 'dark'])('keeps the default home dark for saved %s without a theme toggle', (theme) => {
     localStorage.setItem('theme', theme)
     document.documentElement.classList.toggle('dark', theme === 'dark')
     const wrapper = mountHome()
@@ -103,10 +103,8 @@ describe('HomeView default particle home branch', () => {
     expect(home.classes()).toEqual(expect.arrayContaining(['dark', 'bg-transparent', 'text-white']))
     expect(localStorage.getItem('theme')).toBe(theme)
     expect(document.documentElement.classList.contains('dark')).toBe(theme === 'dark')
-    await wrapper.get('header button').trigger('click')
-    expect(localStorage.getItem('theme')).toBe(theme === 'dark' ? 'light' : 'dark')
-    expect(document.documentElement.classList.contains('dark')).toBe(theme !== 'dark')
-    expect(home.classes()).toContain('dark')
+    expect(wrapper.find('[title="home.switchToLight"]').exists()).toBe(false)
+    expect(wrapper.find('[title="home.switchToDark"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="home-particle-background"]').exists()).toBe(true)
     wrapper.unmount()
   })
@@ -209,7 +207,7 @@ describe('HomeView default particle home branch', () => {
     expect(hero.text()).toContain('Test subtitle')
   })
 
-  it('keeps the header actions: language, theme, docs and model plaza', () => {
+  it('keeps the header actions: language, docs and model plaza without a theme toggle', () => {
     const wrapper = mountHome({
       doc_url: 'https://docs.example.com',
       model_plaza_enabled: true,
@@ -217,9 +215,8 @@ describe('HomeView default particle home branch', () => {
     })
 
     expect(wrapper.find('[data-testid="locale-switcher"]').exists()).toBe(true)
-    // Starts light (no saved theme, matchMedia mocked to no-preference), so the
-    // toggle offers the dark theme.
-    expect(wrapper.find('[title="home.switchToDark"]').exists()).toBe(true)
+    expect(wrapper.find('[title="home.switchToLight"]').exists()).toBe(false)
+    expect(wrapper.find('[title="home.switchToDark"]').exists()).toBe(false)
     // sanitizeUrl normalises a bare origin to a trailing slash.
     expect(wrapper.find('a[href="https://docs.example.com/"]').exists()).toBe(true)
 

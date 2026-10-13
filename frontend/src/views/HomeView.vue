@@ -49,14 +49,6 @@
             <Icon name="grid" size="md" />
             <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
           </router-link>
-          <button
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-accent-950/80 dark:text-dark-400"
-            :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
-            @click="toggleTheme"
-          >
-            <Icon v-if="isDark" name="sun" size="md" />
-            <Icon v-else name="moon" size="md" />
-          </button>
           <router-link
             :to="isAuthenticated ? dashboardPath : '/login'"
             class="btn-primary inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium"
@@ -150,16 +142,6 @@
             <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
           </router-link>
 
-          <!-- Theme Toggle -->
-          <button
-            class="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 transition-colors duration-150 hover:bg-accent-950/80 hover:text-gray-800 dark:text-dark-400 dark:hover:text-white"
-            :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
-            @click="toggleTheme"
-          >
-            <Icon v-if="isDark" name="sun" size="md" />
-            <Icon v-else name="moon" size="md" />
-          </button>
-
           <router-link
             v-if="isAuthenticated"
             :to="dashboardPath"
@@ -231,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
@@ -265,9 +247,6 @@ const isHomeContentUrl = computed(() => {
   const content = homeContent.value.trim()
   return content.startsWith('http://') || content.startsWith('https://')
 })
-
-// Theme
-const isDark = ref(document.documentElement.classList.contains('dark'))
 
 // GitHub URL
 const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
@@ -303,13 +282,6 @@ const particleBackgroundSupported = computed(() => {
   return typeof query?.addEventListener === 'function'
 })
 
-// Toggle theme
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
-
 // Initialize theme
 function initTheme() {
   const savedTheme = localStorage.getItem('theme')
@@ -317,7 +289,6 @@ function initTheme() {
     savedTheme === 'dark' ||
     (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
   ) {
-    isDark.value = true
     document.documentElement.classList.add('dark')
   }
 }

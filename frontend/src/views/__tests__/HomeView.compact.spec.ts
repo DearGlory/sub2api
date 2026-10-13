@@ -78,7 +78,7 @@ describe('HomeView compact mode', () => {
     vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
   })
 
-  it.each(['light', 'dark'])('keeps compact mode dark with orange actions for saved %s', async (theme) => {
+  it.each(['light', 'dark'])('keeps compact mode dark with orange actions and no theme toggle for saved %s', (theme) => {
     localStorage.setItem('theme', theme)
     document.documentElement.classList.toggle('dark', theme === 'dark')
     const wrapper = mountHome({ compact_home_enabled: true })
@@ -91,10 +91,10 @@ describe('HomeView compact mode', () => {
       expect(action.props('to')).toBe('/login')
       expect(action.classes()).toContain('btn-primary')
     }
-    await compact.get('button').trigger('click')
-    expect(localStorage.getItem('theme')).toBe(theme === 'dark' ? 'light' : 'dark')
-    expect(document.documentElement.classList.contains('dark')).toBe(theme !== 'dark')
-    expect(compact.classes()).toContain('dark')
+    expect(compact.find('[title="home.switchToLight"]').exists()).toBe(false)
+    expect(compact.find('[title="home.switchToDark"]').exists()).toBe(false)
+    expect(localStorage.getItem('theme')).toBe(theme)
+    expect(document.documentElement.classList.contains('dark')).toBe(theme === 'dark')
     wrapper.unmount()
   })
 
