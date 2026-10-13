@@ -2,11 +2,8 @@
 /**
  * Vue shell around the three.js particle engine.
  *
- * FROZEN — owned by the integrator. Lane 4 (the home page) renders this and must
- * not change it; if it needs a new prop, say so and the integrator adds it.
- *
- * The shell owns everything that is Vue's business — mount/unmount, theme, motion
- * preference, sizing, tab visibility — and nothing that is the engine's. The
+ * The shell owns mount/unmount, motion preference, sizing, tab visibility,
+ * and the fixed cosmos palette — and nothing that is the engine's. The
  * container is `pointer-events-none`: the engine reads pointer moves off `window`
  * so the background never swallows a click meant for the page.
  */
@@ -33,28 +30,12 @@ const emit = defineEmits<{
 const host = ref<HTMLDivElement | null>(null)
 /** WebGL unavailable or the context blew up: fall back to a static backdrop. */
 const failed = ref(false)
-/**
- * Whether the photograph should be showing.
- *
- * Driven from script rather than from a `:global(.dark) .home-space-sky` rule because
- * that rule does NOT survive Vue's scoped-CSS compiler — it compiles to a bare `.dark`,
- * silently dropping the descendant, so the sky stays `display:none` forever. That was a
- * live bug in this file's fallback styles before the photograph existed, invisible
- * because a dark-theme-only rule that never applies looks exactly like one that does.
- *
- * Bound to the same observer that feeds the engine, so the sky and the palette can never
- * disagree about which theme is active.
- */
-const skyVisible = ref(false)
+/** The existing space photograph remains visible for both saved theme preferences. */
+const skyVisible = true
 
 let engine: ParticleEngine | null = null
-let themeObserver: MutationObserver | null = null
 let resizeObserver: ResizeObserver | null = null
 let motionQuery: MediaQueryList | null = null
-
-function isDarkTheme(): boolean {
-  return document.documentElement.classList.contains('dark')
-}
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -78,16 +59,11 @@ onMounted(() => {
   const container = host.value
   if (!container) return
 
-  // Set before the engine is built: if the engine throws on a missing WebGL context the
-  // photograph is still the right backdrop, and this is the only place the theme is read
-  // at mount time.
-  skyVisible.value = isDarkTheme()
-
   try {
     engine = new ParticleEngine({
       container,
       brands: props.brands ?? BRANDS,
-      isLightTheme: !isDarkTheme(),
+      isLightTheme: false,
       reducedMotion: prefersReducedMotion(),
       quality: probeQualityProfile(window.innerWidth),
       onBrandChange: (slug, index) => emit('brandChange', slug, index),
@@ -105,17 +81,6 @@ onMounted(() => {
   }
 
   if (props.active) engine.start()
-
-  // The app toggles `.dark` on <html>, so the class attribute is the theme signal.
-  themeObserver = new MutationObserver(() => {
-    const dark = isDarkTheme()
-    skyVisible.value = dark
-    engine?.setTheme(!dark)
-  })
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['class'],
-  })
 
   motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   motionQuery.addEventListener('change', handleMotionChange)
@@ -142,9 +107,6 @@ watch(
 
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-
-  themeObserver?.disconnect()
-  themeObserver = null
 
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -184,20 +146,14 @@ defineExpose({
       `no-repeat` is load-bearing: the master is a 360-degree equirectangular strip,
       so tiling on x restarts the galactic band at a hard cut mid-screen.
 
-      Visibility is a BOUND CLASS, not a `:global(.dark) …` rule — see `skyVisible`.
+      The photograph stays visible regardless of the saved theme preference.
     -->
     <div v-show="skyVisible" class="home-space-sky absolute inset-0" />
 
-    <!--
-      Non-WebGL degradation. The starfield is a CSS dot grid here because there is
-      no GL context to draw one in; the flat space colour keeps the page readable
-      either way. This is the only gradient in the feature and it exists solely to
-      stand in for a failed canvas, not as decoration.
-    -->
+    <!-- A failed canvas leaves the existing photograph visible. -->
     <div
       v-if="failed"
-      class="home-particle-fallback absolute inset-0 bg-gray-50"
-      :class="skyVisible ? 'home-particle-fallback--on-sky' : 'dark:bg-dark-950'"
+      class="home-particle-fallback home-particle-fallback--on-sky absolute inset-0 bg-transparent"
     />
   </div>
 </template>

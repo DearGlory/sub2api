@@ -29,7 +29,7 @@ withDefaults(
   <section data-testid="home-cta" class="relative z-10 px-6 py-20 md:py-28">
     <SectionReveal>
       <div
-        class="mx-auto max-w-4xl rounded-2xl border border-gray-200 bg-white/60 p-8 text-center md:p-12 dark:border-dark-800 dark:bg-dark-900/60"
+        class="mx-auto max-w-4xl rounded-2xl border border-gray-200 bg-accent-950/80 p-8 text-center md:p-12 dark:border-dark-800"
       >
         <p
           class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-transparent px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-700 dark:text-dark-300"

@@ -54,7 +54,7 @@ function bindCounter(counter: Counter, el: Element | ComponentPublicInstance | n
             index > 1 ? 'border-t md:border-t-0 md:border-l' : '',
           ]"
         >
-          <div class="flex h-full flex-col bg-white/60 px-5 py-6 text-center dark:bg-dark-900/60">
+          <div class="flex h-full flex-col bg-accent-950/80 px-5 py-6 text-center">
             <span
               :ref="(el) => bindCounter(counter, el)"
               class="block font-mono text-2xl font-semibold tabular-nums text-gray-900 md:text-3xl dark:text-white"

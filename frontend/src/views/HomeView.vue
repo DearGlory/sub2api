@@ -16,7 +16,7 @@
   <div
     v-else-if="compactHomeEnabled"
     data-testid="compact-home"
-    class="flex min-h-screen flex-col bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-white"
+    class="dark flex min-h-screen flex-col bg-transparent text-white"
   >
     <header class="border-b border-gray-200 px-4 py-4 sm:px-6 dark:border-dark-800">
       <nav class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 sm:gap-4">
@@ -35,7 +35,7 @@
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-accent-950/80 dark:text-dark-400"
             :title="t('home.viewDocs')"
           >
             <Icon name="book" size="md" />
@@ -43,14 +43,14 @@
           <router-link
             v-if="showModelPlazaEntry"
             to="/model-plaza"
-            class="flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-gray-500 hover:bg-accent-950/80 hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
             :title="t('nav.modelPlaza')"
           >
             <Icon name="grid" size="md" />
             <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
           </router-link>
           <button
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-accent-950/80 dark:text-dark-400"
             :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
             @click="toggleTheme"
           >
@@ -59,7 +59,7 @@
           </button>
           <router-link
             :to="isAuthenticated ? dashboardPath : '/login'"
-            class="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+            class="btn-primary inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium"
           >
             {{ isAuthenticated ? t('home.dashboard') : t('home.login') }}
           </router-link>
@@ -78,7 +78,7 @@
         <p class="mt-4 whitespace-pre-wrap [overflow-wrap:anywhere] text-base text-gray-600 dark:text-dark-300">{{ siteSubtitle }}</p>
         <router-link
           :to="isAuthenticated ? dashboardPath : '/login'"
-          class="mt-8 inline-flex min-h-10 items-center justify-center rounded-lg bg-primary-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-800"
+          class="btn-primary mt-8 inline-flex min-h-10 items-center justify-center rounded-lg px-5 py-2.5 text-sm font-medium"
         >
           {{ isAuthenticated ? t('home.goToDashboard') : t('home.login') }}
         </router-link>
@@ -100,7 +100,7 @@
   <div
     v-else
     data-testid="home-particle"
-    class="relative flex min-h-screen flex-col bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-white"
+    class="dark relative flex min-h-screen flex-col bg-transparent text-white"
   >
     <!--
       The deep-space canvas. Fixed and full-viewport at `z-0`, `pointer-events-none`
@@ -133,7 +133,7 @@
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-800 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 transition-colors duration-150 hover:bg-accent-950/80 hover:text-gray-800 dark:text-dark-400 dark:hover:text-white"
             :title="t('home.viewDocs')"
           >
             <Icon name="book" size="md" />
@@ -143,7 +143,7 @@
           <router-link
             v-if="showModelPlazaEntry"
             to="/model-plaza"
-            class="flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-800 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-gray-500 transition-colors duration-150 hover:bg-accent-950/80 hover:text-gray-800 dark:text-dark-400 dark:hover:text-white"
             :title="t('nav.modelPlaza')"
           >
             <Icon name="grid" size="md" />
@@ -152,7 +152,7 @@
 
           <!-- Theme Toggle -->
           <button
-            class="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-gray-800 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 transition-colors duration-150 hover:bg-accent-950/80 hover:text-gray-800 dark:text-dark-400 dark:hover:text-white"
             :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
             @click="toggleTheme"
           >
@@ -160,18 +160,13 @@
             <Icon v-else name="moon" size="md" />
           </button>
 
-          <!--
-            The header action stays monochrome on purpose: the orange accent is
-            spent on the hero's primary button, and a second orange button in the
-            same viewport would dilute it.
-          -->
           <router-link
             v-if="isAuthenticated"
             :to="dashboardPath"
-            class="ml-1 inline-flex h-10 items-center gap-2 rounded-lg bg-gray-900 pl-1 pr-3 text-white transition-colors duration-150 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+            class="btn-primary ml-1 inline-flex h-10 items-center gap-2 rounded-lg pl-1 pr-3 transition-colors duration-150"
           >
             <span
-              class="flex h-7 w-7 items-center justify-center rounded-md bg-gray-700 text-xs font-medium text-white dark:bg-gray-200 dark:text-gray-900"
+              class="btn-primary flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium"
             >
               {{ userInitial }}
             </span>
@@ -180,7 +175,7 @@
           <router-link
             v-else
             to="/login"
-            class="ml-1 inline-flex h-10 items-center rounded-lg bg-gray-900 px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+            class="btn-primary ml-1 inline-flex h-10 items-center rounded-lg px-4 text-sm font-medium transition-colors duration-150"
           >
             {{ t('home.login') }}
           </router-link>
@@ -300,8 +295,7 @@ const currentYear = computed(() => new Date().getFullYear())
  * The particle shell subscribes to `MediaQueryList.addEventListener` on mount,
  * which jsdom's partial `matchMedia` double does not implement. Probe for it
  * here rather than assume: without the capability we simply skip the canvas,
- * since it is decoration and the page reads fine without it. Guarding here also
- * keeps the frozen shell untouched.
+ * since it is decoration and the page reads fine without it.
  */
 const particleBackgroundSupported = computed(() => {
   if (typeof window.matchMedia !== 'function') return false

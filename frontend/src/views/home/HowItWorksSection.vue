@@ -57,7 +57,7 @@ const steps: Step[] = [
         <div class="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div class="max-w-2xl">
             <p
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white/60 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:bg-dark-900/60 dark:text-dark-300"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-accent-950/80 px-3 py-1.5 text-xs font-medium text-gray-600 dark:border-dark-800 dark:text-dark-300"
             >
               <Icon name="login" size="sm" class="text-gray-500 dark:text-dark-400" />
               {{ t('home.sections.howItWorks.eyebrow') }}
@@ -75,7 +75,7 @@ const steps: Step[] = [
       <div class="mt-10 grid gap-4 md:grid-cols-3">
         <SectionReveal v-for="(step, index) in steps" :key="step.num" :delay="index * 60" class="min-w-0">
           <div
-            class="group flex h-full flex-col rounded-xl border border-gray-200 bg-white/60 p-6 transition-colors duration-200 hover:border-gray-300 md:p-7 dark:border-dark-800 dark:bg-dark-900/60 dark:hover:border-dark-700"
+            class="group flex h-full flex-col rounded-xl border border-gray-200 bg-accent-950/80 p-6 transition-colors duration-200 hover:border-gray-300 md:p-7 dark:border-dark-800 dark:hover:border-dark-700"
           >
             <div class="mb-8 flex items-center justify-between gap-4">
               <span
