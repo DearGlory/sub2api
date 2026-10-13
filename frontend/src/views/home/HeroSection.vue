@@ -168,7 +168,7 @@ withDefaults(
   --terminal-muted: #9ca3af;
   --terminal-cmd: #e4e4e7;
   --terminal-text: #d4d4d8;
-  --terminal-comment: #94a3b8;
+  --terminal-comment: #cbd5e1;
   --terminal-success: #6ee7b7;
   width: 100%;
   max-width: 420px;
