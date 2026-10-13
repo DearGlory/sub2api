@@ -77,7 +77,8 @@ import { EmittedTail, createCometBody } from './emittedTail'
 import { createChoreography, type Point3 } from './choreography'
 import { createCometVisual } from './cometVisual'
 import type { CometVisual, CometVisualFrame } from './cometVisualContract'
-import { transitionGlyphMix, writeCometTransition } from './cometTransition'
+import { assignCometCore, transitionGlyphMix, writeCometTransition } from './cometTransition'
+import { writeCometFlowBasis } from './cometFlow'
 import {
   AMPLITUDE_X,
   BRANDS,
@@ -286,6 +287,14 @@ interface EngineScratch {
   body: ReturnType<typeof createCometBody>
   /** Last valid flow frame, retained during the stationary glyph phases. */
   bodyBasis: Float64Array
+  targetBasis: Float64Array
+  /** Persistent particle → body identity; assigned only at the scatter seam. */
+  coreAssignment: Uint32Array
+  sourceOrder: Uint32Array
+  coreOrder: Uint32Array
+  sourceRadii: Float64Array
+  coreRadii: Float64Array
+  localReassemblies: number
   bodyRotation: Quaternion
   bodyTargetRotation: Quaternion
   bodyFrame: Matrix4
@@ -515,6 +524,13 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
     emittedTail: new EmittedTail(Math.max(1, Math.floor(count * 1.35))),
     body: createCometBody(count),
     bodyBasis: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    targetBasis: new Float64Array(9),
+    coreAssignment: Uint32Array.from({ length: count }, (_, i) => i),
+    sourceOrder: new Uint32Array(count),
+    coreOrder: new Uint32Array(count),
+    sourceRadii: new Float64Array(count),
+    coreRadii: new Float64Array(count),
+    localReassemblies: 0,
     bodyRotation: new Quaternion(),
     bodyTargetRotation: new Quaternion(),
     bodyFrame: new Matrix4(),
@@ -1557,9 +1573,11 @@ export class ParticleEngine implements ParticleEngineContract {
             s.shapeFrom[i * 3 + 2] += state.headZ - this.renderedHead.z
           }
         }
-        for (let i = 0; i < count; i++) {
-          const spriteScale = s.body.spriteScale[i]
-          s.shapeAlpha[i] = colors[i * 4 + 3] * spriteScale * spriteScale
+        for (let i = 0; i < count; i++) s.shapeAlpha[i] = colors[i * 4 + 3]
+        if (phase === 'scatter') {
+          s.localReassemblies = assignCometCore(s.coreAssignment, s.sourceOrder, s.coreOrder,
+            s.sourceRadii, s.coreRadii, s.shapeFrom, s.body.offsets,
+            state.headX, state.headY, state.headZ)
         }
         s.pointerOffset.fill(0)
         velocities.fill(0)
@@ -1642,10 +1660,12 @@ export class ParticleEngine implements ParticleEngineContract {
     const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6
     const basis = s.bodyBasis
     if (moving) {
+      const targetBasis = s.targetBasis
+      writeCometFlowBasis(targetBasis, table)
       s.bodyFrame.set(
-        table.axis[0], table.side1[0], table.side2[0], 0,
-        table.axis[1], table.side1[1], table.side2[1], 0,
-        table.axis[2], table.side1[2], table.side2[2], 0,
+        targetBasis[0], targetBasis[3], targetBasis[6], 0,
+        targetBasis[1], targetBasis[4], targetBasis[7], 0,
+        targetBasis[2], targetBasis[5], targetBasis[8], 0,
         0, 0, 0, 1)
       s.bodyTargetRotation.setFromRotationMatrix(s.bodyFrame)
       if (!s.bodyFrameReady) s.bodyRotation.copy(s.bodyTargetRotation)
@@ -1673,13 +1693,15 @@ export class ParticleEngine implements ParticleEngineContract {
       // A's body offsets use the tail's orthonormal birth frame: x follows
       // the backward axis, y / z span its cross-section. The world head is
       // unchanged; only the local fine-grain envelope rotates with the flow.
-      const localX = s.body.offsets[idx]
-      const localY = s.body.offsets[idx + 1]
-      const localZ = s.body.offsets[idx + 2]
+      const bodyIndex = s.coreAssignment[i]
+      const bodyOffset = bodyIndex * 3
+      const localX = s.body.offsets[bodyOffset]
+      const localY = s.body.offsets[bodyOffset + 1]
+      const localZ = s.body.offsets[bodyOffset + 2]
       const cometX = state.headX + basis[0] * localX + basis[3] * localY + basis[6] * localZ
       const cometY = state.headY + basis[1] * localX + basis[4] * localY + basis[7] * localZ
       const cometZ = state.headZ + basis[2] * localX + basis[5] * localY + basis[8] * localZ
-      const emit = s.body.alpha[i]
+      const emit = s.body.alpha[bodyIndex]
 
       // --- glyph target: the anchor plus its bounded internal drift -----------
       let tx = cometX
@@ -1763,8 +1785,8 @@ export class ParticleEngine implements ParticleEngineContract {
       const glyphR = (palette.core.r + (palette.accent.r - palette.core.r) * warm) * glyphLum
       const glyphG = (palette.core.g + (palette.accent.g - palette.core.g) * warm) * glyphLum
       const glyphB = (palette.core.b + (palette.accent.b - palette.core.b) * warm) * glyphLum
-      const sheath = Math.min(1, Math.max(0, (1 - s.body.tone[i]) * 1.5 + Math.max(0, -localY) * 0.35))
-      const cometLum = (0.78 + s.body.tone[i] * 0.22) * shimmer * palette.gain
+      const sheath = Math.min(1, Math.max(0, (1 - s.body.tone[bodyIndex]) * 1.5 + Math.max(0, -localY) * 0.35))
+      const cometLum = (0.78 + s.body.tone[bodyIndex] * 0.22) * shimmer * palette.gain
       let cr = ((this.light ? 0.52 - sheath * 0.12 : 1.08) * (1 - pointGlyphMix) * cometLum) + glyphR * pointGlyphMix
       let cg = ((this.light ? 0.32 - sheath * 0.14 : 0.86 - sheath * 0.43) * (1 - pointGlyphMix) * cometLum) + glyphG * pointGlyphMix
       let cb = ((this.light ? 0.10 - sheath * 0.05 : 0.52 - sheath * 0.47) * (1 - pointGlyphMix) * cometLum) + glyphB * pointGlyphMix
@@ -1781,11 +1803,10 @@ export class ParticleEngine implements ParticleEngineContract {
       colors[colorIndex] = cr > cap ? cap : cr
       colors[colorIndex + 1] = cg > cap ? cap : cg
       colors[colorIndex + 2] = cb > cap ? cap : cb
-      const flightScale = 1 + (1 - pointGlyphMix) * (this.light ? 0.18 : Math.max(0, s.body.spriteSize[i] * 0.34 - 1))
-      // Fine-grain transition stays on the same body points, with no event disc.
-      const spriteScale = flightScale
-      s.body.spriteScale[i] = spriteScale
-      colors[colorIndex + 3] = alpha / (spriteScale * spriteScale)
+      // A's authored grain diameter and alpha are independent. Dividing by size²
+      // would overexpose fine grains. Position, size and colour share one commit.
+      s.body.spriteScale[i] = s.body.spriteSize[bodyIndex] * (1 - pointGlyphMix) + pointGlyphMix
+      colors[colorIndex + 3] = alpha
     }
     this.renderedHead.set(state.headX, state.headY, state.headZ)
     this.hasIntegrated = true

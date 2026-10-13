@@ -9,16 +9,62 @@ function smooth(q: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
-/** Gravity accelerates until the final eight percent, then settles with C1 continuity. */
+/** C1 endpoints, visible early infall, peak speed at 2/3 rather than a final snap. */
 export function collapseProgress(q: number): number {
   const t = unit(q)
-  if (t === 1) return 1
-  if (t <= 0.92) return t ** 3.5
-  const u = (t - 0.92) / 0.08
-  const start = 0.92 ** 3.5
-  const tangent = 3.5 * 0.92 ** 2.5 * 0.08
-  return (2 * u ** 3 - 3 * u * u + 1) * start +
-    (u ** 3 - 2 * u * u + u) * tangent + (-2 * u ** 3 + 3 * u * u)
+  return t * t * t * (4 - 3 * t)
+}
+
+/** In-place heap sort: bounded O(N log N), no comparator closures or temporary arrays. */
+function sortRadii(order: Uint32Array, radii: Float64Array): void {
+  const n = order.length
+  for (let start = Math.floor(n / 2) - 1; start >= -n + 1; start--) {
+    let root: number, end: number
+    if (start >= 0) { root = start; end = n }
+    else {
+      end = n + start
+      const swap = order[0]; order[0] = order[end]; order[end] = swap
+      root = 0
+    }
+    const value = order[root]
+    while (root * 2 + 1 < end) {
+      let child = root * 2 + 1
+      if (child + 1 < end && radii[order[child + 1]] > radii[order[child]]) child++
+      if (radii[value] >= radii[order[child]]) break
+      order[root] = order[child]
+      root = child
+    }
+    order[root] = value
+  }
+}
+
+/**
+ * Phase-seam rank transport. Identity/source buffers stay untouched; each actual
+ * body point is used exactly once, with its tone, size and alpha. Rotation leaves
+ * the radius order invariant. Caller owns every buffer; work runs once per scatter.
+ * Returns the number of endpoint-constrained local reassemblies (target > source).
+ */
+export function assignCometCore(
+  assignment: Uint32Array, sourceOrder: Uint32Array, coreOrder: Uint32Array,
+  sourceRadii: Float64Array, coreRadii: Float64Array,
+  sources: ArrayLike<number>, offsets: ArrayLike<number>,
+  headX: number, headY: number, headZ: number
+): number {
+  for (let i = 0; i < assignment.length; i++) {
+    const k = i * 3
+    sourceOrder[i] = coreOrder[i] = i
+    sourceRadii[i] = Math.hypot(sources[k] - headX, sources[k + 1] - headY, sources[k + 2] - headZ)
+    coreRadii[i] = Math.hypot(offsets[k], offsets[k + 1], offsets[k + 2])
+  }
+  sortRadii(sourceOrder, sourceRadii)
+  sortRadii(coreOrder, coreRadii)
+  let reassemblies = 0
+  for (let rank = 0; rank < assignment.length; rank++) {
+    const source = sourceOrder[rank], core = coreOrder[rank]
+    assignment[source] = core
+    if (sourceRadii[source] < coreRadii[core]) reassemblies++
+  }
+  return reassemblies
 }
 
 /** Actual shape commitment, separate from the frozen choreography's legacy easing API. */
@@ -90,38 +136,53 @@ export function writeCometTransition(
     return
   }
 
-  // Outer glyph layers release first, with a small independent timing variation.
-  const delay = 0.18 * (1 - unit(sourceRadius / 6)) + salt * 0.018
+  // Outer glyph layers release first. Independent start times break the outline
+  // early instead of shrinking the whole mark by a common scale.
+  const delay = 0.12 * (1 - unit(sourceRadius / 6)) + salt * 0.06
   const c = collapseProgress((t - delay) / (1 - delay))
   const cx = coreX - headX
   const cy = coreY - headY
   const cz = coreZ - headZ
   const coreRadius = Math.hypot(cx, cy, cz)
-  const radius = sourceRadius + (coreRadius - sourceRadius) * c
-  const sourceInverse = sourceRadius > 1e-9 ? 1 / sourceRadius : 0
-  const coreInverse = coreRadius > 1e-9 ? 1 / coreRadius : 0
-  const sx = x * sourceInverse, sy = y * sourceInverse, sz = z * sourceInverse
-  // Preserve the original radial ray until the atom reaches the compact nucleus.
-  // Only that small volume resolves the final grain position: no orbital spin,
-  // shared pole, or large-radius angular sweep.
-  const compact = Math.max(coreRadius * 1.35, 0.28)
-  const resolveStart = Math.max(0, 1 - compact / Math.max(sourceRadius - coreRadius, compact))
-  const resolve = smooth((c - resolveStart) / (1 - resolveStart))
-  const dot = sx * cx * coreInverse + sy * cy * coreInverse + sz * cz * coreInverse
-  // Decorrelated local bend keeps antipodal endpoints away from a zero vector.
-  const ax = Math.sin(salt * 127.1 + 0.3)
-  const ay = Math.cos(salt * 269.5 + 0.7)
-  const az = Math.sin(salt * 183.3 + 1.1)
-  const projection = ax * sx + ay * sy + az * sz
-  const bend = Math.max(0, -dot) * resolve * (1 - resolve)
-  const dx = sx * (1 - resolve) + cx * coreInverse * resolve + (ax - sx * projection) * bend
-  const dy = sy * (1 - resolve) + cy * coreInverse * resolve + (ay - sy * projection) * bend
-  const dz = sz * (1 - resolve) + cz * coreInverse * resolve + (az - sz * projection) * bend
-  const length = Math.hypot(dx, dy, dz)
-  const scale = length > 1e-12 ? radius / length : 0
-  out[0] = headX + dx * scale
-  out[1] = headY + dy * scale
-  out[2] = headZ + dz * scale
+  if (sourceRadius < coreRadius) {
+    // Endpoint constraints forbid monotone radius here. Rank assignment confines
+    // these to the innermost population. Remain in place through 65% of coalescence,
+    // then reassemble inside the convex ball of radius coreRadius (no overshoot).
+    const local = smooth((t - 0.65) / 0.35)
+    out[0] = sourceX + (coreX - sourceX) * local
+    out[1] = sourceY + (coreY - sourceY) * local
+    out[2] = sourceZ + (coreZ - sourceZ) * local
+  } else {
+    const radius = sourceRadius + (coreRadius - sourceRadius) * c
+    const sourceInverse = sourceRadius > 0 ? 1 / sourceRadius : 0
+    const coreInverse = coreRadius > 0 ? 1 / coreRadius : 0
+    const sx = x * sourceInverse, sy = y * sourceInverse, sz = z * sourceInverse
+    const ex = cx * coreInverse, ey = cy * coreInverse, ez = cz * coreInverse
+    // No angular sweep outside the target neighbourhood. Give docking a broad
+    // time window inside it; quintic endpoints also stop its angular velocity.
+    const compact = Math.max(coreRadius * 1.35, 0.28)
+    const resolveStart = Math.max(0, 1 - compact / Math.max(sourceRadius - coreRadius, compact))
+    const resolve = smooth((c - resolveStart) / (1 - resolveStart))
+    const dot = Math.max(-1, Math.min(1, sx * ex + sy * ey + sz * ez))
+    let ux = ex - sx * dot, uy = ey - sy * dot, uz = ez - sz * dot
+    let tangentLength = Math.hypot(ux, uy, uz)
+    if (tangentLength < 1e-8) {
+      // At an exact antipode no unique arc exists. Pick a well-conditioned
+      // tangent using the least-aligned coordinate, never normalize a tiny lerp.
+      const ax = Math.abs(sx), ay = Math.abs(sy), az = Math.abs(sz)
+      const rx = ax <= ay && ax <= az ? 1 : 0
+      const ry = ay < ax && ay <= az ? 1 : 0
+      const rz = rx === 0 && ry === 0 ? 1 : 0
+      const projection = rx * sx + ry * sy + rz * sz
+      ux = rx - sx * projection; uy = ry - sy * projection; uz = rz - sz * projection
+      tangentLength = Math.hypot(ux, uy, uz)
+    }
+    const angle = coreRadius > 0 ? Math.acos(dot) * resolve : 0
+    const along = Math.cos(angle), across = Math.sin(angle) / Math.max(tangentLength, 1e-12)
+    out[0] = headX + radius * (sx * along + ux * across)
+    out[1] = headY + radius * (sy * along + uy * across)
+    out[2] = headZ + radius * (sz * along + uz * across)
+  }
   out[3] = sourceAlpha + (coreAlpha - sourceAlpha) * c
   out[4] = 1 - c
 }

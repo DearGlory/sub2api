@@ -2,6 +2,7 @@ import { BufferAttribute, BufferGeometry, PerspectiveCamera, Points, PointsMater
 import { describe, expect, it, vi } from 'vitest'
 import { createEngineScratch, fillEmissionTable, paletteFor, ParticleEngine } from '../ParticleEngine'
 import { cometVisualFixture } from './cometVisualFixture'
+import { writeCometFlowBasis } from '../cometFlow'
 import { cameraTravelAt, glyphStopZ } from '../spaceMotion'
 import { CAMERA_FOV, GATHER_SECONDS, HOLD_SECONDS, LEG_SECONDS, SCATTER_SECONDS, SUBJECT_Z } from '../constants'
 import type { BrandTargets, ChoreographyState, CometPhase } from '../types'
@@ -103,7 +104,8 @@ describe('world-space rendering', () => {
       expect(h.scratch.emittedTail.birthTime.every(t => t === -1)).toBe(true)
     }
     for (let i = 0; i < count; i++) {
-      expect(h.scratch.positions[i * 3 + 2]).toBeCloseTo(anchorZ + h.scratch.body.offsets[i * 3 + 2], 3)
+      const b = h.scratch.bodyBasis, k = h.scratch.coreAssignment[i] * 3, offsets = h.scratch.body.offsets
+      expect(h.scratch.positions[i * 3 + 2]).toBeCloseTo(anchorZ + b[2] * offsets[k] + b[5] * offsets[k + 1] + b[8] * offsets[k + 2], 3)
     }
   })
 
@@ -204,8 +206,12 @@ describe('world-space rendering', () => {
     h.state.headZ = glyphStopZ(1, timing)
     h.render()
     for (let i = 0; i < count; i++) {
-      expect(h.scratch.positions[i * 3]).toBeCloseTo(h.state.headX + h.scratch.body.offsets[i * 3], 5)
-      expect(h.scratch.positions[i * 3 + 2]).toBeCloseTo(h.state.headZ + h.scratch.body.offsets[i * 3 + 2], 5)
+      const b = h.scratch.bodyBasis, k = h.scratch.coreAssignment[i] * 3, offsets = h.scratch.body.offsets
+      for (let axis = 0; axis < 3; axis++) {
+        const head = axis === 0 ? h.state.headX : axis === 1 ? h.state.headY : h.state.headZ
+        expect(h.scratch.positions[i * 3 + axis]).toBeCloseTo(head +
+          b[axis] * offsets[k] + b[axis + 3] * offsets[k + 1] + b[axis + 6] * offsets[k + 2], 5)
+      }
     }
   })
 
@@ -252,9 +258,17 @@ describe('world-space rendering', () => {
     } }, h.scratch.probePoint)
     h.render(8, 0.1)
     expect(pool.active[0]).toBe(1)
-    expect(Math.hypot(pool.birthPosition[0] - h.state.headX, pool.birthPosition[1], pool.birthPosition[2] - h.state.headZ)).toBeLessThan(0.2)
+    const basis = new Float64Array(9)
+    writeCometFlowBasis(basis, h.scratch.tailTable)
+    const aperture = Reflect.get(pool, 'aperture') as Float32Array
+    for (let axis = 0; axis < 3; axis++) {
+      const head = axis === 0 ? h.state.headX : axis === 1 ? h.state.headY : h.state.headZ
+      expect(pool.birthPosition[axis]).toBeCloseTo(head + basis[axis] * aperture[0] +
+        basis[axis + 3] * aperture[1] + basis[axis + 6] * aperture[2], 5)
+    }
     expect(h.scratch.tailTable.vel[2]).toBeGreaterThan(0)
     expect(h.scratch.tailTable.axis[2]).toBeLessThan(0)
+    const acceleration = (Reflect.get(pool, 'birthAcceleration') as Float32Array).slice(0, 3)
     const birth = pool.birthPosition.slice(0, 3), velocity = pool.birthVelocity.slice(0, 3)
     h.engine.dollySeconds += 0.1
     h.state.phase = 'gather'
@@ -262,10 +276,10 @@ describe('world-space rendering', () => {
     h.render(8.1, 0.1)
     for (let j = 0; j < 3; j++) {
       expect(pool.birthPosition[j]).toBe(birth[j])
-      expect(pool.positions[j]).toBeCloseTo(birth[j] + velocity[j] * pool.age[0], 5)
+      expect(pool.positions[j]).toBeCloseTo(birth[j] + velocity[j] * pool.age[0] + 0.5 * acceleration[j] * pool.age[0] ** 2, 5)
     }
     const world = new Vector3().fromArray(pool.positions).applyMatrix4(h.tailPoints.matrixWorld)
-    expect(world.z).toBeCloseTo(SUBJECT_Z + birth[2] + velocity[2] * pool.age[0], 5)
+    expect(world.z).toBeCloseTo(SUBJECT_Z + birth[2] + velocity[2] * pool.age[0] + 0.5 * acceleration[2] * pool.age[0] ** 2, 5)
     // Even an erroneously enabled caller cannot emit from a stationary nozzle.
     h.scratch.tailTable.vel.fill(0)
     const times = pool.birthTime.slice()

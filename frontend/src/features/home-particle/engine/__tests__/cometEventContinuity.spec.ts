@@ -10,6 +10,23 @@ function sample(q: number, angle: number, salt: number, phase: 'gather' | 'scatt
 }
 
 describe('event particle continuity', () => {
+  it('keeps near-zero sources local until late reassembly and bounds antipodal dense steps', () => {
+    for (const source of [0, 1e-12, 0.05, 5]) {
+      let previous = new Float64Array([source, 0, 0])
+      let maxStep = 0
+      for (let j = 0; j <= 1000; j++) {
+        writeCometTransition(out, 'scatter', j / 1000, source, 0, 0,
+          0, 0, 0, -0.8, 0, 0, 0, 0, 0, 0.3, 1, 0.2)
+        expect(out.every(Number.isFinite)).toBe(true)
+        const radius = Math.hypot(out[0], out[1], out[2])
+        if (source < 0.8 && j <= 650) expect(radius).toBeLessThanOrEqual(source + 1e-10)
+        if (j) maxStep = Math.max(maxStep, Math.hypot(out[0] - previous[0], out[1] - previous[1], out[2] - previous[2]))
+        previous = out.slice(0, 3)
+      }
+      expect(maxStep).toBeLessThan(0.16)
+      expect(Array.from(out.slice(0, 3))).toEqual([-0.8, 0, 0])
+    }
+  })
   it('retains mid-collapse strands and cools continuously into the exact core', () => {
     for (const phase of ['gather', 'scatter'] as const) {
       for (const salt of [0, 0.13, 0.5, 0.93, 1]) {
@@ -24,19 +41,20 @@ describe('event particle continuity', () => {
         }
       }
     }
-    expect(sample(0.1, 0.7, 0.5, 'gather')[3]).toBeGreaterThan(0.35)
-    expect(sample(0.4, 0.7, 0.5, 'gather')[3]).toBeGreaterThan(0.35)
-    expect(sample(0.8, 0.7, 0.5)[3]).toBeGreaterThan(0.45)
-    expect(sample(0.99, 0.7, 0.5)[3]).toBeLessThan(0.03)
+    expect(sample(0, 0.7, 0.5, 'gather')[3]).toBe(0.025)
+    expect(sample(0.4, 0.7, 0.5, 'gather')[3]).toBeGreaterThan(sample(0.1, 0.7, 0.5, 'gather')[3])
+    expect(sample(1, 0.7, 0.5, 'gather')[3]).toBe(1)
+    expect(sample(1, 0.7, 0.5)[3]).toBe(0.025)
   })
 
   it('keeps each radius monotonic and angular motion forward until within the compact docking region', () => {
-    let minAngularStep = Infinity, maxStep = 0
+    let minAngularStep = Infinity, maxStep = 0, maxStepChange = 0
     for (let i = 0; i < 64; i++) {
       const angle = i * 2.399963, salt = i / 64
       let p = sample(0, angle, salt).slice()
       let previousRadius = Math.hypot(p[0], p[1], p[2])
       const coreRadius = Math.hypot(0.8, salt * 0.2)
+      let lastDX = 0, lastDY = 0, lastDZ = 0
       for (let j = 1; j <= 1000; j++) {
         const next = sample(j / 1000, angle, salt)
         const radius = Math.hypot(next[0], next[1], next[2])
@@ -47,14 +65,18 @@ describe('event particle continuity', () => {
           minAngularStep = Math.min(minAngularStep, angularStep)
           expect(angularStep).toBeGreaterThanOrEqual(-1e-10)
         }
-        const step = Math.hypot(next[0] - p[0], next[1] - p[1], next[2] - p[2])
+        const dx = next[0] - p[0], dy = next[1] - p[1], dz = next[2] - p[2]
+        maxStepChange = Math.max(maxStepChange, Math.hypot(dx - lastDX, dy - lastDY, dz - lastDZ))
+        lastDX = dx; lastDY = dy; lastDZ = dz
+        const step = Math.hypot(dx, dy, dz)
         maxStep = Math.max(maxStep, step)
         expect(step).toBeLessThan(0.16)
         p = next.slice()
         previousRadius = radius
       }
     }
-    console.info('dense per-particle orbit evidence', { minAngularStep, maxStep, samples: 64000 })
+    expect(maxStepChange).toBeLessThan(0.005)
+    console.info('dense per-particle continuity evidence', { minAngularStep, maxStep, maxStepChange, samples: 64000 })
   })
 
   it('does not pop across source direction branches or at either endpoint', () => {
