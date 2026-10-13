@@ -78,6 +78,26 @@ html[data-universe-theme='cosmos'] :is(
   background-color: var(--universe-neutral-fill, var(--universe-surface));
 }
 
+/* Extra neutral panels/tooltips, not compact brand badges or status rings. */
+html[data-universe-theme='cosmos'] :is(
+  [class^='bg-slate-'], [class*=' bg-slate-'],
+  [class^='bg-zinc-'], [class*=' bg-zinc-'],
+  [class^='bg-stone-'], [class*=' bg-stone-']
+):not([class*='dark:bg-']):not(:is(
+  .inline-flex.items-center, [class*='ring-slate-600/20'],
+  [class~='h-8'][class~='w-8'], [class~='h-10'][class~='w-10']
+)),
+html[data-universe-theme='cosmos'] :is(
+  [class^='dark:bg-slate-'], [class*=' dark:bg-slate-'],
+  [class^='dark:bg-zinc-'], [class*=' dark:bg-zinc-'],
+  [class^='dark:bg-stone-'], [class*=' dark:bg-stone-']
+):not(:is(
+  .inline-flex.items-center, [class*='ring-slate-600/20'],
+  [class~='h-8'][class~='w-8'], [class~='h-10'][class~='w-10']
+)) {
+  background-color: var(--universe-neutral-fill, var(--universe-surface));
+}
+
 /* Unframed structural wrappers must not become a second 80% sheet. Each element
  * gets its own fill token so a transparent wrapper cannot affect a child panel.
  */
@@ -140,7 +160,13 @@ html[data-universe-theme='cosmos'] :is(
 html[data-universe-theme='cosmos'] :is(
   [class~='hover:bg-white'], [class^='hover:bg-gray-'], [class*=' hover:bg-gray-'],
   [class^='hover:bg-dark-'], [class*=' hover:bg-dark-'],
+  [class^='hover:bg-slate-'], [class*=' hover:bg-slate-'],
+  [class^='hover:bg-zinc-'], [class*=' hover:bg-zinc-'],
+  [class^='hover:bg-stone-'], [class*=' hover:bg-stone-'],
   [class^='dark:hover:bg-gray-'], [class*=' dark:hover:bg-gray-'],
+  [class^='dark:hover:bg-slate-'], [class*=' dark:hover:bg-slate-'],
+  [class^='dark:hover:bg-zinc-'], [class*=' dark:hover:bg-zinc-'],
+  [class^='dark:hover:bg-stone-'], [class*=' dark:hover:bg-stone-'],
   [class^='dark:hover:bg-dark-'], [class*=' dark:hover:bg-dark-'],
   .btn-secondary, .btn-ghost, .dropdown-item, .sidebar-link:not(.sidebar-link-active),
   .table tbody tr

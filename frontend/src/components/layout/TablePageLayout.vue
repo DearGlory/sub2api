@@ -83,6 +83,16 @@ onUnmounted(() => {
   /* 保持默认 table-row-group 显示，不使用 block */
 }
 
+/* Beat scoped @apply fills without adding a surface to the mobile layout. */
+:global(html[data-universe-theme='cosmos'] .table-page-layout:not(.mobile-mode) .table-scroll-container) {
+  background-color: var(--universe-surface);
+  border-color: var(--universe-border);
+}
+
+:global(html[data-universe-theme='cosmos'] .table-page-layout .table-scroll-container thead) {
+  background-color: transparent;
+}
+
 .table-scroll-container :deep(th) {
   @apply px-5 py-4 text-left text-sm font-medium text-gray-600 dark:text-dark-300 border-b border-gray-200 dark:border-dark-700;
 }
