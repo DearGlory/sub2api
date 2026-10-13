@@ -73,8 +73,9 @@ try {
   data.spatial = verdict(data.checks)
   if (data.checks.length !== 42) throw Error('instrument-invalid: spatial denominator changed: ' + data.checks.length)
   const headCheck = data.checks.find(c => c.id === 'head-final-geometry-agreement')
-  headCheck.detail.source = 'actual body offsets transformed by actual scratch.bodyBasis, then actual matrix; original tolerance unchanged'
-  data.additionalChecks = [{ id: 'future-head-camera-birth-independence', ...data.counterfactual }]
+  headCheck.detail.source = 'actual body offsets[coreAssignment[i]] (identity fallback for d85) transformed by scratch.bodyBasis, then actual matrix; original tolerance unchanged'
+  data.shapeProof = await ev('__SPACE_PROBE.shapeProof()')
+  data.additionalChecks = [{ id: 'future-head-camera-birth-independence', ...data.counterfactual }, { id: 'flow-basis-aperture-3D', ...data.shapeProof }]
   data.raw = await rawEvidence(out, 'space-observations.json', { meta: data.meta, gpu: data.gpu, samples: data.samples, pairs: data.pairs, arrivals: data.arrivals })
   data.sampleCount = data.samples.length
   delete data.samples; delete data.pairs; delete data.arrivals; delete data.meta; delete data.gpu
@@ -85,7 +86,7 @@ try {
   const expected = [...fixedIds, ...Array.from({ length: 4 }, (_, i) => first + i).flatMap(leg => ['hold-world-freeze-', 'hold-perspective-shrink-', 'hold-three-seconds-', 'glyph-final-geometry-', 'paired-PNG-'].map(id => id + leg))]
   for (const id of expected) if (!data.checks.some(c => c.id === id)) data.checks.push({ id, status: 'instrument-invalid', detail: 'capture aborted before check; see error' })
   data.spatial = verdict(data.checks)
-  data.additionalChecks = [{ id: 'future-head-camera-birth-independence', status: 'instrument-invalid', reason: data.error }]
+  data.additionalChecks = [{ id: 'future-head-camera-birth-independence', status: 'instrument-invalid', reason: data.error }, { id: 'flow-basis-aperture-3D', status: 'instrument-invalid', reason: data.error }]
   if (recorder) data.sourceBinding = await recorder.finish().catch(e => ({ status: 'instrument-invalid', error: String(e) }))
 } finally {
   if (cdp) try { await cdp.send('Browser.close') } catch {}

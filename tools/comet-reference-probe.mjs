@@ -4,14 +4,16 @@ import { rawEvidence, boundedWrite, sourceRecorder, verdict } from './comet-refe
 import net from 'node:net'
 import { execFileSync } from 'node:child_process'
 import { CDP, connect, launchChrome } from './tail-probe-lib/cdp.mjs'
-import { installSpaceProbe } from './space-pursuit-lib/page.mjs'
+import { referenceSpaceInstallerSource } from './comet-reference-space-page.mjs'
 import { installMaterialProbe } from './comet-material-page.mjs'
 import { installReferenceProbe } from './comet-reference-page.mjs'
 import { referenceEvidence, measureImage, comparison, hash } from './comet-reference-image.mjs'
 import { decodePng } from './tail-probe-lib/png.mjs'
-import { LIMITS, deltaPixels, visibility, tailMetrics, motionCheck, lifecycle, scatterMetrics, discCheck } from './comet-reference-checks.mjs'
+import { LIMITS, deltaPixels, visibility, tailMetrics, motionCheck, lifecycle, scatterMetrics, resourceBudget, discCheck } from './comet-reference-checks.mjs'
 
-const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, s) => v.startsWith('--') ? [...a, [v.slice(2), s[i + 1]]] : a, []))
+const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, s) => v.startsWith('--') ? [...a, v.includes('=') ? [v.slice(2, v.indexOf('=')), v.slice(v.indexOf('=') + 1)] : [v.slice(2), s[i + 1]]] : a, []))
+const legOffset = Number(args['leg-offset'] ?? 0)
+if (![0, 1].includes(legOffset)) throw Error('--leg-offset must be 0 or 1')
 for (const k of ['url', 'repo', 'out', 'port', 'w', 'h', 'theme', 'reference']) if (!args[k]) throw Error('required --' + k)
 if (!['light', 'dark'].includes(args.theme)) throw Error('--theme must be light or dark')
 const out = path.resolve(args.out), port = Number(args.port), width = Number(args.w), height = Number(args.h)
@@ -30,7 +32,7 @@ if (signature.subarray(0, 4).toString('latin1') === 'RIFF') {
   referenceConversion = { tool: ffmpeg, output: decodedReference }
 }
 const ref = await referenceEvidence(args.reference, path.join(out, 'reference'), decodedReference)
-const data = { schema: 1, started: new Date().toISOString(), url: args.url, out, port, width, height, theme: args.theme,
+const data = { schema: 1, started: new Date().toISOString(), url: args.url, out, port, width, height, theme: args.theme, legOffset,
   reference: ref, referenceConversion, limits: LIMITS, baseline: 'd85ab0fb5c04c1caded90d6305c306c0c07cf999', sourceHashes: [], frames: [], destructive: [], checks: [], visualReview: [],
   inheritedFreeze: { status: 'not-rerun', note: 'Run comet-reference-space-probe.mjs on the same stable target for the original 42 world/camera/three-second checks. The short visual capture does not infer their verdict.' } }
 await save('initial.json', data)
@@ -40,7 +42,13 @@ const shot = async (name, expression = null) => { if (expression) await ev(expre
 const isolate = ids => ev(`__MATERIAL_PROBE.isolate(${JSON.stringify(ids)})`)
 const restore = '__MATERIAL_PROBE.restore()'
 const raw = row => rawEvidence(out, `${row.label}.json`, row)
-const advance = async t => { await ev(`__REFERENCE_PROBE.advance(${t})`); return ev('__REFERENCE_PROBE.sample(false)') }
+const budgetSamples = []
+const sample = async (audit = false) => {
+  const row = await ev(`__REFERENCE_PROBE.sample(${audit})`)
+  budgetSamples.push({ t: row.t, phase: row.phase, leg: row.leg, drawCalls: row.drawCalls, geometryBytes: row.geometryBytes })
+  return row
+}
+const advance = async t => { await ev(`__REFERENCE_PROBE.advance(${t})`); return sample() }
 const isolatedShot = async (name, ids) => { await isolate(ids); try { return await shot(name) } finally { await ev(restore) } }
 const pixelDelta = async (a, b) => deltaPixels(await fs.readFile(path.join(out, a.file)), await fs.readFile(path.join(out, b.file)))
 try {
@@ -62,18 +70,23 @@ try {
   if (!three) throw Error('instrument-invalid: missing served Three import')
   await ev(`import(${JSON.stringify(three)}).then(m=>{window.__REFERENCE_THREE=m;return true})`)
   data.before = await shot('page-original.png')
-  data.space = await ev('(' + installSpaceProbe.toString() + ')()'); await ev('__SPACE_PROBE.stop()')
+  data.space = await ev(referenceSpaceInstallerSource()); await ev('__SPACE_PROBE.stop()')
   data.material = await ev('(' + installMaterialProbe.toString() + ')()')
   data.probe = await ev('(' + installReferenceProbe.toString() + ')()')
   const inventory = await ev('__MATERIAL_PROBE.inventory()')
   data.inventory = inventory
   const meshCandidates = inventory.filter(o => o.isMesh)
   const isolateAll = async name => { await isolate([inventory.find(o => o.body).uuid, inventory.find(o => o.tail).uuid, ...meshCandidates.map(o => o.uuid)]); try { return await shot(name) } finally { await ev(restore) } }
-  const first = Math.floor(data.material.pose.t / 12) + 1
+  const first = Math.floor(data.material.pose.t / 12) + 1 + legOffset
+  data.leg = { offset: legOffset, index: first, raw: [], checks: [] }
   const start = first * 12 + 1.0
   await ev(`__SPACE_PROBE.advance(${start})`)
+  const flightStart = await sample()
   await ev('__REFERENCE_PROBE.advance(' + (first * 12 + 6.45) + ')')
-  const travel = await ev('__REFERENCE_PROBE.sample(true)')
+  const travel = await sample(true)
+  data.leg.flight = { start: flightStart.head, end: travel.head, dx: travel.head[0] - flightStart.head[0], dz: travel.head[2] - flightStart.head[2] }
+  data.leg.flight.xSign = Math.sign(data.leg.flight.dx)
+  data.leg.raw.push(await raw({ label: 'flight-start', ...flightStart }))
   data.frames.push({ label: 'travel-before-gather', sample: await raw({ label: 'travel-before-gather', ...travel }), wholePage: await shot('travel-original-page.png'), blackScene: await isolateAll('travel-isolated-all.png') })
   data.frames.at(-1).bodyOnly = await (async () => { await isolate([inventory.find(o => o.body).uuid]); try { return await shot('travel-body-only.png') } finally { await ev(restore) } })()
   data.frames.at(-1).tailOnly = await (async () => { await isolate([inventory.find(o => o.tail).uuid]); try { return await shot('travel-tail-only.png') } finally { await ev(restore) } })()
@@ -95,7 +108,7 @@ try {
   for (const [label, q] of [['gather-early', .05], ['gather-middle', .4], ['gather-late', .95]]) {
     const r = await advance(warmStart + q * 1.4)
     const screenshot = await isolateAll(`${label}.png`)
-    gatherFrames.push({ label, sample: await raw({ label, ...r }), screenshot })
+    gatherFrames.push({ label, phase: r.phase, leg: r.leg, sample: await raw({ label, ...r }), screenshot })
   }
   data.frames.push(...gatherFrames)
   const hold = await advance(first * 12 + 8.5)
@@ -146,11 +159,11 @@ try {
     { id: 'tail projection/depth', status: data.frames.find(x => x.label === 'travel-before-gather').tailMetrics.depth.status, detail: data.frames.find(x => x.label === 'travel-before-gather').tailMetrics },
     { id: 'atomized body visual form', status: 'skip', reason: 'Review required: screenshots show real body points at gather/scatter phases, but no machine score asserts fine-particle breakup versus chunky fragments.' },
     { id: 'radial collapse measured', status: data.scatter.status, detail: data.scatter },
-    { id: 'birth lifecycle source-to-outflow', status: data.lifecycle.birthCount ? 'measured-not-verdict' : 'skip', detail: data.lifecycle },
+    { id: 'birth lifecycle source-to-outflow', status: 'skip', reason: 'Small identity sample and retirement observations do not certify the full tail lifetime; raw measurements retained.', detail: data.lifecycle },
     { id: 'advecting jet visual strength', status: data.lifecycle.convection.status, reason: data.lifecycle.convection.reason },
     { id: 'disc/event geometry', status: data.eventContributions.some(r => r.check.status === 'fail') ? 'fail' : eventMeshes.length ? 'pass' : meshCandidates.length ? 'skip' : 'pass', reason: 'compiled radial strata event shader identified independently; per-event isolated pixels versus empty frame', detail: data.eventContributions },
     { id: 'frozen camera and 3-second path', status: 'skip', reason: data.inheritedFreeze.note },
-    { id: 'draw/geometry resource budget', status: data.frames.at(-1).sample ? 'skip' : 'instrument-invalid', reason: 'Read live draw calls and unique scene geometry bytes from JSON; short isolated probe does not establish production tier/steady-state budget.' },
+    { id: 'draw/geometry resource budget', ...resourceBudget(budgetSamples) },
     { id: 'FPS 55 target', status: 'skip', reason: 'FPS intentionally not measured during this short geometry probe.' },
     { id: 'human visual comparison', status: 'skip', reason: 'Use unaltered screenshot and reference crop side by side; no SSIM/similarity threshold or 100% claim.' }
   ]
@@ -161,6 +174,11 @@ try {
     { item: 'Radial collapse visibly starts outside, accelerates inward, and leaves center quiet without a disk, ring, or added bright surface', status: 'review-required', frames: ['scatter-0.png','scatter-0.4.png','scatter-0.8.png','scatter-1.png'] }
   ]
   data.checks.push(...data.destructive.map(c => ({ id: 'selftest-' + c.label, status: c.prerequisite.status === 'pass' && c.check.status === 'fail' ? 'pass' : 'instrument-invalid', prerequisite: c.prerequisite, rejection: c.check })))
+  if (data.checks.length !== 16) throw Error('instrument-invalid: core denominator changed')
+  data.leg.raw.push(...data.frames.map(f => ({ label: f.label, ...f.sample })))
+  data.leg.coverage = { status: flightStart.phase === 'travel' && travel.phase === 'travel' && flightStart.leg === first && travel.leg === first && Math.abs(data.leg.flight.dx) > LIMITS.numericalEpsilon && data.leg.flight.dz > 0 && gatherFrames.every(f => f.phase === 'gather' && f.leg === first) && hold.phase === 'hold' && hold.leg === first && scatterRows.every(r => r.phase === 'scatter' && r.leg === first) ? 'pass' : 'instrument-invalid', criterion: 'selected leg flight + three gather frames + hold + six scatter frames; run both offsets and compare actual xSign' }
+  if (data.leg.coverage.status !== 'pass') throw Error('instrument-invalid: selected leg coverage incomplete')
+  data.leg.checks = data.checks
   Object.assign(data, verdict(data.checks)); process.exitCode = data.exitCode
   data.inventory = await raw({ label: 'inventory', inventory: data.inventory })
   data.material = await raw({ label: 'material', ...data.material })

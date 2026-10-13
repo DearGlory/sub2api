@@ -72,6 +72,11 @@ export function scatterMetrics(rows) {
   const early=mean(intervals.slice(0,2).map(i=>i.meanInwardSpeed)),late=mean(intervals.slice(-2).map(i=>i.meanInwardSpeed))
   return { status: headDrift>LIMITS.numericalEpsilon || intervals.some(i=>i.inwardFraction<.5) || !(late>early) ? 'fail':'pass',headDrift,centers,intervals,earlySpeed:early,lateSpeed:late,criterion:'head stationary within inherited 1e-5 world tolerance; majority moves inward in every interval; average later half radial speed strictly exceeds earlier half. Visual disc absence separate; this is not a full motion-contract pass.' }
 }
+export function resourceBudget(rows) {
+  if (!rows.length || rows.some(r => !Number.isFinite(r.drawCalls) || !Number.isFinite(r.geometryBytes) || r.drawCalls < 0 || r.geometryBytes < 0)) return { status: 'instrument-invalid', reason: 'missing full-scene drawCalls/geometryBytes samples' }
+  const maxDrawCalls = Math.max(...rows.map(r => r.drawCalls)), maxGeometryBytes = Math.max(...rows.map(r => r.geometryBytes))
+  return { status: maxDrawCalls <= LIMITS.drawCalls && maxGeometryBytes <= LIMITS.geometryBytes ? 'pass' : 'fail', maxDrawCalls, maxGeometryBytes, samples: rows, limits: { drawCalls: LIMITS.drawCalls, geometryBytes: LIMITS.geometryBytes }, criterion: 'actual full-scene samples before isolation/GPU audit; short capture budget only, not steady-state FPS' }
+}
 export function discCheck(mesh, delta) {
   if (!mesh) return { status: 'instrument-invalid', reason: 'missing actual mesh inventory' }
   return { status: delta?.changed>0 ? 'fail' : delta ? 'pass':'instrument-invalid', uuid:mesh.uuid,pixels:delta,criterion:'candidate disc was independently identified / injected; actual compositor contribution must be zero. Unknown mesh appearance requires manual review.' }

@@ -30,6 +30,12 @@ export function verdict(checks) {
 
 export const REQUIRED_PRODUCTS = ['ParticleEngine', 'emittedTail', 'cometVisual', 'cometTransition', 'choreography', 'spaceMotion', 'spaceMotionContract']
 const enginePrefix = '/src/features/home-particle/engine/'
+export function cometFlowBinding(loaded) {
+  const dependencies = loaded.filter(r => r.sourceImports?.includes('cometFlow')).map(r => ({ name: r.name, runtimeImport: r.runtimeImports?.includes('cometFlow') === true }))
+  const required = [...REQUIRED_PRODUCTS, ...(dependencies.length ? ['cometFlow'] : [])]
+  const missing = required.filter(n => !loaded.some(r => r.name === n))
+  return { required, missing, dependencies, valid: !missing.length && dependencies.every(d => d.runtimeImport) }
+}
 // Captures the browser's actual responses, not a parallel fetch mistaken for loaded code.
 export function sourceRecorder({ cdp, ws, out, repo }) {
   const epochs = [], responses = [], pending = new Map(), jobs = [], errors = []
@@ -54,7 +60,8 @@ export function sourceRecorder({ cdp, ws, out, repo }) {
       if (typeof content !== 'string') throw Error('missing matching sourcesContent: ' + name)
       const file = path.join(repo, 'frontend/src/features/home-particle/engine', name)
       const actual = await fs.readFile(file, 'utf8')
-      Object.assign(row, { file, raw, name: name.slice(0, -3), mapSource: map.sources[index], sourceSha256: hash(content), repoSha256: hash(actual), matches: content === actual })
+      const imports = text => [...text.matchAll(/\bimport\s+(?!type\b)[^;\n]*?\bfrom\s*["']([^"']+)["']/g)].map(m => m[1].split('?')[0].split('/').at(-1).replace(/\.ts$/, ''))
+      Object.assign(row, { file, raw, name: name.slice(0, -3), mapSource: map.sources[index], sourceImports: imports(content), runtimeImports: imports(body), sourceSha256: hash(content), repoSha256: hash(actual), matches: content === actual })
     } catch (error) { row.error = String(error); errors.push({ url: row.url, error: row.error }) }
   }
   ws.addEventListener('message', event => {
@@ -74,10 +81,11 @@ export function sourceRecorder({ cdp, ws, out, repo }) {
     async finish() {
       await Promise.all(jobs)
       for (const row of responses) if (row.file) row.repoUnchanged = hash(await fs.readFile(row.file)) === row.repoSha256
-      const loaded = responses.filter(r => r.loaderId === frozenEpoch), missing = REQUIRED_PRODUCTS.filter(n => !loaded.some(r => r.name === n))
+      const loaded = responses.filter(r => r.loaderId === frozenEpoch), flowBinding = cometFlowBinding(loaded)
+      const { required, missing } = flowBinding
       const stable = !!frozenEpoch && epochs.at(-1)?.loaderId === frozenEpoch && epochs.filter(e => e.loaderId === frozenEpoch).length === 1
-      const valid = stable && !pending.size && !errors.length && !missing.length && loaded.length >= REQUIRED_PRODUCTS.length && loaded.every(r => r.status === 200 && (r.erasedTypesOnly || r.matches && r.repoUnchanged) && !r.error)
-      return { status: valid ? 'pass' : 'instrument-invalid', repo, frozenEpoch, epochs, required: REQUIRED_PRODUCTS, missing, pending: pending.size, errors, stable, responses }
+      const valid = stable && !pending.size && !errors.length && flowBinding.valid && loaded.length >= required.length && loaded.every(r => r.status === 200 && (r.erasedTypesOnly || r.matches && r.repoUnchanged) && !r.error)
+      return { status: valid ? 'pass' : 'instrument-invalid', repo, frozenEpoch, epochs, required, missing, flowBinding, pending: pending.size, errors, stable, responses }
     }
   }
 }
