@@ -521,7 +521,7 @@ export function createEngineScratch(count: number, tailSampleCount: number): Eng
   }
 
   return {
-    emittedTail: new EmittedTail(Math.max(1, Math.floor(count * 1.35))),
+    emittedTail: new EmittedTail(Math.max(1, Math.floor(count * 2.7))),
     body: createCometBody(count),
     bodyBasis: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
     targetBasis: new Float64Array(9),
@@ -1060,14 +1060,23 @@ export class ParticleEngine implements ParticleEngineContract {
     this.tailMaterial = this.material.clone()
     // The causal birth pool is the visible fine-grain tail; colour belongs to it.
     this.tailMaterial.opacity = this.palette.opacity
-    this.tailMaterial.size = this.palette.pointSize * (this.light ? 0.8 : 0.65)
-    // Only the body uses per-point coverage; the tail keeps its own material.
+    this.tailMaterial.size = this.palette.pointSize * (this.light ? 0.95 : 1.25)
+    // Only the body uses per-point coverage; its glyph sprite remains unchanged.
     this.material.onBeforeCompile = shader => {
-      shader.vertexShader = `attribute float cometScale;\n${shader.vertexShader}`.replace(
-        'gl_PointSize = size;', 'gl_PointSize = size * cometScale;'
+      shader.vertexShader = `attribute float cometScale;\nvarying float vCometGrain;\n${shader.vertexShader}`.replace(
+        'gl_PointSize = size;', 'gl_PointSize = size * cometScale; vCometGrain = min(1.0, abs(cometScale - 1.0) * 8.0);'
+      )
+      shader.fragmentShader = `varying float vCometGrain;\n${shader.fragmentShader}`.replace(
+        '#include <map_particle_fragment>',
+        '#include <map_particle_fragment>\ndiffuseColor.a *= mix(1.0, 1.0 - smoothstep(0.12, 0.48, length(gl_PointCoord - 0.5)), vCometGrain);'
       )
     }
-    this.material.customProgramCacheKey = () => 'comet-body-coverage-v1'
+    this.material.customProgramCacheKey = () => 'comet-body-coverage-v2'
+    this.tailMaterial.onBeforeCompile = shader => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <map_particle_fragment>',
+        '#include <map_particle_fragment>\ndiffuseColor.a *= 1.0 - smoothstep(0.12, 0.48, length(gl_PointCoord - 0.5));')
+    }
+    this.tailMaterial.customProgramCacheKey = () => 'comet-tail-grain-v1'
     this.tailPoints = new Points(this.tailGeometry, this.tailMaterial)
     this.tailPoints.name = 'causal-emitted-tail'
     this.tailPoints.frustumCulled = false
@@ -1199,7 +1208,7 @@ export class ParticleEngine implements ParticleEngineContract {
     this.material.opacity = this.palette.opacity
     this.material.needsUpdate = true
     this.tailMaterial.blending = this.palette.blending
-    this.tailMaterial.size = this.palette.pointSize * (this.light ? 0.8 : 0.65)
+    this.tailMaterial.size = this.palette.pointSize * (this.light ? 0.95 : 1.25)
     this.tailMaterial.opacity = this.palette.opacity
     this.tailMaterial.needsUpdate = true
     this.renderer.setClearColor(this.palette.background, isLightTheme ? 1 : 0)
