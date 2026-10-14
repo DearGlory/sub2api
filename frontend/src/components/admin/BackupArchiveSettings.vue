@@ -18,16 +18,16 @@
               @click="datesOpen = !datesOpen" @keydown.down.prevent="openDatesWithKeyboard"
             >
               <span class="flex min-w-0 flex-wrap items-center gap-1">
-                <span v-if="!selectedLabels.length" class="text-gray-400">{{ t('admin.backup.archive.selectDates') }}</span>
+                <span v-if="!selectedLabels.length" class="text-gray-500">{{ t('admin.backup.archive.selectDates') }}</span>
                 <span v-for="label in selectedLabels.slice(0, 3)" :key="label" class="rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">{{ label }}</span>
                 <span v-if="selectedLabels.length > 3" class="text-xs">+{{ selectedLabels.length - 3 }}</span>
               </span>
               <Icon name="chevronDown" size="sm" class="shrink-0" />
             </button>
-            <div v-if="datesOpen" id="backup-archive-options" class="absolute left-0 top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-dark-600 dark:bg-dark-800">
+            <div v-if="datesOpen" id="backup-archive-options" class="absolute left-0 top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-2 shadow-pop dark:border-dark-600 dark:bg-dark-800">
               <div class="mb-1 flex items-center justify-between gap-2 px-1 text-xs text-gray-500 dark:text-gray-400">
                 <span>{{ t('admin.backup.archive.selectedDates', { count: selectedLabels.length }) }}</span>
-                <button type="button" class="min-h-9 px-2 text-primary-600 dark:text-primary-400" @click="closeDates(true)">{{ t('admin.backup.archive.done') }}</button>
+                <button type="button" class="min-h-9 px-2 text-primary-700 dark:text-primary-400" @click="closeDates(true)">{{ t('admin.backup.archive.done') }}</button>
               </div>
               <div class="grid grid-cols-4 gap-1" role="group" :aria-label="t('admin.backup.archive.dates')">
                 <label v-for="day in 31" :key="day" class="flex min-h-10 cursor-pointer items-center gap-1.5 rounded px-1 text-xs hover:bg-gray-100 dark:hover:bg-dark-700">

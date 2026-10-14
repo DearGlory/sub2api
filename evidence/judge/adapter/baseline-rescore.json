@@ -1,0 +1,1657 @@
+{
+  "input": "E:\\Global-session\\xiao-20261013-010435\\judge\\evidence\\judge\\baseline-final\\result.json",
+  "observationsSHA256": "b079ce853811aeeaf2b5acd6a655f53e50fd578a6406f69cfcc29c6c51c6c2aa",
+  "status": "fail",
+  "checks": [
+    {
+      "id": "baseline-viewport-theme",
+      "status": "pass",
+      "detail": {
+        "width": 1440,
+        "height": 900,
+        "theme": "dark"
+      }
+    },
+    {
+      "id": "travel-coverage",
+      "status": "pass",
+      "detail": [
+        {
+          "leg": 1,
+          "p": 0.44999999999997703
+        },
+        {
+          "leg": 1,
+          "p": 0.6999999999999728
+        },
+        {
+          "leg": 2,
+          "p": 0.45000000000009127
+        },
+        {
+          "leg": 2,
+          "p": 0.7000000000001045
+        }
+      ]
+    },
+    {
+      "id": "travel-leg1-p0.45-mesh-normals-triangles",
+      "status": "fail",
+      "detail": {
+        "meshes": []
+      }
+    },
+    {
+      "id": "travel-leg1-p0.45-volume-draw",
+      "status": "fail",
+      "detail": {
+        "candidates": []
+      }
+    },
+    {
+      "id": "travel-leg1-p0.45-same-phase-camera",
+      "status": "pass",
+      "detail": {
+        "head": [
+          0.14709987966317128,
+          0,
+          10.40956678700325
+        ],
+        "baselineHead": [
+          0.14709987966317128,
+          0,
+          10.40956678700325
+        ]
+      }
+    },
+    {
+      "id": "travel-leg1-p0.45-size",
+      "status": "fail",
+      "detail": {
+        "ratio": 1,
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 4264,
+          "mean": 27.394058442776807,
+          "p95": 70.32679999999999,
+          "p10": 9.6654,
+          "whiteFraction": 0,
+          "bbox": [
+            686,
+            411,
+            767,
+            489
+          ],
+          "diameter": 80.48602363143554,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 4264,
+          "mean": 27.394058442776807,
+          "p95": 70.32679999999999,
+          "p10": 9.6654,
+          "whiteFraction": 0,
+          "bbox": [
+            686,
+            411,
+            767,
+            489
+          ],
+          "diameter": 80.48602363143554,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg1-p0.45-exposure",
+      "status": "fail",
+      "detail": {
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 4264,
+          "mean": 27.394058442776807,
+          "p95": 70.32679999999999,
+          "p10": 9.6654,
+          "whiteFraction": 0,
+          "bbox": [
+            686,
+            411,
+            767,
+            489
+          ],
+          "diameter": 80.48602363143554,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 4264,
+          "mean": 27.394058442776807,
+          "p95": 70.32679999999999,
+          "p10": 9.6654,
+          "whiteFraction": 0,
+          "bbox": [
+            686,
+            411,
+            767,
+            489
+          ],
+          "diameter": 80.48602363143554,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg1-p0.45-nucleus-larger",
+      "status": "fail",
+      "detail": {
+        "oldNucleusRadius": 0.32
+      }
+    },
+    {
+      "id": "travel-leg1-p0.45-geometry-budget",
+      "status": "pass",
+      "detail": 1052304
+    },
+    {
+      "id": "travel-leg1-p0.7-mesh-normals-triangles",
+      "status": "fail",
+      "detail": {
+        "meshes": []
+      }
+    },
+    {
+      "id": "travel-leg1-p0.7-volume-draw",
+      "status": "fail",
+      "detail": {
+        "candidates": []
+      }
+    },
+    {
+      "id": "travel-leg1-p0.7-same-phase-camera",
+      "status": "pass",
+      "detail": {
+        "head": [
+          -1.1044043321298278,
+          0,
+          14.369404332129534
+        ],
+        "baselineHead": [
+          -1.1044043321298278,
+          0,
+          14.369404332129534
+        ]
+      }
+    },
+    {
+      "id": "travel-leg1-p0.7-size",
+      "status": "fail",
+      "detail": {
+        "ratio": 1,
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 5120,
+          "mean": 27.70721367187492,
+          "p95": 70.63,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            607,
+            407,
+            695,
+            493
+          ],
+          "diameter": 87.99431799837987,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 5120,
+          "mean": 27.70721367187492,
+          "p95": 70.63,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            607,
+            407,
+            695,
+            493
+          ],
+          "diameter": 87.99431799837987,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg1-p0.7-exposure",
+      "status": "fail",
+      "detail": {
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 5120,
+          "mean": 27.70721367187492,
+          "p95": 70.63,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            607,
+            407,
+            695,
+            493
+          ],
+          "diameter": 87.99431799837987,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 5120,
+          "mean": 27.70721367187492,
+          "p95": 70.63,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            607,
+            407,
+            695,
+            493
+          ],
+          "diameter": 87.99431799837987,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg1-p0.7-nucleus-larger",
+      "status": "fail",
+      "detail": {
+        "oldNucleusRadius": 0.32
+      }
+    },
+    {
+      "id": "travel-leg1-p0.7-geometry-budget",
+      "status": "pass",
+      "detail": 1052304
+    },
+    {
+      "id": "travel-leg2-p0.45-mesh-normals-triangles",
+      "status": "fail",
+      "detail": {
+        "meshes": []
+      }
+    },
+    {
+      "id": "travel-leg2-p0.45-volume-draw",
+      "status": "fail",
+      "detail": {
+        "candidates": []
+      }
+    },
+    {
+      "id": "travel-leg2-p0.45-same-phase-camera",
+      "status": "pass",
+      "detail": {
+        "head": [
+          -0.14709987966259946,
+          0,
+          26.609566787005058
+        ],
+        "baselineHead": [
+          -0.14709987966259946,
+          0,
+          26.609566787005058
+        ]
+      }
+    },
+    {
+      "id": "travel-leg2-p0.45-size",
+      "status": "fail",
+      "detail": {
+        "ratio": 1,
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 4245,
+          "mean": 27.488309587750326,
+          "p95": 69.752,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            670,
+            411,
+            750,
+            489
+          ],
+          "diameter": 79.9937497558403,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 4245,
+          "mean": 27.488309587750326,
+          "p95": 69.752,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            670,
+            411,
+            750,
+            489
+          ],
+          "diameter": 79.9937497558403,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg2-p0.45-exposure",
+      "status": "fail",
+      "detail": {
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 4245,
+          "mean": 27.488309587750326,
+          "p95": 69.752,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            670,
+            411,
+            750,
+            489
+          ],
+          "diameter": 79.9937497558403,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 4245,
+          "mean": 27.488309587750326,
+          "p95": 69.752,
+          "p10": 9.804599999999999,
+          "whiteFraction": 0,
+          "bbox": [
+            670,
+            411,
+            750,
+            489
+          ],
+          "diameter": 79.9937497558403,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg2-p0.45-nucleus-larger",
+      "status": "fail",
+      "detail": {
+        "oldNucleusRadius": 0.32
+      }
+    },
+    {
+      "id": "travel-leg2-p0.45-geometry-budget",
+      "status": "pass",
+      "detail": 1052304
+    },
+    {
+      "id": "travel-leg2-p0.7-mesh-normals-triangles",
+      "status": "fail",
+      "detail": {
+        "meshes": []
+      }
+    },
+    {
+      "id": "travel-leg2-p0.7-volume-draw",
+      "status": "fail",
+      "detail": {
+        "candidates": []
+      }
+    },
+    {
+      "id": "travel-leg2-p0.7-same-phase-camera",
+      "status": "pass",
+      "detail": {
+        "head": [
+          1.1044043321304873,
+          0,
+          30.569404332131626
+        ],
+        "baselineHead": [
+          1.1044043321304873,
+          0,
+          30.569404332131626
+        ]
+      }
+    },
+    {
+      "id": "travel-leg2-p0.7-size",
+      "status": "fail",
+      "detail": {
+        "ratio": 1,
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 5137,
+          "mean": 27.6702698462138,
+          "p95": 72.1142,
+          "p10": 9.809799999999997,
+          "whiteFraction": 0,
+          "bbox": [
+            742,
+            407,
+            831,
+            493
+          ],
+          "diameter": 88.48728722251576,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 5137,
+          "mean": 27.6702698462138,
+          "p95": 72.1142,
+          "p10": 9.809799999999997,
+          "whiteFraction": 0,
+          "bbox": [
+            742,
+            407,
+            831,
+            493
+          ],
+          "diameter": 88.48728722251576,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg2-p0.7-exposure",
+      "status": "fail",
+      "detail": {
+        "current": {
+          "width": 1440,
+          "height": 900,
+          "count": 5137,
+          "mean": 27.6702698462138,
+          "p95": 72.1142,
+          "p10": 9.809799999999997,
+          "whiteFraction": 0,
+          "bbox": [
+            742,
+            407,
+            831,
+            493
+          ],
+          "diameter": 88.48728722251576,
+          "threshold": 8
+        },
+        "baseline": {
+          "width": 1440,
+          "height": 900,
+          "count": 5137,
+          "mean": 27.6702698462138,
+          "p95": 72.1142,
+          "p10": 9.809799999999997,
+          "whiteFraction": 0,
+          "bbox": [
+            742,
+            407,
+            831,
+            493
+          ],
+          "diameter": 88.48728722251576,
+          "threshold": 8
+        }
+      }
+    },
+    {
+      "id": "travel-leg2-p0.7-nucleus-larger",
+      "status": "fail",
+      "detail": {
+        "oldNucleusRadius": 0.32
+      }
+    },
+    {
+      "id": "travel-leg2-p0.7-geometry-budget",
+      "status": "pass",
+      "detail": 1052304
+    },
+    {
+      "id": "dt0-gather-same-glyph-source",
+      "status": "pass",
+      "detail": {
+        "brand": "claude",
+        "points": 18000
+      }
+    },
+    {
+      "id": "dt0-gather-world-anchor",
+      "status": "pass",
+      "detail": {
+        "headDrift": 0
+      }
+    },
+    {
+      "id": "dt0-gather-internal-explosion",
+      "status": "fail",
+      "detail": {
+        "outward": -0.0002275663020415708,
+        "alignment": -0.27776586648858737,
+        "zRatio": 0.9973208921236795,
+        "series": [
+          {
+            "q": 0,
+            "t": 18.50000001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223539094049075,
+            "z": 0.8920536041259766
+          },
+          {
+            "q": 0.05,
+            "t": 18.57000001,
+            "median": 0.6573700828511103,
+            "p90": 0.9223653393205368,
+            "z": 0.89166259765625
+          },
+          {
+            "q": 0.1,
+            "t": 18.64000001,
+            "median": 0.6550399328152896,
+            "p90": 0.9213724112709315,
+            "z": 0.8896636962890625
+          },
+          {
+            "q": 0.18,
+            "t": 18.75200001,
+            "median": 0.6443469182310076,
+            "p90": 0.9201386389897253,
+            "z": 0.8752117156982422
+          },
+          {
+            "q": 0.25,
+            "t": 18.85000001,
+            "median": 0.6488023668294626,
+            "p90": 0.9499370457928183,
+            "z": 0.8432083129882812
+          },
+          {
+            "q": 0.4,
+            "t": 19.06000001,
+            "median": 0.8456366209794318,
+            "p90": 1.8715401022499583,
+            "z": 0.753936767578125
+          },
+          {
+            "q": 0.7,
+            "t": 19.480000009999998,
+            "median": 2.6287935564375364,
+            "p90": 4.232186755398473,
+            "z": 1.1054954528808594
+          },
+          {
+            "q": 1,
+            "t": 19.89999991,
+            "median": 3.0075365566149435,
+            "p90": 4.639297121173537,
+            "z": 1.2436885833740234
+          }
+        ],
+        "note": "relative to each frame head; majority radial direction, not every logo point"
+      }
+    },
+    {
+      "id": "dt0-gather-final-glyph",
+      "status": "pass",
+      "detail": {
+        "rms": 5.60750450486213e-7,
+        "rawRms": 0.17641886528810413,
+        "t": 19.89999991,
+        "q": 1,
+        "note": "subtract actual bounded internal flow; unchanged glyph anchors checked separately"
+      }
+    },
+    {
+      "id": "dt0-scatter-same-glyph-source",
+      "status": "pass",
+      "detail": {
+        "brand": "claude",
+        "points": 18000
+      }
+    },
+    {
+      "id": "dt0-scatter-world-anchor",
+      "status": "pass",
+      "detail": {
+        "headDrift": 0
+      }
+    },
+    {
+      "id": "dt0-scatter-accelerating-collapse",
+      "status": "fail",
+      "detail": {
+        "slow": 4.898318581657578,
+        "fast": 2.0605774390584966,
+        "ratio": 0.4206703595749386,
+        "monotone": false,
+        "series": [
+          {
+            "q": 0,
+            "t": 22.900000001000002,
+            "median": 3.030378238316614,
+            "p90": 4.6510965265650785,
+            "z": 1.2826080322265625
+          },
+          {
+            "q": 0.05,
+            "t": 22.934100001,
+            "median": 3.029685645162504,
+            "p90": 4.650988134588324,
+            "z": 1.2823657989501953
+          },
+          {
+            "q": 0.2,
+            "t": 23.036400001,
+            "median": 2.9352546347198527,
+            "p90": 4.527601710231181,
+            "z": 1.247701644897461
+          },
+          {
+            "q": 0.4,
+            "t": 23.172800001,
+            "median": 2.04512479248631,
+            "p90": 3.7044708071521626,
+            "z": 0.9764385223388672
+          },
+          {
+            "q": 0.5,
+            "t": 23.241000001,
+            "median": 1.360051601971392,
+            "p90": 2.851741232043098,
+            "z": 0.8237476348876953
+          },
+          {
+            "q": 0.6,
+            "t": 23.309200001,
+            "median": 0.8476434486771599,
+            "p90": 1.875334263441837,
+            "z": 0.7726001739501953
+          },
+          {
+            "q": 0.8,
+            "t": 23.445600001000003,
+            "median": 0.6416516576343431,
+            "p90": 0.9216585568371384,
+            "z": 0.8715705871582031
+          },
+          {
+            "q": 0.92,
+            "t": 23.527440001000002,
+            "median": 0.6571175523466997,
+            "p90": 0.9210262643326832,
+            "z": 0.8907394409179688
+          },
+          {
+            "q": 0.99,
+            "t": 23.575180001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223550084287533,
+            "z": 0.8920536041259766
+          },
+          {
+            "q": 1,
+            "t": 23.582000001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223550084287533,
+            "z": 0.8920536041259766
+          }
+        ]
+      }
+    },
+    {
+      "id": "dt0-scatter-coalesced-at-.62",
+      "status": "pass",
+      "detail": {
+        "rms": 5.527242934598183e-7,
+        "p": 0.6200000009094336,
+        "t": 23.582000001
+      }
+    },
+    {
+      "id": "dt1-gather-same-glyph-source",
+      "status": "pass",
+      "detail": {
+        "brand": "claude",
+        "points": 18000
+      }
+    },
+    {
+      "id": "dt1-gather-world-anchor",
+      "status": "pass",
+      "detail": {
+        "headDrift": 0
+      }
+    },
+    {
+      "id": "dt1-gather-internal-explosion",
+      "status": "fail",
+      "detail": {
+        "outward": -0.00022901606030911736,
+        "alignment": -0.2795668901866714,
+        "zRatio": 0.9972567416162774,
+        "series": [
+          {
+            "q": 0,
+            "t": 18.50000001,
+            "median": 0.6573936212588256,
+            "p90": 0.9223539620492173,
+            "z": 0.8920516967773438
+          },
+          {
+            "q": 0.05,
+            "t": 18.57000001,
+            "median": 0.6573430154847958,
+            "p90": 0.9223689866115391,
+            "z": 0.8916721343994141
+          },
+          {
+            "q": 0.1,
+            "t": 18.64000001,
+            "median": 0.6549213396419556,
+            "p90": 0.9214966439117467,
+            "z": 0.8896045684814453
+          },
+          {
+            "q": 0.18,
+            "t": 18.75200001,
+            "median": 0.6447762244488748,
+            "p90": 0.9201364883096858,
+            "z": 0.8763713836669922
+          },
+          {
+            "q": 0.25,
+            "t": 18.85000001,
+            "median": 0.6481958113914911,
+            "p90": 0.9495071838940395,
+            "z": 0.8421344757080078
+          },
+          {
+            "q": 0.4,
+            "t": 19.06000001,
+            "median": 0.8450586220269405,
+            "p90": 1.8699343321513475,
+            "z": 0.7526226043701172
+          },
+          {
+            "q": 0.7,
+            "t": 19.480000009999998,
+            "median": 2.6218157812319194,
+            "p90": 4.234801408260436,
+            "z": 1.1048641204833984
+          },
+          {
+            "q": 1,
+            "t": 19.89999991,
+            "median": 3.0037452428881206,
+            "p90": 4.639298287286249,
+            "z": 1.2381248474121094
+          }
+        ],
+        "note": "relative to each frame head; majority radial direction, not every logo point"
+      }
+    },
+    {
+      "id": "dt1-gather-final-glyph",
+      "status": "pass",
+      "detail": {
+        "rms": 5.614122965629049e-7,
+        "rawRms": 0.17681508967030454,
+        "t": 19.89999991,
+        "q": 1,
+        "note": "subtract actual bounded internal flow; unchanged glyph anchors checked separately"
+      }
+    },
+    {
+      "id": "dt1-scatter-same-glyph-source",
+      "status": "pass",
+      "detail": {
+        "brand": "claude",
+        "points": 18000
+      }
+    },
+    {
+      "id": "dt1-scatter-world-anchor",
+      "status": "pass",
+      "detail": {
+        "headDrift": 0
+      }
+    },
+    {
+      "id": "dt1-scatter-accelerating-collapse",
+      "status": "fail",
+      "detail": {
+        "slow": 4.884381494612859,
+        "fast": 2.069262102379437,
+        "ratio": 0.4236487474743102,
+        "monotone": false,
+        "series": [
+          {
+            "q": 0,
+            "t": 22.900000001000002,
+            "median": 3.0285871618268057,
+            "p90": 4.648435788858826,
+            "z": 1.280447006225586
+          },
+          {
+            "q": 0.05,
+            "t": 22.934100001,
+            "median": 3.0281601141523864,
+            "p90": 4.647689158434884,
+            "z": 1.2804222106933594
+          },
+          {
+            "q": 0.2,
+            "t": 23.036400001,
+            "median": 2.938888067764804,
+            "p90": 4.525618087302939,
+            "z": 1.242441177368164
+          },
+          {
+            "q": 0.4,
+            "t": 23.172800001,
+            "median": 2.047857818599742,
+            "p90": 3.698981198524147,
+            "z": 0.9784488677978516
+          },
+          {
+            "q": 0.5,
+            "t": 23.241000001,
+            "median": 1.3630130721638327,
+            "p90": 2.8556601843839835,
+            "z": 0.8206691741943359
+          },
+          {
+            "q": 0.6,
+            "t": 23.309200001,
+            "median": 0.8454648527448682,
+            "p90": 1.8747304055711023,
+            "z": 0.7700519561767578
+          },
+          {
+            "q": 0.8,
+            "t": 23.445600001000003,
+            "median": 0.642173401331395,
+            "p90": 0.921131875138726,
+            "z": 0.8712062835693359
+          },
+          {
+            "q": 0.92,
+            "t": 23.527440001000002,
+            "median": 0.6571175523466997,
+            "p90": 0.9210702877862095,
+            "z": 0.8903903961181641
+          },
+          {
+            "q": 0.99,
+            "t": 23.575180001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223550084287533,
+            "z": 0.8920536041259766
+          },
+          {
+            "q": 1,
+            "t": 23.582000001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223550084287533,
+            "z": 0.8920536041259766
+          }
+        ]
+      }
+    },
+    {
+      "id": "dt1-scatter-coalesced-at-.62",
+      "status": "pass",
+      "detail": {
+        "rms": 5.527242934598183e-7,
+        "p": 0.6200000009087425,
+        "t": 23.582000001
+      }
+    },
+    {
+      "id": "dt2-gather-same-glyph-source",
+      "status": "pass",
+      "detail": {
+        "brand": "claude",
+        "points": 18000
+      }
+    },
+    {
+      "id": "dt2-gather-world-anchor",
+      "status": "pass",
+      "detail": {
+        "headDrift": 0
+      }
+    },
+    {
+      "id": "dt2-gather-internal-explosion",
+      "status": "fail",
+      "detail": {
+        "outward": -0.00022886754525586195,
+        "alignment": -0.27397659072209785,
+        "zRatio": 0.9971904646851674,
+        "series": [
+          {
+            "q": 0,
+            "t": 18.50000001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223550084287533,
+            "z": 0.8920536041259766
+          },
+          {
+            "q": 0.05,
+            "t": 18.57000001,
+            "median": 0.6573701048751116,
+            "p90": 0.9223660234622205,
+            "z": 0.8915863037109375
+          },
+          {
+            "q": 0.1,
+            "t": 18.64000001,
+            "median": 0.6550356547057852,
+            "p90": 0.921514865168981,
+            "z": 0.8895473480224609
+          },
+          {
+            "q": 0.18,
+            "t": 18.75200001,
+            "median": 0.6444055921164832,
+            "p90": 0.9201390443494487,
+            "z": 0.8755664825439453
+          },
+          {
+            "q": 0.25,
+            "t": 18.85000001,
+            "median": 0.6489929905131743,
+            "p90": 0.949832489667391,
+            "z": 0.8448123931884766
+          },
+          {
+            "q": 0.4,
+            "t": 19.06000001,
+            "median": 0.8465795350703034,
+            "p90": 1.869762384102334,
+            "z": 0.7542953491210938
+          },
+          {
+            "q": 0.7,
+            "t": 19.480000009999998,
+            "median": 2.6261723302482216,
+            "p90": 4.232358817148378,
+            "z": 1.1049156188964844
+          },
+          {
+            "q": 1,
+            "t": 19.89999991,
+            "median": 3.0041323292675544,
+            "p90": 4.64615539643025,
+            "z": 1.2477493286132812
+          }
+        ],
+        "note": "relative to each frame head; majority radial direction, not every logo point"
+      }
+    },
+    {
+      "id": "dt2-gather-final-glyph",
+      "status": "pass",
+      "detail": {
+        "rms": 5.641407135492476e-7,
+        "rawRms": 0.17630821454757115,
+        "t": 19.89999991,
+        "q": 1,
+        "note": "subtract actual bounded internal flow; unchanged glyph anchors checked separately"
+      }
+    },
+    {
+      "id": "dt2-scatter-same-glyph-source",
+      "status": "pass",
+      "detail": {
+        "brand": "claude",
+        "points": 18000
+      }
+    },
+    {
+      "id": "dt2-scatter-world-anchor",
+      "status": "pass",
+      "detail": {
+        "headDrift": 0
+      }
+    },
+    {
+      "id": "dt2-scatter-accelerating-collapse",
+      "status": "fail",
+      "detail": {
+        "slow": 4.913650657850894,
+        "fast": 2.059144071424609,
+        "ratio": 0.4190660294774042,
+        "monotone": false,
+        "series": [
+          {
+            "q": 0,
+            "t": 22.900000001000002,
+            "median": 3.0351176979353793,
+            "p90": 4.649992543970946,
+            "z": 1.2761001586914062
+          },
+          {
+            "q": 0.05,
+            "t": 22.934100001,
+            "median": 3.03411329461416,
+            "p90": 4.649654325108594,
+            "z": 1.2761001586914062
+          },
+          {
+            "q": 0.2,
+            "t": 23.036400001,
+            "median": 2.945502790211167,
+            "p90": 4.528905343225901,
+            "z": 1.2436504364013672
+          },
+          {
+            "q": 0.4,
+            "t": 23.172800001,
+            "median": 2.0447416695549916,
+            "p90": 3.714331843634873,
+            "z": 0.9861965179443359
+          },
+          {
+            "q": 0.5,
+            "t": 23.241000001,
+            "median": 1.3595628236082364,
+            "p90": 2.853295253313972,
+            "z": 0.8314456939697266
+          },
+          {
+            "q": 0.6,
+            "t": 23.309200001,
+            "median": 0.8468379952823898,
+            "p90": 1.8765617989894632,
+            "z": 0.7733325958251953
+          },
+          {
+            "q": 0.8,
+            "t": 23.445600001000003,
+            "median": 0.6416281135093492,
+            "p90": 0.9215506114067749,
+            "z": 0.8714218139648438
+          },
+          {
+            "q": 0.92,
+            "t": 23.527440001000002,
+            "median": 0.6571009612268428,
+            "p90": 0.9209220690046763,
+            "z": 0.89019775390625
+          },
+          {
+            "q": 0.99,
+            "t": 23.575180001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223550084287533,
+            "z": 0.8920536041259766
+          },
+          {
+            "q": 1,
+            "t": 23.582000001,
+            "median": 0.6573946952524424,
+            "p90": 0.9223550084287533,
+            "z": 0.8920536041259766
+          }
+        ]
+      }
+    },
+    {
+      "id": "dt2-scatter-coalesced-at-.62",
+      "status": "pass",
+      "detail": {
+        "rms": 5.527242934598183e-7,
+        "p": 0.620000000909348,
+        "t": 23.582000001
+      }
+    },
+    {
+      "id": "actual-draw-budget",
+      "status": "pass",
+      "detail": {
+        "maxDraw": 6
+      }
+    },
+    {
+      "id": "transition-frozen-PNG-pairs",
+      "status": "pass",
+      "detail": {
+        "count": 20,
+        "files": [
+          {
+            "kind": "gather",
+            "q": 0,
+            "file": "gather-q0.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 10734,
+              "mean": 58.35337261039622,
+              "p95": 241.56799999999998,
+              "p10": 10.225799999999998,
+              "whiteFraction": 0.04322712874976709,
+              "bbox": [
+                497,
+                401,
+                764,
+                498
+              ],
+              "diameter": 162.06171663906315,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "gather",
+            "q": 0.05,
+            "file": "gather-q0.05.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 10519,
+              "mean": 55.09231147447425,
+              "p95": 215.31359999999998,
+              "p10": 10.212599999999997,
+              "whiteFraction": 0.031752067687042494,
+              "bbox": [
+                498,
+                401,
+                763,
+                498
+              ],
+              "diameter": 161.45587632539113,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "gather",
+            "q": 0.1,
+            "file": "gather-q0.1.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 10544,
+              "mean": 50.91403368740484,
+              "p95": 183.9462,
+              "p10": 10.452799999999998,
+              "whiteFraction": 0.014131259484066768,
+              "bbox": [
+                496,
+                401,
+                766,
+                499
+              ],
+              "diameter": 163.79560433662436,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "gather",
+            "q": 0.18,
+            "file": "gather-q0.18.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 11962,
+              "mean": 46.07492143454269,
+              "p95": 146.92379999999997,
+              "p10": 10.9278,
+              "whiteFraction": 0.0006687844841999665,
+              "bbox": [
+                492,
+                393,
+                752,
+                503
+              ],
+              "diameter": 170.2086954300514,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "gather",
+            "q": 0.25,
+            "file": "gather-q0.25.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 16571,
+              "mean": 43.885038163055825,
+              "p95": 126.5302,
+              "p10": 10.646999999999997,
+              "whiteFraction": 0,
+              "bbox": [
+                472,
+                377,
+                742,
+                521
+              ],
+              "diameter": 198.22966478304906,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "gather",
+            "q": 0.4,
+            "file": "gather-q0.4.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 54122,
+              "mean": 34.34055968368061,
+              "p95": 99.6614,
+              "p10": 9.999999999999998,
+              "whiteFraction": 0,
+              "bbox": [
+                369,
+                252,
+                749,
+                661
+              ],
+              "diameter": 395.23410783989783,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "gather",
+            "q": 0.7,
+            "file": "gather-q0.7.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 111378,
+              "mean": 47.6479879904372,
+              "p95": 113.55359999999999,
+              "p10": 12.2126,
+              "whiteFraction": 0.00023343927885219703,
+              "bbox": [
+                247,
+                132,
+                872,
+                765
+              ],
+              "diameter": 629.987301459323,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "gather",
+            "q": 1,
+            "file": "gather-q1.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 106780,
+              "mean": 51.84836688704865,
+              "p95": 125.89740000000002,
+              "p10": 11.140399999999998,
+              "whiteFraction": 0.00021539614159955047,
+              "bbox": [
+                251,
+                142,
+                871,
+                758
+              ],
+              "diameter": 618.9967689737969,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "hold",
+            "q": 0,
+            "file": "hold-q0.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 106779,
+              "mean": 51.84871813370665,
+              "p95": 125.8344,
+              "p10": 11.140399999999998,
+              "whiteFraction": 0.000215398158813999,
+              "bbox": [
+                251,
+                142,
+                871,
+                758
+              ],
+              "diameter": 618.9967689737969,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "hold",
+            "q": 1,
+            "file": "hold-q1.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 74995,
+              "mean": 49.83136296554316,
+              "p95": 110.40400000000001,
+              "p10": 13.140400000000001,
+              "whiteFraction": 0,
+              "bbox": [
+                341,
+                196,
+                845,
+                700
+              ],
+              "diameter": 505,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0,
+            "file": "scatter-q0.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 74995,
+              "mean": 49.83136296554316,
+              "p95": 110.40400000000001,
+              "p10": 13.140400000000001,
+              "whiteFraction": 0,
+              "bbox": [
+                341,
+                196,
+                845,
+                700
+              ],
+              "diameter": 505,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.05,
+            "file": "scatter-q0.05.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 74916,
+              "mean": 49.600365604151875,
+              "p95": 110.40400000000001,
+              "p10": 13.140400000000001,
+              "whiteFraction": 0.00004004485023226013,
+              "bbox": [
+                342,
+                197,
+                845,
+                699
+              ],
+              "diameter": 503.4997517377739,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.2,
+            "file": "scatter-q0.2.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 76563,
+              "mean": 44.48674727741456,
+              "p95": 99.9106,
+              "p10": 14.8556,
+              "whiteFraction": 0,
+              "bbox": [
+                344,
+                199,
+                844,
+                696
+              ],
+              "diameter": 499.49774774267,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.4,
+            "file": "scatter-q0.4.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 66137,
+              "mean": 29.496004526955634,
+              "p95": 63.642999999999994,
+              "p10": 11.212599999999997,
+              "whiteFraction": 0,
+              "bbox": [
+                367,
+                216,
+                831,
+                678
+              ],
+              "diameter": 463.9989224125418,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.5,
+            "file": "scatter-q0.5.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 45759,
+              "mean": 22.12504657444175,
+              "p95": 47.58,
+              "p10": 9.7874,
+              "whiteFraction": 0,
+              "bbox": [
+                403,
+                251,
+                794,
+                646
+              ],
+              "diameter": 393.9949238251681,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.6,
+            "file": "scatter-q0.6.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 19913,
+              "mean": 19.547561291617697,
+              "p95": 47.297999999999995,
+              "p10": 9.149599999999998,
+              "whiteFraction": 0,
+              "bbox": [
+                465,
+                311,
+                745,
+                582
+              ],
+              "diameter": 276.4633791300396,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.8,
+            "file": "scatter-q0.8.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 3537,
+              "mean": 28.23514860050891,
+              "p95": 70.466,
+              "p10": 10.158800000000001,
+              "whiteFraction": 0,
+              "bbox": [
+                559,
+                413,
+                632,
+                485
+              ],
+              "diameter": 73.49829930005184,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.92,
+            "file": "scatter-q0.92.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 3179,
+              "mean": 27.30874790814725,
+              "p95": 69.819,
+              "p10": 9.800599999999998,
+              "whiteFraction": 0,
+              "bbox": [
+                560,
+                416,
+                630,
+                484
+              ],
+              "diameter": 69.99285677838846,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 0.99,
+            "file": "scatter-q0.99.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 3147,
+              "mean": 27.17759860184302,
+              "p95": 68.7652,
+              "p10": 9.728399999999999,
+              "whiteFraction": 0,
+              "bbox": [
+                560,
+                416,
+                630,
+                484
+              ],
+              "diameter": 69.99285677838846,
+              "threshold": 8
+            }
+          },
+          {
+            "kind": "scatter",
+            "q": 1,
+            "file": "scatter-q1.png",
+            "pixels": {
+              "width": 1440,
+              "height": 900,
+              "count": 3148,
+              "mean": 27.14800076238883,
+              "p95": 68.0356,
+              "p10": 9.5932,
+              "whiteFraction": 0,
+              "bbox": [
+                560,
+                416,
+                630,
+                484
+              ],
+              "diameter": 69.99285677838846,
+              "threshold": 8
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "transition-screen-smoothness",
+      "status": "skip",
+      "detail": "static paired PNGs and geometry do not establish perceived smoothness; parent must review normal-rAF video"
+    },
+    {
+      "id": "desktop-mobile-light-dark-release-matrix",
+      "status": "skip",
+      "detail": "this invocation verifies one viewport/theme; parent records the four-cell release matrix"
+    },
+    {
+      "id": "hold-no-new-tail-existing-fade",
+      "status": "pass",
+      "detail": {
+        "startActive": 3158,
+        "endActive": 0,
+        "startAlpha": 5.640909316576174,
+        "endAlpha": 0,
+        "newBirths": 0
+      }
+    },
+    {
+      "id": "hold-volume-density-fade",
+      "status": "instrument-invalid",
+      "detail": {
+        "startMass": [],
+        "endMass": []
+      }
+    },
+    {
+      "id": "requested-theme-observed",
+      "status": "pass",
+      "detail": {
+        "engineLight": false,
+        "className": "dark"
+      }
+    },
+    {
+      "id": "normal-raf-36s",
+      "status": "pass",
+      "detail": {
+        "status": "pass",
+        "elapsedMs": 37027.40000000596,
+        "screencastSeconds": 37.025177001953125,
+        "screencastFrames": 1779,
+        "canvasVideo": "E:\\Global-session\\xiao-20261013-010435\\judge\\evidence\\judge\\baseline-final\\normal-canvas.webm",
+        "pageVideo": "E:\\Global-session\\xiao-20261013-010435\\judge\\evidence\\judge\\baseline-final\\normal-page.mp4",
+        "metrics": {
+          "frames": 1776,
+          "meanMs": 20.832038288291646,
+          "p50Ms": 20.80000000000109,
+          "p95Ms": 20.900000000001455,
+          "longtaskCount": 0,
+          "longtaskTotalMs": 0
+        },
+        "videoError": null,
+        "normalRAF": true,
+        "note": "normal native rAF with recording overhead; isolated canvas captureStream plus full-page CDP screencast, no CSS scene isolation; parent owns theme/mobile matrix"
+      }
+    },
+    {
+      "id": "console-webgl-errors",
+      "status": "pass",
+      "detail": []
+    },
+    {
+      "id": "source-stable",
+      "status": "pass",
+      "detail": true
+    }
+  ],
+  "note": "recomputed from preserved actual observations; no new rendering and no fabricated samples"
+}

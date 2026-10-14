@@ -15,9 +15,9 @@
       <template v-else>
         <!-- 金额头部 -->
         <div v-if="order" class="card overflow-hidden">
-          <div class="bg-gradient-to-br from-[#635bff] to-[#4f46e5] px-6 py-6 text-center">
-            <p class="text-sm font-medium text-indigo-200">{{ t('payment.actualPay') }}</p>
-            <p class="mt-1 text-3xl font-bold text-white">{{ formatGatewayAmount(order.pay_amount) }}</p>
+          <div class="bg-[#635bff] px-6 py-6 text-center">
+            <p class="text-sm font-medium text-white/80">{{ t('payment.actualPay') }}</p>
+            <p class="mt-1 text-3xl font-semibold text-white">{{ formatGatewayAmount(order.pay_amount) }}</p>
           </div>
         </div>
 
@@ -59,7 +59,7 @@
               <div class="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
                 <Icon name="check" size="lg" class="text-green-500" />
               </div>
-              <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('payment.result.success') }}</p>
+              <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.result.success') }}</p>
               <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.stripeSuccessProcessing') }}</p>
             </div>
           </div>
@@ -94,6 +94,7 @@
 </template>
 
 <script setup lang="ts">
+import { isDarkSurface } from '@/features/universe/theme'
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -244,7 +245,7 @@ async function confirmWechatPay(stripe: Stripe, clientSecret: string) {
 
 function mountPaymentElement(stripe: Stripe, clientSecret: string) {
   if (disposed) return
-  const isDark = document.documentElement.classList.contains('dark')
+  const isDark = isDarkSurface()
   const elements = stripe.elements({
     clientSecret,
     appearance: { theme: isDark ? 'night' : 'stripe', variables: { borderRadius: '8px' } },

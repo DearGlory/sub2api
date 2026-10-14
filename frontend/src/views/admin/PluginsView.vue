@@ -75,7 +75,7 @@
         v-else-if="plugins.length === 0"
         class="flex min-h-56 flex-col items-center justify-center border border-dashed border-gray-300 px-6 text-center dark:border-dark-600"
       >
-        <Icon name="cube" size="xl" class="text-gray-400" />
+        <Icon name="cube" size="xl" class="text-gray-500" />
         <p class="mt-3 font-medium text-gray-800 dark:text-gray-200">
           {{ t("admin.plugins.empty") }}
         </p>

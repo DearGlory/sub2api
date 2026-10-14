@@ -8,7 +8,7 @@
       <!-- Prefix Icon Slot -->
       <div
         v-if="$slots.prefix"
-        class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400 dark:text-dark-400"
+        class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-500 dark:text-dark-400"
       >
         <slot name="prefix"></slot>
       </div>
@@ -24,7 +24,7 @@
         :autocomplete="autocomplete"
         :readonly="readonly"
         :class="[
-          'input w-full transition-all duration-200',
+          'input w-full transition-opacity duration-200',
           $slots.prefix ? 'pl-11' : '',
           $slots.suffix ? 'pr-11' : '',
           error ? 'input-error ring-2 ring-red-500/20' : '',
@@ -40,7 +40,7 @@
       <!-- Suffix Slot (e.g. Password Toggle or Clear Button) -->
       <div
         v-if="$slots.suffix"
-        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 dark:text-dark-400"
+        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 dark:text-dark-400"
       >
         <slot name="suffix"></slot>
       </div>

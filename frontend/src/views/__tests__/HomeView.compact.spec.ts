@@ -74,7 +74,39 @@ describe('HomeView compact mode', () => {
     authStore.checkAuth.mockClear()
     appStore.fetchPublicSettings.mockClear()
     localStorage.clear()
+    document.documentElement.classList.remove('dark')
     vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
+  })
+
+  it.each(['light', 'dark'])('keeps compact mode dark with orange actions and no theme toggle for saved %s', (theme) => {
+    localStorage.setItem('theme', theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    const wrapper = mountHome({ compact_home_enabled: true })
+    const compact = wrapper.get('[data-testid="compact-home"]')
+
+    expect(compact.classes()).toEqual(expect.arrayContaining(['dark', 'bg-transparent', 'text-white']))
+    const actions = compact.findAllComponents(RouterLinkStub)
+    expect(actions).toHaveLength(2)
+    for (const action of actions) {
+      expect(action.props('to')).toBe('/login')
+      expect(action.classes()).toContain('btn-primary')
+    }
+    expect(compact.find('[title="home.switchToLight"]').exists()).toBe(false)
+    expect(compact.find('[title="home.switchToDark"]').exists()).toBe(false)
+    expect(localStorage.getItem('theme')).toBe(theme)
+    expect(document.documentElement.classList.contains('dark')).toBe(theme === 'dark')
+    wrapper.unmount()
+  })
+
+  it.each([false, true])('keeps compact account actions orange for admin=%s', (isAdmin) => {
+    authStore.isAuthenticated = true
+    authStore.isAdmin = isAdmin
+    const wrapper = mountHome({ compact_home_enabled: true })
+    for (const action of wrapper.findAllComponents(RouterLinkStub)) {
+      expect(action.props('to')).toBe(isAdmin ? '/admin/dashboard' : '/dashboard')
+      expect(action.classes()).toContain('btn-primary')
+    }
+    wrapper.unmount()
   })
 
   it('renders custom HTML ahead of compact mode', () => {

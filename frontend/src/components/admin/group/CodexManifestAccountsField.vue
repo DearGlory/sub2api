@@ -65,12 +65,12 @@
         />
         <div
           v-if="showDropdown && (searchResults.length > 0 || searchKeyword.trim() !== '')"
-          class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800"
+          class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-white shadow-pop dark:border-dark-600 dark:bg-dark-800"
           data-testid="codex-manifest-dropdown"
         >
           <p
             v-if="searchResults.length === 0"
-            class="px-3 py-2 text-sm text-gray-400"
+            class="px-3 py-2 text-sm text-gray-500"
             data-testid="codex-manifest-search-empty"
           >
             {{ t("admin.groups.codexModelsManifest.searchEmpty") }}
@@ -87,7 +87,7 @@
             @click="selectAccount(account)"
           >
             <span>{{ account.name }}</span>
-            <span class="ml-2 text-xs text-gray-400">#{{ account.id }}</span>
+            <span class="ml-2 text-xs text-gray-500">#{{ account.id }}</span>
           </button>
         </div>
       </div>

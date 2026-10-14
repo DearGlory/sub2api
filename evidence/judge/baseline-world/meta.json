@@ -1,0 +1,359 @@
+{
+  "url": "http://127.0.0.1:5210/home",
+  "headSource": "choreography.state.headX/headY/headZ + points.matrixWorld",
+  "glyphSource": "scratch.glyphTargets + points.matrixWorld",
+  "geometrySource": "points.geometry.attributes.position + points.matrixWorld",
+  "cameraSource": "camera.matrixWorld actual position",
+  "tailSource": "scratch.emittedTail.birthTime/birthPosition/birthVelocity + tailPoints.matrixWorld",
+  "geometryBytes": 1052304,
+  "inventory": [
+    {
+      "uuid": "14336ee1-9b04-476b-828b-ab2301f356a2",
+      "parent": "551951ff-ac61-4271-a4fb-cf1d3dd6d911",
+      "attributes": {
+        "position": {
+          "itemSize": 3,
+          "count": 18000
+        },
+        "color": {
+          "itemSize": 4,
+          "count": 18000
+        },
+        "cometScale": {
+          "itemSize": 1,
+          "count": 18000
+        }
+      }
+    },
+    {
+      "uuid": "6382a4e2-356a-4853-870b-d125cb9e0eff",
+      "parent": "551951ff-ac61-4271-a4fb-cf1d3dd6d911",
+      "attributes": {
+        "position": {
+          "itemSize": 3,
+          "count": 14760
+        },
+        "color": {
+          "itemSize": 4,
+          "count": 14760
+        }
+      }
+    }
+  ],
+  "methods": {
+    "tick": "() => {\n    if (!this.running || this.disposed) return;\n    this.rafId = requestAnimationFrame(this.tick);\n    const now = performance.now();\n    const delta = this.lastFrameMs === 0 ? 1 / 60 : (now - this.lastFrameMs) / 1e3;\n    this.lastFrameMs = now;\n    const frameStep = Math.min(Math.max(delta * 60, 1e-4), 2);\n    const clockStep = Math.min(Math.max(delta, 0), MAX_CLOCK_STEP);\n    try {\n      this.advanceClock(clockStep);\n      this.advanceCamera();\n      this.writeEmissionTable();\n      this.integrate(frameStep, now / 1e3, clockStep);\n      this.upload();\n      this.starfield.update(clockStep, this.camera.position.z, now / 1e3);\n      this.renderer.render(this.scene, this.camera);\n      this.publishStats(now);\n    } catch (error) {\n      this.stop();\n      this.options.onError?.(error);\n    }\n  }",
+    "advanceClock": "advanceClock(delta) {\n    if (!this.reducedMotion) this.choreography.update(delta);\n    const state = this.choreography.state;\n    if (state.phase !== this.lastPhase) {\n      this.lastPhase = state.phase;\n      this.options.onPhaseChange?.(state.phase);\n    }\n    const brand = this.roster[state.brandIndex % this.roster.length];\n    if (brand && brand.slug !== this.currentBrandSlug) {\n      this.currentBrandSlug = brand.slug;\n      this.syncGlyph();\n      this.options.onBrandChange?.(brand.slug, state.brandIndex);\n    } else if (this.currentGlyphLeg !== state.legIndex) {\n      this.syncGlyph();\n    }\n    this.prefetchAhead();\n    if (!this.reducedMotion) this.dollySeconds += delta;\n  }",
+    "advanceCamera": "advanceCamera() {\n    const cameraZ = this.fitDistance + cameraTravelAt(this.dollySeconds);\n    this.camera.position.set(0, 0, cameraZ);\n    this.camera.quaternion.identity();\n    this.camera.updateMatrixWorld();\n  }",
+    "integrate": "integrate(frameStep, time, delta = frameStep / 60) {\n    const s = this.scratch;\n    const positions = s.positions;\n    const velocities = s.velocities;\n    const colors = s.colors;\n    const glyph = s.glyphTargets;\n    const count = this.particleCount;\n    const state = this.choreography.state;\n    const palette = this.palette;\n    const phase = state.phase;\n    if (phase !== this.renderedPhase) {\n      if (phase === \"gather\" || phase === \"scatter\") {\n        s.shapeFrom.set(positions);\n        if (phase === \"gather\") {\n          for (let i = 0; i < count; i++) {\n            s.shapeFrom[i * 3] += state.headX - this.renderedHead.x;\n            s.shapeFrom[i * 3 + 1] += state.headY - this.renderedHead.y;\n            s.shapeFrom[i * 3 + 2] += state.headZ - this.renderedHead.z;\n          }\n        }\n        for (let i = 0; i < count; i++) {\n          const spriteScale = s.body.spriteScale[i];\n          s.shapeAlpha[i] = colors[i * 4 + 3] * spriteScale * spriteScale;\n        }\n        s.pointerOffset.fill(0);\n        velocities.fill(0);\n      }\n      this.renderedPhase = phase;\n    }\n    const shapeProgress = phase === \"scatter\" ? clamp01(state.phaseProgress / COALESCE_END) : state.phaseProgress;\n    let glyphMix = glyphMixFor(phase, shapeProgress);\n    if (this.reducedMotion) glyphMix = glyphMix > 0.5 ? 1 : 0;\n    if (glyphMix > 1e-3) {\n      fillVoxSpaceIconOrbitOffsets(s.iconOrbitOffsets, s.iconOrbitField, time, glyphMix);\n    }\n    const followSpeed = this.reducedMotion ? FOLLOW_TRAVEL * 0.6 : followSpeedFor(phase);\n    const friction = phase === \"hold\" ? getVoxSpaceHoldFrameFriction(frameStep) : Math.pow(FRICTION, frameStep);\n    this.holdFade = nextVoxSpaceIconHoldFade(this.holdFade, glyphMix, frameStep);\n    writeVoxSpaceIconHoldPose(s.iconHoldPose, time, this.holdFade);\n    this.points.rotation.set(0, 0, 0);\n    let pointerActive = isVoxSpacePointerActive(\n      this.pointer.active,\n      this.pointer.lastMove,\n      performance.now()\n    );\n    if (pointerActive) {\n      const rect = this.renderer.domElement.getBoundingClientRect();\n      if (rect.width > 0 && rect.height > 0) {\n        const ndc = s.vecA.set(\n          (this.pointer.clientX - rect.left) / rect.width * 2 - 1,\n          -((this.pointer.clientY - rect.top) / rect.height * 2 - 1),\n          0.5\n        );\n        ndc.unproject(this.camera);\n        const dir = s.vecB.copy(ndc).sub(this.camera.position);\n        const dirZ = dir.z;\n        dir.normalize();\n        const planeZ = this.points.position.z + state.headZ;\n        const distance = dirZ === 0 ? -1 : (planeZ - this.camera.position.z) / dir.z;\n        if (Number.isFinite(distance) && distance > 0) {\n          const world = s.vecA.copy(this.camera.position).addScaledVector(dir, distance).sub(this.points.position);\n          s.inverseRotation.copy(this.points.quaternion).invert();\n          world.applyQuaternion(s.inverseRotation);\n          s.pointerField.localX = world.x;\n          s.pointerField.localY = world.y;\n          s.pointerField.localZ = world.z;\n          s.pointerField.time = time;\n        } else {\n          pointerActive = false;\n        }\n      } else {\n        pointerActive = false;\n      }\n    }\n    const useHoldStep = phase === \"hold\" && glyphMix > 0.5;\n    const cometMix = 1 - glyphMix;\n    const bodyMaterial = this.points.material;\n    bodyMaterial.size = palette.pointSize;\n    const table = s.tailTable;\n    const departure = departureSeconds(phase, state.phaseProgress, LEG_SECONDS, SCATTER_SECONDS);\n    const moving = Math.hypot(table.vel[0], table.vel[1], table.vel[2]) > 1e-6;\n    s.emittedTail.update(\n      delta,\n      departure,\n      departure > 0 && moving && !this.reducedMotion,\n      table,\n      state.headX,\n      state.headY,\n      state.headZ,\n      palette.core,\n      palette.accent,\n      this.light\n    );\n    for (let i = 0; i < count; i++) {\n      const idx = i * 3;\n      const px = positions[idx];\n      const py = positions[idx + 1];\n      const pz = positions[idx + 2];\n      const cometX = state.headX + s.body.offsets[idx];\n      const cometY = state.headY + s.body.offsets[idx + 1];\n      const cometZ = state.headZ + s.body.offsets[idx + 2];\n      const emit = s.body.alpha[i] * (this.light ? 1.7 : 1);\n      let tx = cometX;\n      let ty = cometY;\n      let tz = cometZ;\n      const mix = this.reducedMotion ? glyphMix : staggeredGlyphMix(phase, shapeProgress, i);\n      let alpha = emit;\n      if (phase === \"gather\") {\n        tx = s.shapeFrom[idx] + (glyph[idx] + s.iconOrbitOffsets[idx] - s.shapeFrom[idx]) * mix;\n        ty = s.shapeFrom[idx + 1] + (glyph[idx + 1] + s.iconOrbitOffsets[idx + 1] - s.shapeFrom[idx + 1]) * mix;\n        tz = s.shapeFrom[idx + 2] + (glyph[idx + 2] + s.iconOrbitOffsets[idx + 2] - s.shapeFrom[idx + 2]) * mix;\n        alpha = s.shapeAlpha[i] + (1 - s.shapeAlpha[i]) * mix;\n      } else if (phase === \"scatter\") {\n        const bend = Math.sin(Math.PI * mix) * (s.tailSeed[i] - 0.5) * 0.16;\n        tx += (s.shapeFrom[idx] - cometX) * mix - (s.shapeFrom[idx + 1] - cometY) * bend;\n        ty += (s.shapeFrom[idx + 1] - cometY) * mix + (s.shapeFrom[idx] - cometX) * bend;\n        tz += (s.shapeFrom[idx + 2] - cometZ) * mix + Math.sin(Math.PI * mix) * (s.tailSeed[i] - 0.5) * 0.22;\n        alpha = emit + (s.shapeAlpha[i] - emit) * mix * mix;\n      } else if (phase === \"hold\") {\n        tx = glyph[idx] + s.iconOrbitOffsets[idx];\n        ty = glyph[idx + 1] + s.iconOrbitOffsets[idx + 1];\n        tz = glyph[idx + 2] + s.iconOrbitOffsets[idx + 2];\n        alpha = 1;\n      }\n      let vx = velocities[idx];\n      let vy = velocities[idx + 1];\n      let vz = velocities[idx + 2];\n      if (useHoldStep) {\n        stepVoxSpaceHoldParticle(velocities, idx, px, py, pz, tx, ty, tz, followSpeed, frameStep);\n        vx = velocities[idx];\n        vy = velocities[idx + 1];\n        vz = velocities[idx + 2];\n      } else {\n        vx = vx * COMET_VELOCITY_MEMORY - s.pointerOffset[idx] * followSpeed * frameStep;\n        vy = vy * COMET_VELOCITY_MEMORY - s.pointerOffset[idx + 1] * followSpeed * frameStep;\n        vz = vz * COMET_VELOCITY_MEMORY - s.pointerOffset[idx + 2] * followSpeed * frameStep;\n        velocities[idx] = vx;\n        velocities[idx + 1] = vy;\n        velocities[idx + 2] = vz;\n      }\n      if (pointerActive) {\n        applyVoxSpacePointerPush(velocities, idx, px, py, pz, i / count, s.pointerField);\n        vx = velocities[idx];\n        vy = velocities[idx + 1];\n        vz = velocities[idx + 2];\n      }\n      vx *= friction;\n      vy *= friction;\n      vz *= friction;\n      velocities[idx] = vx;\n      velocities[idx + 1] = vy;\n      velocities[idx + 2] = vz;\n      if (!useHoldStep) {\n        s.pointerOffset[idx] += vx;\n        s.pointerOffset[idx + 1] += vy;\n        s.pointerOffset[idx + 2] += vz;\n      }\n      const nx = useHoldStep ? px + vx : tx + s.pointerOffset[idx];\n      const ny = useHoldStep ? py + vy : ty + s.pointerOffset[idx + 1];\n      const nz = useHoldStep ? pz + vz : tz + s.pointerOffset[idx + 2];\n      positions[idx] = nx;\n      positions[idx + 1] = ny;\n      positions[idx + 2] = nz;\n      const warm = glyphMix * 0.26 + cometMix * 0.045;\n      const depth = Math.max(-1, Math.min(1, (nz - state.headZ) / 1.4)) * this.holdFade;\n      const shimmer = 0.86 + Math.sin(time * 2.1 + s.tailSeed[i] * 43) * 0.05 + depth * 0.08;\n      const w = warm;\n      const lum = (glyphMix * 1.14 + cometMix * s.body.tone[i] + Math.abs(depth) * 0.06) * shimmer * palette.gain;\n      let cr = (palette.core.r + (palette.accent.r - palette.core.r) * w) * lum;\n      let cg = (palette.core.g + (palette.accent.g - palette.core.g) * w) * lum;\n      let cb = (palette.core.b + (palette.accent.b - palette.core.b) * w) * lum;\n      const nucleus = s.body.spriteSize[i] < 3;\n      if (this.light) {\n        const ink = nucleus ? 1 - cometMix * 0.72 : 1;\n        cr *= ink;\n        cg *= ink;\n        cb *= ink;\n      } else {\n        cr *= 1 + cometMix * (nucleus ? 0.04 : -0.72);\n        cg *= 1 + cometMix * (nucleus ? 0 : -0.18);\n        cb *= 1 + cometMix * (nucleus ? -0.12 : 0.18);\n      }\n      const cap = this.light ? 0.82 : 1.4;\n      const colorIndex = i * 4;\n      colors[colorIndex] = cr > cap ? cap : cr;\n      colors[colorIndex + 1] = cg > cap ? cap : cg;\n      colors[colorIndex + 2] = cb > cap ? cap : cb;\n      const spriteScale = 1 + cometMix * (this.light ? 0.35 : s.body.spriteSize[i] - 1);\n      s.body.spriteScale[i] = spriteScale;\n      colors[colorIndex + 3] = alpha / (spriteScale * spriteScale);\n    }\n    this.renderedHead.set(state.headX, state.headY, state.headZ);\n  }",
+    "syncGlyph": "syncGlyph() {\n    const brand = this.roster[this.choreography.state.brandIndex % this.roster.length];\n    if (!brand) return;\n    const targets = this.brandSource.ensure(\n      brand.slug,\n      this.particleCount,\n      this.quality.iconCanvasSize\n    );\n    if (!targets) return;\n    const state = this.choreography.state;\n    const amplitude = state.toX;\n    const anchorZ = glyphStopZ(state.legIndex, SPACE_TIMING);\n    const glyph = this.scratch.glyphTargets;\n    const n = Math.min(this.particleCount, Math.floor(targets.targets.length / 3));\n    for (let i = 0; i < n; i++) {\n      glyph[i * 3] = targets.targets[i * 3] - GLYPH_CENTER_X + amplitude;\n      glyph[i * 3 + 1] = targets.targets[i * 3 + 1];\n      glyph[i * 3 + 2] = targets.targets[i * 3 + 2] + anchorZ;\n    }\n    for (let i = n; i < this.particleCount; i++) {\n      glyph[i * 3] = amplitude;\n      glyph[i * 3 + 1] = 0;\n      glyph[i * 3 + 2] = anchorZ;\n    }\n    this.currentGlyphLeg = state.legIndex;\n    this.scratch.glyphStrokeDepth.fill(0);\n    this.scratch.glyphStrokeDepth.set(targets.strokeDepth.subarray(0, n));\n    fillVoxSpaceIconOrbitField(\n      this.scratch.iconOrbitField,\n      targets.targets,\n      targets.strokeDepth\n    );\n  }"
+  },
+  "initial": {
+    "t": 0.11666666666666667,
+    "phase": "travel",
+    "progress": 0.017948717948717947,
+    "leg": 0,
+    "brand": "openai",
+    "head": [
+      -2.3099558764540715,
+      0,
+      -12.63384476534296
+    ],
+    "localHead": [
+      -2.3099558764540715,
+      0,
+      -6.63384476534296
+    ],
+    "camera": [
+      0,
+      0,
+      10.530199535348798
+    ],
+    "gap": 23.164044300691756,
+    "fitGap": 16.372699535348797,
+    "geometry": {
+      "min": [
+        -3.3189733028411865,
+        -1.0066680908203125,
+        -13.443048000335693
+      ],
+      "max": [
+        -1.2997920513153076,
+        1.0118870735168457,
+        -11.821082592010498
+      ],
+      "n": 18000,
+      "center": [
+        -2.309382677078247,
+        0.0026094913482666016,
+        -12.632065296173096
+      ],
+      "size": [
+        2.019181251525879,
+        2.018555164337158,
+        1.6219654083251953
+      ]
+    },
+    "headGeometryMaxError": 2.3839269047698508e-7,
+    "glyph": {
+      "min": [
+        -2.5142080783843994,
+        -5.006529331207275,
+        1.697072982788086
+      ],
+      "max": [
+        7.616978645324707,
+        5.0734710693359375,
+        3.8469486236572266
+      ],
+      "n": 18000,
+      "center": [
+        2.551385283470154,
+        0.033470869064331055,
+        2.7720108032226562
+      ],
+      "size": [
+        10.131186723709106,
+        10.080000400543213,
+        2.1498756408691406
+      ]
+    },
+    "projected": null,
+    "glyphProjected": null,
+    "matrices": {
+      "body": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        -6,
+        1
+      ],
+      "tail": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        -6,
+        1
+      ],
+      "camera": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        10.530199535348798,
+        1
+      ],
+      "projection": [
+        1.546929283385185,
+        0,
+        0,
+        0,
+        0,
+        2.475086853416296,
+        0,
+        0,
+        0,
+        0,
+        -1.000222246916324,
+        -1,
+        0,
+        0,
+        -0.20002222469163242,
+        0
+      ]
+    },
+    "births": {
+      "count": 0,
+      "examples": [],
+      "errors": [],
+      "inertiaErrors": []
+    },
+    "drawCalls": 6
+  },
+  "gpu": [
+    {
+      "uuid": "14336ee1-9b04-476b-828b-ab2301f356a2",
+      "attributes": {
+        "position": {
+          "itemSize": 3,
+          "count": 18000,
+          "bytes": 216000,
+          "exactGPU": true
+        },
+        "color": {
+          "itemSize": 4,
+          "count": 18000,
+          "bytes": 288000,
+          "exactGPU": true
+        },
+        "cometScale": {
+          "itemSize": 1,
+          "count": 18000,
+          "bytes": 72000,
+          "exactGPU": true
+        }
+      },
+      "vertex": "#version 300 es\n\n#define attribute in\n#define varying out\n#define texture2D texture\nprecision highp float;\n\tprecision highp int;\n\tprecision highp sampler2D;\n\tprecision highp samplerCube;\n\tprecision highp sampler3D;\n\tprecision highp sampler2DArray;\n\tprecision highp sampler2DShadow;\n\tprecision highp samplerCubeShadow;\n\tprecision highp sampler2DArrayShadow;\n\tprecision highp isampler2D;\n\tprecision highp isampler3D;\n\tprecision highp isamplerCube;\n\tprecision highp isampler2DArray;\n\tprecision highp usampler2D;\n\tprecision highp usampler3D;\n\tprecision highp usamplerCube;\n\tprecision highp usampler2DArray;\n\t\n#define HIGH_PRECISION\n#define SHADER_TYPE PointsMaterial\n#define SHADER_NAME \n#define USE_MAP\n#define MAP_UV uv\n#define USE_COLOR\n#define USE_COLOR_ALPHA\n#define USE_SIZEATTENUATION\nuniform mat4 modelMatrix;\nuniform mat4 modelViewMatrix;\nuniform mat4 projectionMatrix;\nuniform mat4 viewMatrix;\nuniform mat3 normalMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\n#ifdef USE_INSTANCING\n\tattribute mat4 instanceMatrix;\n#endif\n#ifdef USE_INSTANCING_COLOR\n\tattribute vec3 instanceColor;\n#endif\n#ifdef USE_INSTANCING_MORPH\n\tuniform sampler2D morphTexture;\n#endif\nattribute vec3 position;\nattribute vec3 normal;\nattribute vec2 uv;\n#ifdef USE_UV1\n\tattribute vec2 uv1;\n#endif\n#ifdef USE_UV2\n\tattribute vec2 uv2;\n#endif\n#ifdef USE_UV3\n\tattribute vec2 uv3;\n#endif\n#ifdef USE_TANGENT\n\tattribute vec4 tangent;\n#endif\n#if defined( USE_COLOR_ALPHA )\n\tattribute vec4 color;\n#elif defined( USE_COLOR )\n\tattribute vec3 color;\n#endif\n#ifdef USE_SKINNING\n\tattribute vec4 skinIndex;\n\tattribute vec4 skinWeight;\n#endif\n\nattribute float cometScale;\nuniform float size;\nuniform float scale;\n#define PI 3.141592653589793\n#define PI2 6.283185307179586\n#define PI_HALF 1.5707963267948966\n#define RECIPROCAL_PI 0.3183098861837907\n#define RECIPROCAL_PI2 0.15915494309189535\n#define EPSILON 1e-6\n#ifndef saturate\n#define saturate( a ) clamp( a, 0.0, 1.0 )\n#endif\n#define whiteComplement( a ) ( 1.0 - saturate( a ) )\nfloat pow2( const in float x ) { return x*x; }\nvec3 pow2( const in vec3 x ) { return x*x; }\nfloat pow3( const in float x ) { return x*x*x; }\nfloat pow4( const in float x ) { float x2 = x*x; return x2*x2; }\nfloat max3( const in vec3 v ) { return max( max( v.x, v.y ), v.z ); }\nfloat average( const in vec3 v ) { return dot( v, vec3( 0.3333333 ) ); }\nhighp float rand( const in vec2 uv ) {\n\tconst highp float a = 12.9898, b = 78.233, c = 43758.5453;\n\thighp float dt = dot( uv.xy, vec2( a,b ) ), sn = mod( dt, PI );\n\treturn fract( sin( sn ) * c );\n}\n#ifdef HIGH_PRECISION\n\tfloat precisionSafeLength( vec3 v ) { return length( v ); }\n#else\n\tfloat precisionSafeLength( vec3 v ) {\n\t\tfloat maxComponent = max3( abs( v ) );\n\t\treturn length( v / maxComponent ) * maxComponent;\n\t}\n#endif\nstruct IncidentLight {\n\tvec3 color;\n\tvec3 direction;\n\tbool visible;\n};\nstruct ReflectedLight {\n\tvec3 directDiffuse;\n\tvec3 directSpecular;\n\tvec3 indirectDiffuse;\n\tvec3 indirectSpecular;\n};\n#ifdef USE_ALPHAHASH\n\tvarying vec3 vPosition;\n#endif\nvec3 transformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( matrix * vec4( dir, 0.0 ) ).xyz );\n}\nvec3 inverseTransformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( vec4( dir, 0.0 ) * matrix ).xyz );\n}\nbool isPerspectiveMatrix( mat4 m ) {\n\treturn m[ 2 ][ 3 ] == - 1.0;\n}\nvec2 equirectUv( in vec3 dir ) {\n\tfloat u = atan( dir.z, dir.x ) * RECIPROCAL_PI2 + 0.5;\n\tfloat v = asin( clamp( dir.y, - 1.0, 1.0 ) ) * RECIPROCAL_PI + 0.5;\n\treturn vec2( u, v );\n}\nvec3 BRDF_Lambert( const in vec3 diffuseColor ) {\n\treturn RECIPROCAL_PI * diffuseColor;\n}\nvec3 F_Schlick( const in vec3 f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n}\nfloat F_Schlick( const in float f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n} // validated\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA ) || defined( USE_INSTANCING_COLOR ) || defined( USE_BATCHING_COLOR )\n\tvarying vec4 vColor;\n#endif\n#ifdef USE_FOG\n\tvarying float vFogDepth;\n#endif\n#ifdef USE_MORPHTARGETS\n\t#ifndef USE_INSTANCING_MORPH\n\t\tuniform float morphTargetBaseInfluence;\n\t\tuniform float morphTargetInfluences[ MORPHTARGETS_COUNT ];\n\t#endif\n\tuniform sampler2DArray morphTargetsTexture;\n\tuniform ivec2 morphTargetsTextureSize;\n\tvec4 getMorph( const in int vertexIndex, const in int morphTargetIndex, const in int offset ) {\n\t\tint texelIndex = vertexIndex * MORPHTARGETS_TEXTURE_STRIDE + offset;\n\t\tint y = texelIndex / morphTargetsTextureSize.x;\n\t\tint x = texelIndex - y * morphTargetsTextureSize.x;\n\t\tivec3 morphUV = ivec3( x, y, morphTargetIndex );\n\t\treturn texelFetch( morphTargetsTexture, morphUV, 0 );\n\t}\n#endif\n#ifdef USE_LOGARITHMIC_DEPTH_BUFFER\n\tvarying float vFragDepth;\n\tvarying float vIsPerspective;\n#endif\n#if 0 > 0\n\tvarying vec3 vClipPosition;\n#endif\n#ifdef USE_POINTS_UV\n\tvarying vec2 vUv;\n\tuniform mat3 uvTransform;\n#endif\nvoid main() {\n\t#ifdef USE_POINTS_UV\n\t\tvUv = ( uvTransform * vec3( uv, 1 ) ).xy;\n\t#endif\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA ) || defined( USE_INSTANCING_COLOR ) || defined( USE_BATCHING_COLOR )\n\tvColor = vec4( 1.0 );\n#endif\n#ifdef USE_COLOR_ALPHA\n\tvColor *= color;\n#elif defined( USE_COLOR )\n\tvColor.rgb *= color;\n#endif\n#ifdef USE_INSTANCING_COLOR\n\tvColor.rgb *= instanceColor.rgb;\n#endif\n#ifdef USE_BATCHING_COLOR\n\tvColor *= getBatchingColor( getIndirectIndex( gl_DrawID ) );\n#endif\n#ifdef USE_INSTANCING_MORPH\n\tfloat morphTargetInfluences[ MORPHTARGETS_COUNT ];\n\tfloat morphTargetBaseInfluence = texelFetch( morphTexture, ivec2( 0, gl_InstanceID ), 0 ).r;\n\tfor ( int i = 0; i < MORPHTARGETS_COUNT; i ++ ) {\n\t\tmorphTargetInfluences[i] =  texelFetch( morphTexture, ivec2( i + 1, gl_InstanceID ), 0 ).r;\n\t}\n#endif\n#if defined( USE_MORPHCOLORS )\n\tvColor *= morphTargetBaseInfluence;\n\tfor ( int i = 0; i < MORPHTARGETS_COUNT; i ++ ) {\n\t\t#if defined( USE_COLOR_ALPHA )\n\t\t\tif ( morphTargetInfluences[ i ] != 0.0 ) vColor += getMorph( gl_VertexID, i, 2 ) * morphTargetInfluences[ i ];\n\t\t#elif defined( USE_COLOR )\n\t\t\tif ( morphTargetInfluences[ i ] != 0.0 ) vColor += getMorph( gl_VertexID, i, 2 ).rgb * morphTargetInfluences[ i ];\n\t\t#endif\n\t}\n#endif\nvec3 transformed = vec3( position );\n#ifdef USE_ALPHAHASH\n\tvPosition = vec3( position );\n#endif\n#ifdef USE_MORPHTARGETS\n\ttransformed *= morphTargetBaseInfluence;\n\tfor ( int i = 0; i < MORPHTARGETS_COUNT; i ++ ) {\n\t\tif ( morphTargetInfluences[ i ] != 0.0 ) transformed += getMorph( gl_VertexID, i, 0 ).xyz * morphTargetInfluences[ i ];\n\t}\n#endif\nvec4 mvPosition = vec4( transformed, 1.0 );\n#ifdef USE_BATCHING\n\tmvPosition = batchingMatrix * mvPosition;\n#endif\n#ifdef USE_INSTANCING\n\tmvPosition = instanceMatrix * mvPosition;\n#endif\nmvPosition = modelViewMatrix * mvPosition;\ngl_Position = projectionMatrix * mvPosition;\n\tgl_PointSize = size * cometScale;\n\t#ifdef USE_SIZEATTENUATION\n\t\tbool isPerspective = isPerspectiveMatrix( projectionMatrix );\n\t\tif ( isPerspective ) gl_PointSize *= ( scale / - mvPosition.z );\n\t#endif\n#ifdef USE_LOGARITHMIC_DEPTH_BUFFER\n\tvFragDepth = 1.0 + gl_Position.w;\n\tvIsPerspective = float( isPerspectiveMatrix( projectionMatrix ) );\n#endif\n#if 0 > 0\n\tvClipPosition = - mvPosition.xyz;\n#endif\n#if defined( USE_ENVMAP ) || defined( DISTANCE ) || defined ( USE_SHADOWMAP ) || defined ( USE_TRANSMISSION ) || 0 > 0\n\tvec4 worldPosition = vec4( transformed, 1.0 );\n\t#ifdef USE_BATCHING\n\t\tworldPosition = batchingMatrix * worldPosition;\n\t#endif\n\t#ifdef USE_INSTANCING\n\t\tworldPosition = instanceMatrix * worldPosition;\n\t#endif\n\tworldPosition = modelMatrix * worldPosition;\n#endif\n#ifdef USE_FOG\n\tvFogDepth = - mvPosition.z;\n#endif\n}",
+      "fragment": "#version 300 es\n#define varying in\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor\n#define gl_FragDepthEXT gl_FragDepth\n#define texture2D texture\n#define textureCube texture\n#define texture2DProj textureProj\n#define texture2DLodEXT textureLod\n#define texture2DProjLodEXT textureProjLod\n#define textureCubeLodEXT textureLod\n#define texture2DGradEXT textureGrad\n#define texture2DProjGradEXT textureProjGrad\n#define textureCubeGradEXT textureGrad\nprecision highp float;\n\tprecision highp int;\n\tprecision highp sampler2D;\n\tprecision highp samplerCube;\n\tprecision highp sampler3D;\n\tprecision highp sampler2DArray;\n\tprecision highp sampler2DShadow;\n\tprecision highp samplerCubeShadow;\n\tprecision highp sampler2DArrayShadow;\n\tprecision highp isampler2D;\n\tprecision highp isampler3D;\n\tprecision highp isamplerCube;\n\tprecision highp isampler2DArray;\n\tprecision highp usampler2D;\n\tprecision highp usampler3D;\n\tprecision highp usamplerCube;\n\tprecision highp usampler2DArray;\n\t\n#define HIGH_PRECISION\n#define SHADER_TYPE PointsMaterial\n#define SHADER_NAME \n#define USE_MAP\n#define USE_COLOR\n#define USE_COLOR_ALPHA\nuniform mat4 viewMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\nvec4 LinearTransferOETF( in vec4 value ) {\n\treturn value;\n}\nvec4 sRGBTransferEOTF( in vec4 value ) {\n\treturn vec4( mix( pow( value.rgb * 0.9478672986 + vec3( 0.0521327014 ), vec3( 2.4 ) ), value.rgb * 0.0773993808, vec3( lessThanEqual( value.rgb, vec3( 0.04045 ) ) ) ), value.a );\n}\nvec4 sRGBTransferOETF( in vec4 value ) {\n\treturn vec4( mix( pow( value.rgb, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), value.rgb * 12.92, vec3( lessThanEqual( value.rgb, vec3( 0.0031308 ) ) ) ), value.a );\n}\nvec4 linearToOutputTexel( vec4 value ) {\n\treturn sRGBTransferOETF( vec4( value.rgb * mat3( 1.0000,-0.0000,-0.0000,-0.0000,1.0000,0.0000,0.0000,0.0000,1.0000 ), value.a ) );\n}\nfloat luminance( const in vec3 rgb ) {\n\tconst vec3 weights = vec3( 0.2126, 0.7152, 0.0722 );\n\treturn dot( weights, rgb );\n}\n\nuniform vec3 diffuse;\nuniform float opacity;\n#define PI 3.141592653589793\n#define PI2 6.283185307179586\n#define PI_HALF 1.5707963267948966\n#define RECIPROCAL_PI 0.3183098861837907\n#define RECIPROCAL_PI2 0.15915494309189535\n#define EPSILON 1e-6\n#ifndef saturate\n#define saturate( a ) clamp( a, 0.0, 1.0 )\n#endif\n#define whiteComplement( a ) ( 1.0 - saturate( a ) )\nfloat pow2( const in float x ) { return x*x; }\nvec3 pow2( const in vec3 x ) { return x*x; }\nfloat pow3( const in float x ) { return x*x*x; }\nfloat pow4( const in float x ) { float x2 = x*x; return x2*x2; }\nfloat max3( const in vec3 v ) { return max( max( v.x, v.y ), v.z ); }\nfloat average( const in vec3 v ) { return dot( v, vec3( 0.3333333 ) ); }\nhighp float rand( const in vec2 uv ) {\n\tconst highp float a = 12.9898, b = 78.233, c = 43758.5453;\n\thighp float dt = dot( uv.xy, vec2( a,b ) ), sn = mod( dt, PI );\n\treturn fract( sin( sn ) * c );\n}\n#ifdef HIGH_PRECISION\n\tfloat precisionSafeLength( vec3 v ) { return length( v ); }\n#else\n\tfloat precisionSafeLength( vec3 v ) {\n\t\tfloat maxComponent = max3( abs( v ) );\n\t\treturn length( v / maxComponent ) * maxComponent;\n\t}\n#endif\nstruct IncidentLight {\n\tvec3 color;\n\tvec3 direction;\n\tbool visible;\n};\nstruct ReflectedLight {\n\tvec3 directDiffuse;\n\tvec3 directSpecular;\n\tvec3 indirectDiffuse;\n\tvec3 indirectSpecular;\n};\n#ifdef USE_ALPHAHASH\n\tvarying vec3 vPosition;\n#endif\nvec3 transformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( matrix * vec4( dir, 0.0 ) ).xyz );\n}\nvec3 inverseTransformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( vec4( dir, 0.0 ) * matrix ).xyz );\n}\nbool isPerspectiveMatrix( mat4 m ) {\n\treturn m[ 2 ][ 3 ] == - 1.0;\n}\nvec2 equirectUv( in vec3 dir ) {\n\tfloat u = atan( dir.z, dir.x ) * RECIPROCAL_PI2 + 0.5;\n\tfloat v = asin( clamp( dir.y, - 1.0, 1.0 ) ) * RECIPROCAL_PI + 0.5;\n\treturn vec2( u, v );\n}\nvec3 BRDF_Lambert( const in vec3 diffuseColor ) {\n\treturn RECIPROCAL_PI * diffuseColor;\n}\nvec3 F_Schlick( const in vec3 f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n}\nfloat F_Schlick( const in float f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n} // validated\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )\n\tvarying vec4 vColor;\n#endif\n#if defined( USE_POINTS_UV )\n\tvarying vec2 vUv;\n#else\n\t#if defined( USE_MAP ) || defined( USE_ALPHAMAP )\n\t\tuniform mat3 uvTransform;\n\t#endif\n#endif\n#ifdef USE_MAP\n\tuniform sampler2D map;\n#endif\n#ifdef USE_ALPHAMAP\n\tuniform sampler2D alphaMap;\n#endif\n#ifdef USE_ALPHATEST\n\tuniform float alphaTest;\n#endif\n#ifdef USE_ALPHAHASH\n\tconst float ALPHA_HASH_SCALE = 0.05;\n\tfloat hash2D( vec2 value ) {\n\t\treturn fract( 1.0e4 * sin( 17.0 * value.x + 0.1 * value.y ) * ( 0.1 + abs( sin( 13.0 * value.y + value.x ) ) ) );\n\t}\n\tfloat hash3D( vec3 value ) {\n\t\treturn hash2D( vec2( hash2D( value.xy ), value.z ) );\n\t}\n\tfloat getAlphaHashThreshold( vec3 position ) {\n\t\tfloat maxDeriv = max(\n\t\t\tlength( dFdx( position.xyz ) ),\n\t\t\tlength( dFdy( position.xyz ) )\n\t\t);\n\t\tfloat pixScale = 1.0 / ( ALPHA_HASH_SCALE * maxDeriv );\n\t\tvec2 pixScales = vec2(\n\t\t\texp2( floor( log2( pixScale ) ) ),\n\t\t\texp2( ceil( log2( pixScale ) ) )\n\t\t);\n\t\tvec2 alpha = vec2(\n\t\t\thash3D( floor( pixScales.x * position.xyz ) ),\n\t\t\thash3D( floor( pixScales.y * position.xyz ) )\n\t\t);\n\t\tfloat lerpFactor = fract( log2( pixScale ) );\n\t\tfloat x = ( 1.0 - lerpFactor ) * alpha.x + lerpFactor * alpha.y;\n\t\tfloat a = min( lerpFactor, 1.0 - lerpFactor );\n\t\tvec3 cases = vec3(\n\t\t\tx * x / ( 2.0 * a * ( 1.0 - a ) ),\n\t\t\t( x - 0.5 * a ) / ( 1.0 - a ),\n\t\t\t1.0 - ( ( 1.0 - x ) * ( 1.0 - x ) / ( 2.0 * a * ( 1.0 - a ) ) )\n\t\t);\n\t\tfloat threshold = ( x < ( 1.0 - a ) )\n\t\t\t? ( ( x < a ) ? cases.x : cases.y )\n\t\t\t: cases.z;\n\t\treturn clamp( threshold , 1.0e-6, 1.0 );\n\t}\n#endif\n#ifdef USE_FOG\n\tuniform vec3 fogColor;\n\tvarying float vFogDepth;\n\t#ifdef FOG_EXP2\n\t\tuniform float fogDensity;\n\t#else\n\t\tuniform float fogNear;\n\t\tuniform float fogFar;\n\t#endif\n#endif\n#if defined( USE_LOGARITHMIC_DEPTH_BUFFER )\n\tuniform float logDepthBufFC;\n\tvarying float vFragDepth;\n\tvarying float vIsPerspective;\n#endif\n#if 0 > 0\n\tvarying vec3 vClipPosition;\n\tuniform vec4 clippingPlanes[ 0 ];\n#endif\nvoid main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n#if 0 > 0\n\tvec4 plane;\n\t#ifdef ALPHA_TO_COVERAGE\n\t\tfloat distanceToPlane, distanceGradient;\n\t\tfloat clipOpacity = 1.0;\n\t\t\n\t\t#if 0 < 0\n\t\t\tfloat unionClipOpacity = 1.0;\n\t\t\t\n\t\t\tclipOpacity *= 1.0 - unionClipOpacity;\n\t\t#endif\n\t\tdiffuseColor.a *= clipOpacity;\n\t\tif ( diffuseColor.a == 0.0 ) discard;\n\t#else\n\t\t\n\t\t#if 0 < 0\n\t\t\tbool clipped = true;\n\t\t\t\n\t\t\tif ( clipped ) discard;\n\t\t#endif\n\t#endif\n#endif\n\tvec3 outgoingLight = vec3( 0.0 );\n#if defined( USE_LOGARITHMIC_DEPTH_BUFFER )\n\tgl_FragDepth = vIsPerspective == 0.0 ? gl_FragCoord.z : log2( vFragDepth ) * logDepthBufFC * 0.5;\n#endif\n#if defined( USE_MAP ) || defined( USE_ALPHAMAP )\n\t#if defined( USE_POINTS_UV )\n\t\tvec2 uv = vUv;\n\t#else\n\t\tvec2 uv = ( uvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1 ) ).xy;\n\t#endif\n#endif\n#ifdef USE_MAP\n\tdiffuseColor *= texture2D( map, uv );\n#endif\n#ifdef USE_ALPHAMAP\n\tdiffuseColor.a *= texture2D( alphaMap, uv ).g;\n#endif\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )\n\tdiffuseColor *= vColor;\n#endif\n#ifdef USE_ALPHATEST\n\t#ifdef ALPHA_TO_COVERAGE\n\tdiffuseColor.a = smoothstep( alphaTest, alphaTest + fwidth( diffuseColor.a ), diffuseColor.a );\n\tif ( diffuseColor.a == 0.0 ) discard;\n\t#else\n\tif ( diffuseColor.a < alphaTest ) discard;\n\t#endif\n#endif\n#ifdef USE_ALPHAHASH\n\tif ( diffuseColor.a < getAlphaHashThreshold( vPosition ) ) discard;\n#endif\n\toutgoingLight = diffuseColor.rgb;\n#ifdef OPAQUE\ndiffuseColor.a = 1.0;\n#endif\n#ifdef USE_TRANSMISSION\ndiffuseColor.a *= material.transmissionAlpha;\n#endif\ngl_FragColor = vec4( outgoingLight, diffuseColor.a );\n#if defined( TONE_MAPPING )\n\tgl_FragColor.rgb = toneMapping( gl_FragColor.rgb );\n#endif\ngl_FragColor = linearToOutputTexel( gl_FragColor );\n#ifdef USE_FOG\n\t#ifdef FOG_EXP2\n\t\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );\n\t#else\n\t\tfloat fogFactor = smoothstep( fogNear, fogFar, vFogDepth );\n\t#endif\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );\n#endif\n#ifdef PREMULTIPLIED_ALPHA\n\tgl_FragColor.rgb *= gl_FragColor.a;\n#endif\n}",
+      "pointScaleOnly": true
+    },
+    {
+      "uuid": "6382a4e2-356a-4853-870b-d125cb9e0eff",
+      "attributes": {
+        "position": {
+          "itemSize": 3,
+          "count": 14760,
+          "bytes": 177120,
+          "exactGPU": true
+        },
+        "color": {
+          "itemSize": 4,
+          "count": 14760,
+          "bytes": 236160,
+          "exactGPU": true
+        }
+      },
+      "vertex": "#version 300 es\n\n#define attribute in\n#define varying out\n#define texture2D texture\nprecision highp float;\n\tprecision highp int;\n\tprecision highp sampler2D;\n\tprecision highp samplerCube;\n\tprecision highp sampler3D;\n\tprecision highp sampler2DArray;\n\tprecision highp sampler2DShadow;\n\tprecision highp samplerCubeShadow;\n\tprecision highp sampler2DArrayShadow;\n\tprecision highp isampler2D;\n\tprecision highp isampler3D;\n\tprecision highp isamplerCube;\n\tprecision highp isampler2DArray;\n\tprecision highp usampler2D;\n\tprecision highp usampler3D;\n\tprecision highp usamplerCube;\n\tprecision highp usampler2DArray;\n\t\n#define HIGH_PRECISION\n#define SHADER_TYPE PointsMaterial\n#define SHADER_NAME \n#define USE_MAP\n#define MAP_UV uv\n#define USE_COLOR\n#define USE_COLOR_ALPHA\n#define USE_SIZEATTENUATION\nuniform mat4 modelMatrix;\nuniform mat4 modelViewMatrix;\nuniform mat4 projectionMatrix;\nuniform mat4 viewMatrix;\nuniform mat3 normalMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\n#ifdef USE_INSTANCING\n\tattribute mat4 instanceMatrix;\n#endif\n#ifdef USE_INSTANCING_COLOR\n\tattribute vec3 instanceColor;\n#endif\n#ifdef USE_INSTANCING_MORPH\n\tuniform sampler2D morphTexture;\n#endif\nattribute vec3 position;\nattribute vec3 normal;\nattribute vec2 uv;\n#ifdef USE_UV1\n\tattribute vec2 uv1;\n#endif\n#ifdef USE_UV2\n\tattribute vec2 uv2;\n#endif\n#ifdef USE_UV3\n\tattribute vec2 uv3;\n#endif\n#ifdef USE_TANGENT\n\tattribute vec4 tangent;\n#endif\n#if defined( USE_COLOR_ALPHA )\n\tattribute vec4 color;\n#elif defined( USE_COLOR )\n\tattribute vec3 color;\n#endif\n#ifdef USE_SKINNING\n\tattribute vec4 skinIndex;\n\tattribute vec4 skinWeight;\n#endif\n\nuniform float size;\nuniform float scale;\n#define PI 3.141592653589793\n#define PI2 6.283185307179586\n#define PI_HALF 1.5707963267948966\n#define RECIPROCAL_PI 0.3183098861837907\n#define RECIPROCAL_PI2 0.15915494309189535\n#define EPSILON 1e-6\n#ifndef saturate\n#define saturate( a ) clamp( a, 0.0, 1.0 )\n#endif\n#define whiteComplement( a ) ( 1.0 - saturate( a ) )\nfloat pow2( const in float x ) { return x*x; }\nvec3 pow2( const in vec3 x ) { return x*x; }\nfloat pow3( const in float x ) { return x*x*x; }\nfloat pow4( const in float x ) { float x2 = x*x; return x2*x2; }\nfloat max3( const in vec3 v ) { return max( max( v.x, v.y ), v.z ); }\nfloat average( const in vec3 v ) { return dot( v, vec3( 0.3333333 ) ); }\nhighp float rand( const in vec2 uv ) {\n\tconst highp float a = 12.9898, b = 78.233, c = 43758.5453;\n\thighp float dt = dot( uv.xy, vec2( a,b ) ), sn = mod( dt, PI );\n\treturn fract( sin( sn ) * c );\n}\n#ifdef HIGH_PRECISION\n\tfloat precisionSafeLength( vec3 v ) { return length( v ); }\n#else\n\tfloat precisionSafeLength( vec3 v ) {\n\t\tfloat maxComponent = max3( abs( v ) );\n\t\treturn length( v / maxComponent ) * maxComponent;\n\t}\n#endif\nstruct IncidentLight {\n\tvec3 color;\n\tvec3 direction;\n\tbool visible;\n};\nstruct ReflectedLight {\n\tvec3 directDiffuse;\n\tvec3 directSpecular;\n\tvec3 indirectDiffuse;\n\tvec3 indirectSpecular;\n};\n#ifdef USE_ALPHAHASH\n\tvarying vec3 vPosition;\n#endif\nvec3 transformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( matrix * vec4( dir, 0.0 ) ).xyz );\n}\nvec3 inverseTransformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( vec4( dir, 0.0 ) * matrix ).xyz );\n}\nbool isPerspectiveMatrix( mat4 m ) {\n\treturn m[ 2 ][ 3 ] == - 1.0;\n}\nvec2 equirectUv( in vec3 dir ) {\n\tfloat u = atan( dir.z, dir.x ) * RECIPROCAL_PI2 + 0.5;\n\tfloat v = asin( clamp( dir.y, - 1.0, 1.0 ) ) * RECIPROCAL_PI + 0.5;\n\treturn vec2( u, v );\n}\nvec3 BRDF_Lambert( const in vec3 diffuseColor ) {\n\treturn RECIPROCAL_PI * diffuseColor;\n}\nvec3 F_Schlick( const in vec3 f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n}\nfloat F_Schlick( const in float f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n} // validated\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA ) || defined( USE_INSTANCING_COLOR ) || defined( USE_BATCHING_COLOR )\n\tvarying vec4 vColor;\n#endif\n#ifdef USE_FOG\n\tvarying float vFogDepth;\n#endif\n#ifdef USE_MORPHTARGETS\n\t#ifndef USE_INSTANCING_MORPH\n\t\tuniform float morphTargetBaseInfluence;\n\t\tuniform float morphTargetInfluences[ MORPHTARGETS_COUNT ];\n\t#endif\n\tuniform sampler2DArray morphTargetsTexture;\n\tuniform ivec2 morphTargetsTextureSize;\n\tvec4 getMorph( const in int vertexIndex, const in int morphTargetIndex, const in int offset ) {\n\t\tint texelIndex = vertexIndex * MORPHTARGETS_TEXTURE_STRIDE + offset;\n\t\tint y = texelIndex / morphTargetsTextureSize.x;\n\t\tint x = texelIndex - y * morphTargetsTextureSize.x;\n\t\tivec3 morphUV = ivec3( x, y, morphTargetIndex );\n\t\treturn texelFetch( morphTargetsTexture, morphUV, 0 );\n\t}\n#endif\n#ifdef USE_LOGARITHMIC_DEPTH_BUFFER\n\tvarying float vFragDepth;\n\tvarying float vIsPerspective;\n#endif\n#if 0 > 0\n\tvarying vec3 vClipPosition;\n#endif\n#ifdef USE_POINTS_UV\n\tvarying vec2 vUv;\n\tuniform mat3 uvTransform;\n#endif\nvoid main() {\n\t#ifdef USE_POINTS_UV\n\t\tvUv = ( uvTransform * vec3( uv, 1 ) ).xy;\n\t#endif\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA ) || defined( USE_INSTANCING_COLOR ) || defined( USE_BATCHING_COLOR )\n\tvColor = vec4( 1.0 );\n#endif\n#ifdef USE_COLOR_ALPHA\n\tvColor *= color;\n#elif defined( USE_COLOR )\n\tvColor.rgb *= color;\n#endif\n#ifdef USE_INSTANCING_COLOR\n\tvColor.rgb *= instanceColor.rgb;\n#endif\n#ifdef USE_BATCHING_COLOR\n\tvColor *= getBatchingColor( getIndirectIndex( gl_DrawID ) );\n#endif\n#ifdef USE_INSTANCING_MORPH\n\tfloat morphTargetInfluences[ MORPHTARGETS_COUNT ];\n\tfloat morphTargetBaseInfluence = texelFetch( morphTexture, ivec2( 0, gl_InstanceID ), 0 ).r;\n\tfor ( int i = 0; i < MORPHTARGETS_COUNT; i ++ ) {\n\t\tmorphTargetInfluences[i] =  texelFetch( morphTexture, ivec2( i + 1, gl_InstanceID ), 0 ).r;\n\t}\n#endif\n#if defined( USE_MORPHCOLORS )\n\tvColor *= morphTargetBaseInfluence;\n\tfor ( int i = 0; i < MORPHTARGETS_COUNT; i ++ ) {\n\t\t#if defined( USE_COLOR_ALPHA )\n\t\t\tif ( morphTargetInfluences[ i ] != 0.0 ) vColor += getMorph( gl_VertexID, i, 2 ) * morphTargetInfluences[ i ];\n\t\t#elif defined( USE_COLOR )\n\t\t\tif ( morphTargetInfluences[ i ] != 0.0 ) vColor += getMorph( gl_VertexID, i, 2 ).rgb * morphTargetInfluences[ i ];\n\t\t#endif\n\t}\n#endif\nvec3 transformed = vec3( position );\n#ifdef USE_ALPHAHASH\n\tvPosition = vec3( position );\n#endif\n#ifdef USE_MORPHTARGETS\n\ttransformed *= morphTargetBaseInfluence;\n\tfor ( int i = 0; i < MORPHTARGETS_COUNT; i ++ ) {\n\t\tif ( morphTargetInfluences[ i ] != 0.0 ) transformed += getMorph( gl_VertexID, i, 0 ).xyz * morphTargetInfluences[ i ];\n\t}\n#endif\nvec4 mvPosition = vec4( transformed, 1.0 );\n#ifdef USE_BATCHING\n\tmvPosition = batchingMatrix * mvPosition;\n#endif\n#ifdef USE_INSTANCING\n\tmvPosition = instanceMatrix * mvPosition;\n#endif\nmvPosition = modelViewMatrix * mvPosition;\ngl_Position = projectionMatrix * mvPosition;\n\tgl_PointSize = size;\n\t#ifdef USE_SIZEATTENUATION\n\t\tbool isPerspective = isPerspectiveMatrix( projectionMatrix );\n\t\tif ( isPerspective ) gl_PointSize *= ( scale / - mvPosition.z );\n\t#endif\n#ifdef USE_LOGARITHMIC_DEPTH_BUFFER\n\tvFragDepth = 1.0 + gl_Position.w;\n\tvIsPerspective = float( isPerspectiveMatrix( projectionMatrix ) );\n#endif\n#if 0 > 0\n\tvClipPosition = - mvPosition.xyz;\n#endif\n#if defined( USE_ENVMAP ) || defined( DISTANCE ) || defined ( USE_SHADOWMAP ) || defined ( USE_TRANSMISSION ) || 0 > 0\n\tvec4 worldPosition = vec4( transformed, 1.0 );\n\t#ifdef USE_BATCHING\n\t\tworldPosition = batchingMatrix * worldPosition;\n\t#endif\n\t#ifdef USE_INSTANCING\n\t\tworldPosition = instanceMatrix * worldPosition;\n\t#endif\n\tworldPosition = modelMatrix * worldPosition;\n#endif\n#ifdef USE_FOG\n\tvFogDepth = - mvPosition.z;\n#endif\n}",
+      "fragment": "#version 300 es\n#define varying in\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor\n#define gl_FragDepthEXT gl_FragDepth\n#define texture2D texture\n#define textureCube texture\n#define texture2DProj textureProj\n#define texture2DLodEXT textureLod\n#define texture2DProjLodEXT textureProjLod\n#define textureCubeLodEXT textureLod\n#define texture2DGradEXT textureGrad\n#define texture2DProjGradEXT textureProjGrad\n#define textureCubeGradEXT textureGrad\nprecision highp float;\n\tprecision highp int;\n\tprecision highp sampler2D;\n\tprecision highp samplerCube;\n\tprecision highp sampler3D;\n\tprecision highp sampler2DArray;\n\tprecision highp sampler2DShadow;\n\tprecision highp samplerCubeShadow;\n\tprecision highp sampler2DArrayShadow;\n\tprecision highp isampler2D;\n\tprecision highp isampler3D;\n\tprecision highp isamplerCube;\n\tprecision highp isampler2DArray;\n\tprecision highp usampler2D;\n\tprecision highp usampler3D;\n\tprecision highp usamplerCube;\n\tprecision highp usampler2DArray;\n\t\n#define HIGH_PRECISION\n#define SHADER_TYPE PointsMaterial\n#define SHADER_NAME \n#define USE_MAP\n#define USE_COLOR\n#define USE_COLOR_ALPHA\nuniform mat4 viewMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\nvec4 LinearTransferOETF( in vec4 value ) {\n\treturn value;\n}\nvec4 sRGBTransferEOTF( in vec4 value ) {\n\treturn vec4( mix( pow( value.rgb * 0.9478672986 + vec3( 0.0521327014 ), vec3( 2.4 ) ), value.rgb * 0.0773993808, vec3( lessThanEqual( value.rgb, vec3( 0.04045 ) ) ) ), value.a );\n}\nvec4 sRGBTransferOETF( in vec4 value ) {\n\treturn vec4( mix( pow( value.rgb, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), value.rgb * 12.92, vec3( lessThanEqual( value.rgb, vec3( 0.0031308 ) ) ) ), value.a );\n}\nvec4 linearToOutputTexel( vec4 value ) {\n\treturn sRGBTransferOETF( vec4( value.rgb * mat3( 1.0000,-0.0000,-0.0000,-0.0000,1.0000,0.0000,0.0000,0.0000,1.0000 ), value.a ) );\n}\nfloat luminance( const in vec3 rgb ) {\n\tconst vec3 weights = vec3( 0.2126, 0.7152, 0.0722 );\n\treturn dot( weights, rgb );\n}\n\nuniform vec3 diffuse;\nuniform float opacity;\n#define PI 3.141592653589793\n#define PI2 6.283185307179586\n#define PI_HALF 1.5707963267948966\n#define RECIPROCAL_PI 0.3183098861837907\n#define RECIPROCAL_PI2 0.15915494309189535\n#define EPSILON 1e-6\n#ifndef saturate\n#define saturate( a ) clamp( a, 0.0, 1.0 )\n#endif\n#define whiteComplement( a ) ( 1.0 - saturate( a ) )\nfloat pow2( const in float x ) { return x*x; }\nvec3 pow2( const in vec3 x ) { return x*x; }\nfloat pow3( const in float x ) { return x*x*x; }\nfloat pow4( const in float x ) { float x2 = x*x; return x2*x2; }\nfloat max3( const in vec3 v ) { return max( max( v.x, v.y ), v.z ); }\nfloat average( const in vec3 v ) { return dot( v, vec3( 0.3333333 ) ); }\nhighp float rand( const in vec2 uv ) {\n\tconst highp float a = 12.9898, b = 78.233, c = 43758.5453;\n\thighp float dt = dot( uv.xy, vec2( a,b ) ), sn = mod( dt, PI );\n\treturn fract( sin( sn ) * c );\n}\n#ifdef HIGH_PRECISION\n\tfloat precisionSafeLength( vec3 v ) { return length( v ); }\n#else\n\tfloat precisionSafeLength( vec3 v ) {\n\t\tfloat maxComponent = max3( abs( v ) );\n\t\treturn length( v / maxComponent ) * maxComponent;\n\t}\n#endif\nstruct IncidentLight {\n\tvec3 color;\n\tvec3 direction;\n\tbool visible;\n};\nstruct ReflectedLight {\n\tvec3 directDiffuse;\n\tvec3 directSpecular;\n\tvec3 indirectDiffuse;\n\tvec3 indirectSpecular;\n};\n#ifdef USE_ALPHAHASH\n\tvarying vec3 vPosition;\n#endif\nvec3 transformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( matrix * vec4( dir, 0.0 ) ).xyz );\n}\nvec3 inverseTransformDirection( in vec3 dir, in mat4 matrix ) {\n\treturn normalize( ( vec4( dir, 0.0 ) * matrix ).xyz );\n}\nbool isPerspectiveMatrix( mat4 m ) {\n\treturn m[ 2 ][ 3 ] == - 1.0;\n}\nvec2 equirectUv( in vec3 dir ) {\n\tfloat u = atan( dir.z, dir.x ) * RECIPROCAL_PI2 + 0.5;\n\tfloat v = asin( clamp( dir.y, - 1.0, 1.0 ) ) * RECIPROCAL_PI + 0.5;\n\treturn vec2( u, v );\n}\nvec3 BRDF_Lambert( const in vec3 diffuseColor ) {\n\treturn RECIPROCAL_PI * diffuseColor;\n}\nvec3 F_Schlick( const in vec3 f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n}\nfloat F_Schlick( const in float f0, const in float f90, const in float dotVH ) {\n\tfloat fresnel = exp2( ( - 5.55473 * dotVH - 6.98316 ) * dotVH );\n\treturn f0 * ( 1.0 - fresnel ) + ( f90 * fresnel );\n} // validated\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )\n\tvarying vec4 vColor;\n#endif\n#if defined( USE_POINTS_UV )\n\tvarying vec2 vUv;\n#else\n\t#if defined( USE_MAP ) || defined( USE_ALPHAMAP )\n\t\tuniform mat3 uvTransform;\n\t#endif\n#endif\n#ifdef USE_MAP\n\tuniform sampler2D map;\n#endif\n#ifdef USE_ALPHAMAP\n\tuniform sampler2D alphaMap;\n#endif\n#ifdef USE_ALPHATEST\n\tuniform float alphaTest;\n#endif\n#ifdef USE_ALPHAHASH\n\tconst float ALPHA_HASH_SCALE = 0.05;\n\tfloat hash2D( vec2 value ) {\n\t\treturn fract( 1.0e4 * sin( 17.0 * value.x + 0.1 * value.y ) * ( 0.1 + abs( sin( 13.0 * value.y + value.x ) ) ) );\n\t}\n\tfloat hash3D( vec3 value ) {\n\t\treturn hash2D( vec2( hash2D( value.xy ), value.z ) );\n\t}\n\tfloat getAlphaHashThreshold( vec3 position ) {\n\t\tfloat maxDeriv = max(\n\t\t\tlength( dFdx( position.xyz ) ),\n\t\t\tlength( dFdy( position.xyz ) )\n\t\t);\n\t\tfloat pixScale = 1.0 / ( ALPHA_HASH_SCALE * maxDeriv );\n\t\tvec2 pixScales = vec2(\n\t\t\texp2( floor( log2( pixScale ) ) ),\n\t\t\texp2( ceil( log2( pixScale ) ) )\n\t\t);\n\t\tvec2 alpha = vec2(\n\t\t\thash3D( floor( pixScales.x * position.xyz ) ),\n\t\t\thash3D( floor( pixScales.y * position.xyz ) )\n\t\t);\n\t\tfloat lerpFactor = fract( log2( pixScale ) );\n\t\tfloat x = ( 1.0 - lerpFactor ) * alpha.x + lerpFactor * alpha.y;\n\t\tfloat a = min( lerpFactor, 1.0 - lerpFactor );\n\t\tvec3 cases = vec3(\n\t\t\tx * x / ( 2.0 * a * ( 1.0 - a ) ),\n\t\t\t( x - 0.5 * a ) / ( 1.0 - a ),\n\t\t\t1.0 - ( ( 1.0 - x ) * ( 1.0 - x ) / ( 2.0 * a * ( 1.0 - a ) ) )\n\t\t);\n\t\tfloat threshold = ( x < ( 1.0 - a ) )\n\t\t\t? ( ( x < a ) ? cases.x : cases.y )\n\t\t\t: cases.z;\n\t\treturn clamp( threshold , 1.0e-6, 1.0 );\n\t}\n#endif\n#ifdef USE_FOG\n\tuniform vec3 fogColor;\n\tvarying float vFogDepth;\n\t#ifdef FOG_EXP2\n\t\tuniform float fogDensity;\n\t#else\n\t\tuniform float fogNear;\n\t\tuniform float fogFar;\n\t#endif\n#endif\n#if defined( USE_LOGARITHMIC_DEPTH_BUFFER )\n\tuniform float logDepthBufFC;\n\tvarying float vFragDepth;\n\tvarying float vIsPerspective;\n#endif\n#if 0 > 0\n\tvarying vec3 vClipPosition;\n\tuniform vec4 clippingPlanes[ 0 ];\n#endif\nvoid main() {\n\tvec4 diffuseColor = vec4( diffuse, opacity );\n#if 0 > 0\n\tvec4 plane;\n\t#ifdef ALPHA_TO_COVERAGE\n\t\tfloat distanceToPlane, distanceGradient;\n\t\tfloat clipOpacity = 1.0;\n\t\t\n\t\t#if 0 < 0\n\t\t\tfloat unionClipOpacity = 1.0;\n\t\t\t\n\t\t\tclipOpacity *= 1.0 - unionClipOpacity;\n\t\t#endif\n\t\tdiffuseColor.a *= clipOpacity;\n\t\tif ( diffuseColor.a == 0.0 ) discard;\n\t#else\n\t\t\n\t\t#if 0 < 0\n\t\t\tbool clipped = true;\n\t\t\t\n\t\t\tif ( clipped ) discard;\n\t\t#endif\n\t#endif\n#endif\n\tvec3 outgoingLight = vec3( 0.0 );\n#if defined( USE_LOGARITHMIC_DEPTH_BUFFER )\n\tgl_FragDepth = vIsPerspective == 0.0 ? gl_FragCoord.z : log2( vFragDepth ) * logDepthBufFC * 0.5;\n#endif\n#if defined( USE_MAP ) || defined( USE_ALPHAMAP )\n\t#if defined( USE_POINTS_UV )\n\t\tvec2 uv = vUv;\n\t#else\n\t\tvec2 uv = ( uvTransform * vec3( gl_PointCoord.x, 1.0 - gl_PointCoord.y, 1 ) ).xy;\n\t#endif\n#endif\n#ifdef USE_MAP\n\tdiffuseColor *= texture2D( map, uv );\n#endif\n#ifdef USE_ALPHAMAP\n\tdiffuseColor.a *= texture2D( alphaMap, uv ).g;\n#endif\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )\n\tdiffuseColor *= vColor;\n#endif\n#ifdef USE_ALPHATEST\n\t#ifdef ALPHA_TO_COVERAGE\n\tdiffuseColor.a = smoothstep( alphaTest, alphaTest + fwidth( diffuseColor.a ), diffuseColor.a );\n\tif ( diffuseColor.a == 0.0 ) discard;\n\t#else\n\tif ( diffuseColor.a < alphaTest ) discard;\n\t#endif\n#endif\n#ifdef USE_ALPHAHASH\n\tif ( diffuseColor.a < getAlphaHashThreshold( vPosition ) ) discard;\n#endif\n\toutgoingLight = diffuseColor.rgb;\n#ifdef OPAQUE\ndiffuseColor.a = 1.0;\n#endif\n#ifdef USE_TRANSMISSION\ndiffuseColor.a *= material.transmissionAlpha;\n#endif\ngl_FragColor = vec4( outgoingLight, diffuseColor.a );\n#if defined( TONE_MAPPING )\n\tgl_FragColor.rgb = toneMapping( gl_FragColor.rgb );\n#endif\ngl_FragColor = linearToOutputTexel( gl_FragColor );\n#ifdef USE_FOG\n\t#ifdef FOG_EXP2\n\t\tfloat fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );\n\t#else\n\t\tfloat fogFactor = smoothstep( fogNear, fogFar, vFogDepth );\n\t#endif\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );\n#endif\n#ifdef PREMULTIPLIED_ALPHA\n\tgl_FragColor.rgb *= gl_FragColor.a;\n#endif\n}",
+      "pointScaleOnly": false
+    }
+  ],
+  "loadedSources": [
+    {
+      "requestId": "7656.146",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/index.ts?t=1791820681393",
+      "status": 200,
+      "file": "loaded-0.js",
+      "sha256": "07b2cc084342ce798b094ec6017a3344496f135c772184eb48a14fe79c7e5452"
+    },
+    {
+      "requestId": "7656.148",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/types.ts",
+      "status": 200,
+      "file": "loaded-1.js",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "requestId": "7656.150",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/glyphSize.ts",
+      "status": 200,
+      "file": "loaded-2.js",
+      "sha256": "c5d2d6eb07a3f23f874ab7d17d7bb0bfb3d0b02f6eac2300e0d52aaa3fbb9df8"
+    },
+    {
+      "requestId": "7656.149",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/constants.ts",
+      "status": 200,
+      "file": "loaded-3.js",
+      "sha256": "1e59e54b6dec5c8ae264e14c8927d46bc98e4bd76b06494cf88b60c01266575d"
+    },
+    {
+      "requestId": "7656.151",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/quality.ts",
+      "status": 200,
+      "file": "loaded-4.js",
+      "sha256": "c49d3fa17341236b5b047344e89a310ea8e55112e41e3143bfd490f17ea9c158"
+    },
+    {
+      "requestId": "7656.152",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/choreography.ts?t=1791820681190",
+      "status": 200,
+      "file": "loaded-5.js",
+      "sha256": "4d24893321ba2af93242e8b3287526164d05d3c581cf66a319255962dd5382c1"
+    },
+    {
+      "requestId": "7656.153",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/brandTargets.ts?t=1791812203950",
+      "status": 200,
+      "file": "loaded-6.js",
+      "sha256": "f04e010fc5fbceb44890cc0fa8bdd932a387977420c5e8842a8e33f663bbc455"
+    },
+    {
+      "requestId": "7656.154",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/starfield.ts",
+      "status": 200,
+      "file": "loaded-7.js",
+      "sha256": "f7f0bf043dac35aa764b9d501782a0577bb5667bbf79723266f9b9cfc6c4dc9c"
+    },
+    {
+      "requestId": "7656.157",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/spaceMotion.ts?t=1791820681196",
+      "status": 200,
+      "file": "loaded-8.js",
+      "sha256": "020d58a0aced228ca701b5d610a14afc5d3dc6bb880100c43b0aac8b882f11af"
+    },
+    {
+      "requestId": "7656.155",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/ParticleEngine.ts?t=1791820681393",
+      "status": 200,
+      "file": "loaded-9.js",
+      "sha256": "ada335812ed53d51278a5cc5f06a26103d97f57ed4f696e3d5ad2add4a375cd1"
+    },
+    {
+      "requestId": "7656.187",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/brandTargetsRaster.ts",
+      "status": 200,
+      "file": "loaded-10.js",
+      "sha256": "34525a9228944ce36a19b6310990012ee027e2850f6e409708bb1531e638fab7"
+    },
+    {
+      "requestId": "7656.189",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/flightTiming.ts",
+      "status": 200,
+      "file": "loaded-11.js",
+      "sha256": "132b6823e1b6d0f6bf38835cf537e20decd6ac4cba6d4824f8217102a25bf40a"
+    },
+    {
+      "requestId": "7656.191",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/spaceMotionContract.ts",
+      "status": 200,
+      "file": "loaded-12.js",
+      "sha256": "96d430acfa1161ae57a6294ea622111027442c1102d9ff1b5bed967f36526141"
+    },
+    {
+      "requestId": "7656.190",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/flightPath.ts?t=1791820681190",
+      "status": 200,
+      "file": "loaded-13.js",
+      "sha256": "611e4b3d04edfa386f0b39e474d6f0f33f6f5e7dc9a660fa52fd1e6890ee2313"
+    },
+    {
+      "requestId": "7656.193",
+      "url": "http://127.0.0.1:5210/src/features/home-particle/engine/emittedTail.ts?t=1791820681387",
+      "status": 200,
+      "file": "loaded-14.js",
+      "sha256": "886e4c8e0e83b2e481708a2ab2de3d2018e2ec6887084f48b66da1f72124f635"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
+import UniverseBackground from '@/features/universe/UniverseBackground.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,6 +21,22 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
 const adminSettingsStore = useAdminSettingsStore()
+
+// Match HomeView's branch priority, including settings loaded after mount.
+const customHome = computed(() => route.name === 'Home'
+  && Boolean(appStore.cachedPublicSettings?.home_content?.trim()))
+const universeThemeEnabled = computed(() => !customHome.value)
+const showUniverseBackground = computed(() => universeThemeEnabled.value
+  && (route.name !== 'Home' || appStore.cachedPublicSettings?.compact_home_enabled === true))
+
+watch(universeThemeEnabled, (enabled) => {
+  if (enabled) document.documentElement.setAttribute('data-universe-theme', 'cosmos')
+  else document.documentElement.removeAttribute('data-universe-theme')
+}, { immediate: true, flush: 'sync' })
+
+onBeforeUnmount(() => {
+  document.documentElement.removeAttribute('data-universe-theme')
+})
 
 function updateDocumentTitle() {
   const customMenuItems = [
@@ -162,9 +179,26 @@ onMounted(async () => {
 </script>
 
 <template>
-  <NavigationProgress />
-  <RouterView />
-  <Toast />
-  <AnnouncementPopup />
-  <AdminComplianceDialog />
+  <div :class="universeThemeEnabled ? 'universe-app dark' : undefined">
+    <UniverseBackground v-if="showUniverseBackground" />
+    <div class="universe-page-shell">
+      <NavigationProgress />
+      <RouterView />
+      <Toast />
+      <AnnouncementPopup />
+      <AdminComplianceDialog />
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.universe-app {
+  position: relative;
+  isolation: isolate;
+}
+
+.universe-page-shell {
+  position: relative;
+  z-index: 1;
+}
+</style>

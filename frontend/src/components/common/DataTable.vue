@@ -21,7 +21,7 @@
             <Icon
               name="inbox"
               size="xl"
-              class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500"
+              class="mb-4 h-12 w-12 text-gray-500 dark:text-dark-400"
             />
             <p class="text-lg font-medium text-gray-900 dark:text-gray-100">
               {{ t('empty.noData') }}
@@ -36,7 +36,7 @@
         <label class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300">
           <input
             type="checkbox"
-            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
+            class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
             :checked="allVisibleSelected"
             :indeterminate="someVisibleSelected"
             data-test="select-all-mobile"
@@ -59,7 +59,7 @@
           <div v-if="selectable" class="flex justify-end">
             <input
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
+              class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
               :checked="isRowSelected(row, index)"
               :aria-label="getRowSelectionLabel(row, index)"
               data-test="select-row"
@@ -109,7 +109,7 @@
           >
             <input
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
+              class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
               :checked="allVisibleSelected"
               :indeterminate="someVisibleSelected"
               :aria-label="t('common.selectAll')"
@@ -190,7 +190,7 @@
                 <Icon
                   name="inbox"
                   size="xl"
-                  class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500"
+                  class="mb-4 h-12 w-12 text-gray-500 dark:text-dark-400"
                 />
                 <p class="text-lg font-medium text-gray-900 dark:text-gray-100">
                   {{ t('empty.noData') }}
@@ -223,7 +223,7 @@
             <td v-if="selectable" class="w-11 min-w-11 px-3 py-4 text-center">
               <input
                 type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
+                class="h-4 w-4 rounded border-gray-300 text-primary-700 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-800"
                 :checked="isRowSelected(item.row, item.index)"
                 :aria-label="getRowSelectionLabel(item.row, item.index)"
                 data-test="select-row"
@@ -557,8 +557,8 @@ const applySortState = (state: PersistedSortState | null) => {
 
 const getSortIndicatorClass = (key: string, order: 'asc' | 'desc') => {
   return sortKey.value === key && sortOrder.value === order
-    ? 'text-primary-600 dark:text-primary-400'
-    : 'text-gray-300 transition-colors dark:text-dark-500'
+    ? 'text-primary-700 dark:text-primary-400'
+    : 'text-gray-300 transition-colors dark:text-dark-400'
 }
 
 const getColumnAriaSort = (key: string) => {
@@ -1093,6 +1093,21 @@ tbody tr:hover .sticky-col {
 </style>
 
 <style>
+/* Cosmos overrides scoped sticky paints without changing table positioning. */
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper .table-header {
+  background-color: transparent;
+}
+
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper .sticky-header-cell,
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper tbody .sticky-col {
+  background-color: var(--universe-surface);
+}
+
+html[data-universe-theme='cosmos'] .table-wrapper.table-wrapper tbody tr:hover .sticky-col {
+  background-color: var(--universe-surface);
+  background-image: linear-gradient(var(--universe-hover), var(--universe-hover));
+}
+
 /* ==========================================================================
    终极悬浮滚动条防丢器 (Sledgehammer Override)
    绕过 style.css 中 `* { scrollbar-color: transparent }` 的全局悬停隐身诅咒！

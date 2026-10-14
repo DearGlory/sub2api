@@ -16,7 +16,7 @@
       >
         <template #cell-model="{ row }">
           <span v-if="row.model" class="text-sm font-medium text-gray-900 dark:text-white">{{ row.model }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-key_name="{ row }">
@@ -54,7 +54,7 @@
             class="block max-w-[280px] truncate text-sm text-gray-600 dark:text-gray-400"
             :title="row.message"
           >{{ row.message }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-group="{ row }">
@@ -62,7 +62,7 @@
             v-if="row.group_name"
             class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
           >{{ row.group_name }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-type="{ row }">
@@ -71,7 +71,7 @@
             class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
             :class="requestTypeBadge(row)!.className"
           >{{ requestTypeBadge(row)!.label }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #cell-platform="{ row }">
@@ -84,7 +84,7 @@
               <span class="text-sm font-mono text-gray-600 dark:text-gray-400">{{ row.client_ip }}</span>
               <IpGeoCell :ip="row.client_ip" />
             </div>
-            <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+            <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
           </div>
         </template>
 
@@ -98,7 +98,7 @@
             class="block max-w-[320px] truncate text-sm text-gray-600 dark:text-gray-400"
             :title="row.user_agent"
           >{{ row.user_agent }}</span>
-          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
         </template>
 
         <template #empty><EmptyState :message="t('usage.errors.empty')" /></template>

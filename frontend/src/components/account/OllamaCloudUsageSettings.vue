@@ -19,7 +19,7 @@
       </span>
     </div>
 
-    <div v-if="loading" class="flex h-20 items-center justify-center text-gray-400">
+    <div v-if="loading" class="flex h-20 items-center justify-center text-gray-500">
       <Icon name="refresh" size="sm" class="animate-spin" />
     </div>
     <template v-else>

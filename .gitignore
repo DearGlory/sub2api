@@ -24,7 +24,11 @@ backend/main
 coverage.html
 
 # 依赖（使用 go mod）
-vendor/
+# 只排除 Go 模块根下的 vendor 目录。原来的裸 `vendor/` 会匹配任意深度的同名
+# 目录，把 frontend/src/features/home-particle/vendor/ 这类前端源码一并吞掉
+# （git 不会递归进被排除的目录，所以 `!` 否定规则救不回来 —— 必须收窄通配）。
+/vendor/
+backend/vendor/
 
 # Go 编译缓存
 backend/.gocache/
@@ -161,3 +165,5 @@ issues/
 .vite/
 # 本地闭源插件开发目录及构建产物不进入 Sub2API 仓库
 /plugins/
+BATCH.txt
+DESIGN-LANGUAGE.md

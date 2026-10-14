@@ -46,8 +46,8 @@ onUnmounted(() => {
 <style scoped>
 /* 桌面端：Flexbox 布局 */
 .table-page-layout {
-  @apply flex flex-col gap-6;
-  height: calc(100vh - 64px - 4rem); /* 减去 header + lg:p-8 的上下padding */
+  @apply flex flex-col gap-5;
+  height: calc(100vh - 64px - 3rem); /* 减去 header + p-6 的上下padding */
 }
 
 .layout-section-fixed {
@@ -60,7 +60,7 @@ onUnmounted(() => {
 
 /* 表格滚动容器 - 增强版表体滚动方案 */
 .table-scroll-container {
-  @apply flex flex-col overflow-hidden h-full bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-dark-700 shadow-sm;
+  @apply flex flex-col overflow-hidden h-full bg-white dark:bg-dark-900 rounded-xl border border-gray-200 dark:border-dark-800;
 }
 
 .table-scroll-container :deep(.table-wrapper) {
@@ -81,6 +81,16 @@ onUnmounted(() => {
 
 .table-scroll-container :deep(tbody) {
   /* 保持默认 table-row-group 显示，不使用 block */
+}
+
+/* Beat scoped @apply fills without adding a surface to the mobile layout. */
+:global(html[data-universe-theme='cosmos'] .table-page-layout:not(.mobile-mode) .table-scroll-container) {
+  background-color: var(--universe-surface);
+  border-color: var(--universe-border);
+}
+
+:global(html[data-universe-theme='cosmos'] .table-page-layout .table-scroll-container thead) {
+  background-color: transparent;
 }
 
 .table-scroll-container :deep(th) {

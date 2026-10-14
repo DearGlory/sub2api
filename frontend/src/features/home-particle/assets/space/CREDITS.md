@@ -1,0 +1,160 @@
+# Deep-space background credits
+
+Lane LA (宇宙背景 / V8). This directory holds the **real photograph** used as the
+dark-theme home-page backdrop. Nothing here is procedurally generated.
+
+The image is served under **CC BY 4.0**, which permits commercial use and
+adaptation **provided the credit below stays clear and visible to every user**.
+Honour that: render the credit line in the site footer or the legal/about page.
+
+---
+
+## `stars-milkyway.webp` — primary dark-theme backdrop
+
+| field | value |
+|---|---|
+| Subject | The Milky Way panorama — 360° all-sky mosaic, galactic plane horizontal |
+| Source page | https://www.eso.org/public/images/eso0932a/ |
+| Direct file | https://cdn.eso.org/images/original/eso0932a.tif |
+| Original resolution | 6000 × 3000 px, TIFF (LZW), 29,082,084 bytes |
+| Author / institution | ESO / S. Brunier (Serge Brunier) |
+| Licence | Creative Commons Attribution 4.0 International (CC BY 4.0) |
+| Licence URL | https://creativecommons.org/licenses/by/4.0/ |
+| Required credit | `ESO/S. Brunier` |
+| Downloaded | re-fetch with `tools/fetch-space-bg.sh` |
+| Processed resolution | 4096 × 2048 px (exact 2:1, equirectangular) |
+| Processed encoding | WebP, quality 80, method 6 |
+| Processed size | 1380720 bytes (1.317 MB) — budget 1.50 MiB |
+| Grade applied | gamma 1.12, saturation ×1.10 (adapted — darkened) |
+| Mean luminance | master 16.98 / 255 → final 13.42 / 255 |
+| Brightest-1% mean luminance | 129.45 / 255 |
+| 360° wrap continuity | wrap delta inside the normal column-to-column range; brightness step across the join is 1.65× the image's typical adjacent-column drift |
+
+**Why this image.** It is a genuine 120-hour photographic mosaic from ESO's La
+Silla and Paranal observatories, not a render or a catalog-derived chart. It is
+an exact 2:1 equirectangular projection, so a 360° horizontal wrap is
+photographically continuous with no seam. The galactic plane runs horizontally
+through the middle, leaving the top ~20 % and bottom ~30 % of the frame as
+near-black, low-detail sky — exactly where the headline and the particle comet
+need to read. The Magellanic Clouds sit below the band, resolving as real
+nebulosity rather than a smear.
+
+**Grade rationale.** Gamma 1.12 is a *step* curve, not a uniform dim: it pulls the
+low end (where the diffuse galactic glow lives) down hard while leaving
+saturated star cores essentially untouched. That is what makes the sky deep
+enough to sit behind white text and animated particles without flattening the
+stars to mush. Saturation is lifted to ×1.10 to recover the colour the gamma
+pull removes from the mid-tones.
+
+## `stars-milkyway-lite.webp` — narrow viewports
+
+Same source, same grade, 2048 × 1024 px, WebP q78, 234154 bytes (229 KB). Load
+**either** this or the full-size file, never both: pick with a media query or
+`window.devicePixelRatio` / `innerWidth` and load only the chosen one. Roughly a
+sixth of the bytes for phones and low-DPR laptops, where 4096 px of star detail
+is thrown away anyway.
+
+---
+
+## Candidates considered and rejected
+
+| candidate | licence | why not used |
+|---|---|---|
+| NASA SVS *Deep Star Maps 2020* / `milkyway_2020_4k.exr` (Ernie Wright, GSFC SVS) | Public domain (NASA) | Clean licence and genuinely useful as a fallback, but it is a star map *computed* from Hipparcos-2 / Tycho-2 / Gaia DR2 catalogs with a photographic texture underneath — not a photograph of the sky. Measured visibly grainier and flatter than eso0932a, with a chroma flare artifact at a frame edge. Also HDR half-float OpenEXR, which needs a tone-map step in the pipeline for no visual gain here. |
+| ESO `eso0933a` — Milky Way over the VLT | CC BY 4.0 | Beautiful, but 3000 × 2000 — below the 4000 px width requirement, and it is a landscape vista with a horizon and telescope silhouettes, not a deep-space field. The horizon would fight the particle scene. |
+| Wikimedia Commons `File:ESO - Milky Way.jpg` | CC BY 4.0 | Byte-identical derivative of the same ESO eso0932a photograph (Commons-served 7.23 MB JPEG re-encode). **Chose the ESO CDN original TIFF instead**: same licence, 6000 × 3000, 29 MB lossless-ish master — a better input for the grade and resize, no double JPEG generation. |
+| Unsplash "milky way" searches | Unsplash License | Rejected outright. The licence is free for commercial use but the *provenance* of any given upload is unverifiable — Unsplash cannot confirm a contributor actually shot the frame. This brief requires a traceable author and institution, so an Unsplash upload is strictly worse than an observatory release. |
+
+## Reproduce
+
+```bash
+tools/fetch-space-bg.sh            # download -> grade -> encode -> verify
+tools/fetch-space-bg.sh --check    # verify the existing output only
+```
+
+The script asserts the 1.5 MiB ceiling, the 4000 px minimum width, and the
+360° seam, and exits non-zero if any of them fails. It writes the measured
+numbers back to stdout and to `.verify.json`.
+
+---
+
+## Integration — how the engine should consume this
+
+**Assets only.** Nothing in `engine/` was touched: `starfield.ts`,
+`ParticleEngine.ts`, `HomeParticleBackground.vue` and `constants.ts` are byte
+identical to before. Wiring the texture into the scene is a separate change.
+
+The engine currently clears to a solid dark colour with `alpha: true` and
+`setClearColor(palette.background, 1)` on dark, `0` on light. The background
+belongs **behind** the WebGL canvas, on the DOM — not inside the scene — so it
+costs zero draw calls against §6's budget of six.
+
+In `HomeParticleBackground.vue`, on the already-`fixed inset-0 z-0`
+`pointer-events-none` container, add a sibling layer behind the canvas:
+
+```vue
+<div
+  v-if="!failed"
+  class="home-space-sky pointer-events-none absolute inset-0"
+  aria-hidden="true"
+/>
+```
+
+```css
+.home-space-sky {
+  /* Dark theme only. The light theme keeps its current treatment — a deep-space
+     photograph under a pale page destroys the light page's readability. */
+  display: none;
+}
+:global(.dark) .home-space-sky {
+  display: block;
+  background-image: url('../assets/space/stars-milkyway.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* No x-repeat: the source is a 360° equirectangular strip, so tiling it would
+     restart the galactic band at a visible cut. Cover, and accept the crop. */
+}
+```
+
+For the lite variant, swap the URL at build time with a media query rather than
+loading both — Vite will emit only the file each rule references:
+
+```css
+@media (max-width: 900px), (max-resolution: 1.5dppx) {
+  :global(.dark) .home-space-sky {
+    background-image: url('../assets/space/stars-milkyway-lite.webp');
+  }
+}
+```
+
+**In-scene alternative**, if the integrator prefers a `Scene.background`
+texture: set `THREE.EquirectangularReflectionMapping` on the texture and a
+matching `scene.background`, then **keep `setClearColor(..., 0)`** so the canvas
+still composites over the page. The DOM path is recommended — it is one CSS
+layer, it needs no GPU work, and it cannot break the WebGL fallback path.
+
+**Where not to put text.** Measured mean luminance per band of the 4096×2048
+asset, with the WCAG contrast ratio white text would get against it:
+
+| band | mean | white-text contrast |
+|---|---|---|
+| top 20 % | 7.2 / 255 | 20.1 : 1 |
+| upper third | 10.2 / 255 | 19.8 : 1 |
+| galactic plane | 27.5–32.2 / 255 | 16.3–17.1 : 1 |
+| lower third | 9.6 / 255 | 19.8 : 1 |
+| bottom 30 % | 7.1 / 255 | 20.1 : 1 |
+
+Every band clears AA and AAA for white text, including over the galactic plane.
+The real hazards are local, not regional: a handful of stars clip to 255, and
+0.3–0.4 % of pixels in the dark zones exceed 96. Put the headline and body copy
+in the top 20 % or the bottom 30 % and the background is effectively invisible
+behind the type. If the layout must cross the bright mid-band, add a
+`linear-gradient` scrim rather than darkening the photograph.
+
+**Do not darken the file further.** A vertical vignette was tried to buy extra
+text headroom: it cost ~20 % of the detectable stars (top band 9929 → 7673) and
+doubled the longest flat gradient run (42 → 78 px, i.e. more banding risk) for
+contrast the type did not need. The flat grade above is the measurement-driven
+choice; if a specific layout still needs a darker plate, do it in CSS where it is
+one line to tune and costs nothing to re-tune.

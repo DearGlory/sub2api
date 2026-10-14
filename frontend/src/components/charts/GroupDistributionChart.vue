@@ -79,7 +79,7 @@
                 <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
                   ${{ formatCost(group.account_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="py-1.5 text-right text-gray-500 dark:text-gray-400">
                   ${{ formatCost(group.cost) }}
                 </td>
               </tr>
@@ -176,16 +176,16 @@ const toggleBreakdown = async (type: string, id: number | string) => {
 }
 
 const chartColors = [
+  '#ff6708',
   '#3b82f6',
   '#10b981',
-  '#f59e0b',
-  '#ef4444',
   '#8b5cf6',
+  '#f59e0b',
   '#ec4899',
-  '#14b8a6',
-  '#f97316',
   '#6366f1',
-  '#84cc16'
+  '#ef4444',
+  '#84cc16',
+  '#a855f7'
 ]
 
 const displayGroupStats = computed(() => {

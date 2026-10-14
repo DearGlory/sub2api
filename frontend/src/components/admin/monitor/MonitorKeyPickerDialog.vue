@@ -17,7 +17,7 @@
           class="input pl-9"
           :placeholder="t('keys.searchPlaceholder')"
         />
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
         </svg>
       </div>
@@ -55,7 +55,7 @@
                   :rate-multiplier="k.group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[k.group.id]"
                 />
-                <span v-else class="text-xs text-gray-400">—</span>
+                <span v-else class="text-xs text-gray-500">—</span>
               </td>
             </tr>
           </tbody>

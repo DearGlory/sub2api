@@ -51,7 +51,7 @@
             {{ option.label }}
           </button>
         </div>
-        <span class="text-xs text-gray-400 dark:text-gray-500">
+        <span class="text-xs text-gray-500 dark:text-gray-400">
           {{ currentMode === 'discount'
             ? t('admin.settings.payment.rechargeBonus.modeDiscountHint')
             : t('admin.settings.payment.rechargeBonus.modeBonusHint') }}
@@ -108,12 +108,12 @@
               />
               <span
                 class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-xs font-medium"
-                :class="currentMode === 'discount' ? 'text-red-600 dark:text-red-400' : 'text-gray-400'"
+                :class="currentMode === 'discount' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'"
               >{{ currentMode === 'discount' ? '% OFF' : '%' }}</span>
             </div>
             <button
               type="button"
-              class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-dark-700 dark:hover:text-red-400"
+              class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-dark-700 dark:hover:text-red-400"
               :title="t('admin.settings.payment.rechargeBonus.removeTier')"
               data-testid="recharge-bonus-tier-remove"
               @click="removeTier(index)"
@@ -129,7 +129,7 @@
             </p>
             <p
               v-else-if="rowIncomplete(index)"
-              class="col-span-3 -mt-1 text-xs text-gray-400 dark:text-gray-500"
+              class="col-span-3 -mt-1 text-xs text-gray-500 dark:text-gray-400"
               data-testid="recharge-bonus-tier-incomplete"
             >
               {{ t('admin.settings.payment.rechargeBonus.incompleteRow') }}
@@ -167,7 +167,7 @@
           data-testid="recharge-bonus-notice-input"
           @input="emit('update:notice', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
-        <p class="mt-1 text-xs text-gray-400">
+        <p class="mt-1 text-xs text-gray-500">
           {{ t('admin.settings.payment.rechargeBonus.noticeHint') }}
         </p>
       </div>

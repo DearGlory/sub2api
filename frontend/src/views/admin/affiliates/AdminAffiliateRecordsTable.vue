@@ -4,7 +4,7 @@
       <template #filters>
         <div class="flex flex-wrap items-center gap-3">
           <div class="relative w-full md:w-80">
-            <Icon name="search" size="md" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Icon name="search" size="md" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input v-model="filters.search" type="text" class="input pl-10" :placeholder="t('admin.affiliates.records.searchPlaceholder')" @input="debounceLoad" />
           </div>
           <input v-model="filters.start_at" type="date" class="input w-full sm:w-44" :title="t('admin.affiliates.records.startAt')" @change="reloadFromFirstPage" />
@@ -45,7 +45,7 @@
             />
           </template>
           <template #cell-invitee="{ row }">
-            <span v-if="row.invitee_id == null" class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-if="row.invitee_id == null" class="text-sm text-gray-500 dark:text-dark-400">-</span>
             <UserCell
               v-else
               :id="row.invitee_id"
@@ -68,7 +68,7 @@
             <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ row.aff_code || '-' }}</span>
           </template>
           <template #cell-order="{ row }">
-            <span v-if="row.order_id == null" class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-if="row.order_id == null" class="text-sm text-gray-500 dark:text-dark-400">-</span>
             <div v-else class="space-y-0.5">
               <div class="font-mono text-sm text-gray-900 dark:text-white">#{{ row.order_id }}</div>
               <div class="max-w-56 truncate text-sm text-gray-500 dark:text-dark-400">{{ row.out_trade_no }}</div>
@@ -76,11 +76,11 @@
           </template>
           <template #cell-payment_type="{ row }">
             <template v-if="row.payment_type">{{ t('payment.methods.' + row.payment_type, row.payment_type) }}</template>
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-else class="text-sm text-gray-500 dark:text-dark-400">-</span>
           </template>
           <template #cell-order_status="{ row }">
             <OrderStatusBadge v-if="row.order_status" :status="row.order_status" />
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-else class="text-sm text-gray-500 dark:text-dark-400">-</span>
           </template>
           <template #cell-total_rebate="{ row }">
             <AmountText :value="row.total_rebate" />
@@ -89,7 +89,7 @@
             <NullableAmountText :value="row.order_amount" />
           </template>
           <template #cell-pay_amount="{ row }">
-            <span v-if="row.pay_amount == null" class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-if="row.pay_amount == null" class="text-sm text-gray-500 dark:text-dark-400">-</span>
             <span v-else class="text-sm text-gray-900 dark:text-white">¥{{ formatAmount(row.pay_amount) }}</span>
           </template>
           <template #cell-rebate_amount="{ row }">
@@ -385,7 +385,7 @@ const UserCell = defineComponent({
       h('div', { class: 'font-mono text-sm text-gray-900 dark:text-white' }, `#${cellProps.id}`),
       h(cellProps.clickable ? 'button' : 'div', {
         class: cellProps.clickable
-          ? 'max-w-56 truncate text-left text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300'
+          ? 'max-w-56 truncate text-left text-sm font-medium text-primary-700 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300'
           : 'max-w-56 truncate text-sm text-gray-700 dark:text-gray-300',
         type: cellProps.clickable ? 'button' : undefined,
         onClick: cellProps.clickable ? () => emit('open', cellProps.id) : undefined,
@@ -417,7 +417,7 @@ const NullableAmountText = defineComponent({
     return () => {
       const value = amountProps.value
       if (value === null || value === undefined) {
-        return h('span', { class: 'text-sm text-gray-400 dark:text-dark-500' }, '-')
+        return h('span', { class: 'text-sm text-gray-500 dark:text-dark-400' }, '-')
       }
       return h(AmountText, { value })
     }

@@ -7,7 +7,7 @@
         v-if="hasBreakdown"
         name="infoCircle"
         size="xs"
-        class="text-gray-400 dark:text-gray-500"
+        class="text-gray-500 dark:text-gray-400"
       />
     </div>
     <div class="mt-0.5 flex items-center gap-1.5">

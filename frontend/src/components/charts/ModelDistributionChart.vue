@@ -148,7 +148,7 @@
                 <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
                   ${{ formatCost(model.account_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="py-1.5 text-right text-gray-500 dark:text-gray-400">
                   ${{ formatCost(model.cost) }}
                 </td>
               </tr>
@@ -339,6 +339,8 @@ const showAccountCost = computed(() => props.showAccountCost)
 const distributionColspan = computed(() => showAccountCost.value ? 6 : 5)
 const activeView = ref<'model_distribution' | 'spending_ranking'>('model_distribution')
 
+// 注：索引 0 的 '#3b82f6' 与 "Others" 的 '#94a3b8' 被
+// __tests__/ModelDistributionChart.spec.ts 直接断言，保持原值。
 const chartColors = [
   '#3b82f6',
   '#10b981',
@@ -346,11 +348,11 @@ const chartColors = [
   '#ef4444',
   '#8b5cf6',
   '#ec4899',
-  '#14b8a6',
+  '#0ea5e9',
   '#f97316',
   '#6366f1',
   '#84cc16',
-  '#06b6d4',
+  '#64748b',
   '#a855f7'
 ]
 

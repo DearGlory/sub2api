@@ -1,12 +1,12 @@
 <template>
   <Teleport to="body">
     <div
-      class="pointer-events-none fixed right-4 top-4 z-[9999] space-y-3"
+      class="cosmos-toast-region pointer-events-none fixed right-4 top-4 z-[9999] w-[calc(100vw-2rem)] max-w-md space-y-3"
       aria-live="polite"
       aria-atomic="true"
     >
       <TransitionGroup
-        enter-active-class="transition ease-out duration-300"
+        enter-active-class="transition ease-out duration-200"
         enter-from-class="opacity-0 translate-x-full"
         enter-to-class="opacity-100 translate-x-0"
         leave-active-class="transition ease-in duration-200"
@@ -17,10 +17,8 @@
           v-for="toast in toasts"
           :key="toast.id"
           :class="[
-            'pointer-events-auto min-w-[320px] max-w-md overflow-hidden rounded-lg shadow-lg',
-            'bg-white dark:bg-dark-800',
-            'border-l-4',
-            getBorderColor(toast.type)
+            'pointer-events-auto w-full overflow-hidden rounded-lg shadow-pop',
+            'bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700'
           ]"
         >
           <div class="p-4">
@@ -37,12 +35,15 @@
 
               <!-- Content -->
               <div class="min-w-0 flex-1">
-                <p v-if="toast.title" class="text-sm font-semibold text-gray-900 dark:text-white">
+                <p
+                  v-if="toast.title"
+                  class="cosmos-toast-title text-sm font-semibold text-gray-900 dark:text-white"
+                >
                   {{ toast.title }}
                 </p>
                 <p
                   :class="[
-                    'text-sm leading-relaxed',
+                    'cosmos-toast-message text-sm leading-relaxed',
                     toast.title
                       ? 'mt-1 text-gray-600 dark:text-gray-300'
                       : 'text-gray-900 dark:text-white'
@@ -55,7 +56,7 @@
               <!-- Close button -->
               <button
                 @click="removeToast(toast.id)"
-                class="-m-1 flex-shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+                class="-m-1 flex-shrink-0 rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-400 dark:hover:bg-dark-700 dark:hover:text-gray-300"
                 aria-label="Close notification"
               >
                 <Icon name="x" size="sm" />
@@ -105,16 +106,6 @@ const getIconColor = (type: string): string => {
     error: 'text-red-500',
     warning: 'text-yellow-500',
     info: 'text-blue-500'
-  }
-  return colors[type] || colors.info
-}
-
-const getBorderColor = (type: string): string => {
-  const colors: Record<string, string> = {
-    success: 'border-green-500',
-    error: 'border-red-500',
-    warning: 'border-yellow-500',
-    info: 'border-blue-500'
   }
   return colors[type] || colors.info
 }

@@ -20,7 +20,7 @@
           <div class="flex items-center gap-3">
             <span
               :class="[
-                'flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold',
+                'flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold',
                 rankClass(idx),
               ]"
             >

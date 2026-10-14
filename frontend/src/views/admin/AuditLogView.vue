@@ -13,7 +13,7 @@
                   <Icon
                     name="search"
                     size="md"
-                    class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
                   />
                   <input
                     v-model.trim="filters.q"
@@ -94,7 +94,7 @@
               <div class="truncate font-medium text-gray-900 dark:text-white" :title="row.actor_email">
                 {{ row.actor_email || '—' }}
               </div>
-              <div class="mt-0.5 truncate text-xs text-gray-400">
+              <div class="mt-0.5 truncate text-xs text-gray-500">
                 {{ row.actor_role }}<span v-if="row.auth_method"> · {{ authMethodLabel(row.auth_method) }}</span>
               </div>
             </div>
@@ -105,7 +105,7 @@
               <div class="truncate font-mono text-sm text-gray-800 dark:text-gray-200" :title="row.action">
                 {{ row.action }}
               </div>
-              <div class="mt-0.5 truncate font-mono text-xs text-gray-400" :title="`${row.method} ${row.path}`">
+              <div class="mt-0.5 truncate font-mono text-xs text-gray-500" :title="`${row.method} ${row.path}`">
                 {{ row.method }} {{ row.path }}
               </div>
             </div>
@@ -129,7 +129,7 @@
           <template #cell-actions="{ row }">
             <button
               type="button"
-              class="inline-flex items-center gap-1 font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              class="inline-flex items-center gap-1 font-medium text-primary-700 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
               @click="openDetail(row.id)"
             >
               <Icon name="eye" size="sm" />
@@ -176,7 +176,7 @@
 
       <div v-else-if="detail" class="space-y-5 py-2">
         <!-- Hero: action + result at a glance -->
-        <div class="rounded-2xl border border-gray-200 bg-gray-50/60 p-5 dark:border-dark-700 dark:bg-dark-900/60">
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-dark-800 dark:bg-dark-900">
           <div class="flex flex-wrap items-center gap-3">
             <span :class="statusBadgeClass(detail.status_code)">
               <span class="h-1.5 w-1.5 rounded-full" :class="statusDotClass(detail.status_code)"></span>
@@ -187,8 +187,8 @@
             </span>
           </div>
 
-          <div class="mt-3 flex items-center gap-2 rounded-lg bg-white px-3 py-2 ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-600">
-            <span class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-gray-700 dark:bg-dark-700 dark:text-gray-200">
+          <div class="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-dark-800 dark:bg-dark-900">
+            <span class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-700 dark:bg-dark-700 dark:text-gray-200">
               {{ detail.method }}
             </span>
             <span class="break-all font-mono text-xs text-gray-600 dark:text-gray-300">{{ detail.path }}</span>
@@ -210,29 +210,29 @@
         <!-- Actor / auth / source -->
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-            <div class="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {{ t('admin.audit.columns.actor') }}
             </div>
             <div class="mt-1 break-all text-sm font-medium text-gray-900 dark:text-white">
               {{ detail.actor_email || '—' }}
             </div>
-            <div class="mt-0.5 text-xs text-gray-400">{{ detail.actor_role }}</div>
+            <div class="mt-0.5 text-xs text-gray-500">{{ detail.actor_role }}</div>
           </div>
 
           <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-            <div class="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {{ t('admin.audit.filters.authMethod') }}
             </div>
             <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
               {{ authMethodLabel(detail.auth_method) || '—' }}
             </div>
-            <div v-if="detail.credential_masked" class="mt-0.5 break-all font-mono text-xs text-gray-400">
+            <div v-if="detail.credential_masked" class="mt-0.5 break-all font-mono text-xs text-gray-500">
               {{ detail.credential_masked }}
             </div>
           </div>
 
           <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-            <div class="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">
               {{ t('admin.audit.columns.clientIp') }}
             </div>
             <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
@@ -243,7 +243,7 @@
 
         <!-- User-Agent -->
         <section>
-          <h4 class="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">
+          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
             {{ t('admin.audit.detail.userAgent') }}
           </h4>
           <div class="break-all rounded-xl bg-gray-50 p-3 font-mono text-xs leading-relaxed text-gray-600 dark:bg-dark-900 dark:text-gray-400">
@@ -253,7 +253,7 @@
 
         <!-- Request body (redacted) -->
         <section v-if="detail.request_body">
-          <h4 class="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">
+          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
             {{ t('admin.audit.detail.requestBody') }}
           </h4>
           <pre class="max-h-72 overflow-auto rounded-xl bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-600 dark:bg-dark-900 dark:text-gray-400">{{ prettyBody(detail.request_body) }}</pre>
@@ -261,7 +261,7 @@
 
         <!-- Extra -->
         <section v-if="detail.extra && Object.keys(detail.extra).length">
-          <h4 class="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">
+          <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
             {{ t('admin.audit.detail.extra') }}
           </h4>
           <pre class="max-h-48 overflow-auto rounded-xl bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-600 dark:bg-dark-900 dark:text-gray-400">{{ JSON.stringify(detail.extra, null, 2) }}</pre>
@@ -672,13 +672,13 @@ function statusBadgeClass(status: number): string {
   const base = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold '
   if (status >= 500) return base + 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
   if (status >= 400) return base + 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-  return base + 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+  return base + 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
 }
 
 function statusDotClass(status: number): string {
   if (status >= 500) return 'bg-red-500'
   if (status >= 400) return 'bg-amber-500'
-  return 'bg-green-500'
+  return 'bg-emerald-500'
 }
 
 onMounted(fetchLogs)

@@ -43,7 +43,7 @@
       <!-- Progress bar container -->
       <div class="h-1.5 w-8 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
         <div
-          :class="['h-full transition-all duration-300', barClass]"
+          :class="['h-full transition-[width,height] duration-200', barClass]"
           :style="{ width: barWidth }"
         ></div>
       </div>
@@ -54,7 +54,7 @@
       </span>
 
       <!-- Reset time -->
-      <span v-if="shouldShowResetTime" class="shrink-0 text-[10px] text-gray-400">
+      <span v-if="shouldShowResetTime" class="shrink-0 text-[10px] text-gray-500">
         {{ formatResetTime }}
       </span>
     </div>

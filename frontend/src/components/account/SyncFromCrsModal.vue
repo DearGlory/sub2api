@@ -78,7 +78,7 @@
       >
         <div class="mb-2 text-sm font-medium text-gray-700 dark:text-dark-300">
           {{ t('admin.accounts.crsExistingAccounts') }}
-          <span class="ml-1 text-xs text-gray-400">({{ previewResult.existing_accounts.length }})</span>
+          <span class="ml-1 text-xs text-gray-500">({{ previewResult.existing_accounts.length }})</span>
         </div>
         <div class="max-h-32 overflow-auto text-xs text-gray-500 dark:text-dark-400">
           <div
@@ -99,7 +99,7 @@
         <div class="mb-2 flex items-center justify-between">
           <div class="text-sm font-medium text-gray-900 dark:text-white">
             {{ t('admin.accounts.crsNewAccounts') }}
-            <span class="ml-1 text-xs text-gray-400">({{ previewResult.new_accounts.length }})</span>
+            <span class="ml-1 text-xs text-gray-500">({{ previewResult.new_accounts.length }})</span>
           </div>
           <div class="flex gap-2">
             <button
@@ -134,7 +134,7 @@
             <span class="truncate text-sm text-gray-700 dark:text-dark-300">{{ acc.name }}</span>
           </label>
         </div>
-        <div class="mt-1 text-xs text-gray-400">
+        <div class="mt-1 text-xs text-gray-500">
           {{ t('admin.accounts.crsSelectedCount', { count: selectedIds.size }) }}
         </div>
       </div>
@@ -142,7 +142,7 @@
       <!-- Sync options summary -->
       <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-dark-400">
         <span>{{ t('admin.accounts.syncProxies') }}:</span>
-        <span :class="form.sync_proxies ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-dark-500'">
+        <span :class="form.sync_proxies ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-dark-400'">
           {{ form.sync_proxies ? t('common.yes') : t('common.no') }}
         </span>
       </div>

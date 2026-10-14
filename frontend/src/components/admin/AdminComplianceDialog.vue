@@ -38,7 +38,7 @@
             :href="documentUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
+            class="inline-flex items-center gap-2 text-primary-700 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
           >
             <Icon name="externalLink" size="sm" />
             {{ t('adminCompliance.openDocument') }}
@@ -191,7 +191,7 @@ async function logout(): Promise<void> {
 }
 
 .legal-document-content :deep(h1) {
-  @apply mb-4 text-2xl font-bold text-gray-950 dark:text-white;
+  @apply mb-4 text-2xl font-semibold text-gray-950 dark:text-white;
 }
 
 .legal-document-content :deep(h2) {

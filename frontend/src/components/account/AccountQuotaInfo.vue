@@ -8,7 +8,7 @@
     </div>
 
     <!-- Usage status: unlimited flow or rate limit -->
-    <div class="text-xs text-gray-400 dark:text-gray-500">
+    <div class="text-xs text-gray-500 dark:text-gray-400">
       <span v-if="!isRateLimited">
         {{ t('admin.accounts.gemini.rateLimit.unlimited') }}
       </span>

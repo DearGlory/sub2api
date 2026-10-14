@@ -21,7 +21,7 @@
         ref="inputRef"
         v-model="inputValue"
         type="text"
-        class="flex-1 min-w-[120px] border-none bg-transparent text-sm outline-none placeholder:text-gray-400 dark:text-white"
+        class="flex-1 min-w-[120px] border-none bg-transparent text-sm outline-none placeholder:text-gray-500 dark:text-white"
         :placeholder="models.length === 0 ? placeholder : ''"
         @keydown.enter="handleEnter"
         @keydown.tab="handleTab"
@@ -30,7 +30,7 @@
         @blur="addModel"
       />
     </div>
-    <p class="mt-1 text-xs text-gray-400">
+    <p class="mt-1 text-xs text-gray-500">
       {{ t('admin.channels.form.modelInputHint', 'Press Enter to add, supports paste for batch import.') }}
     </p>
   </div>

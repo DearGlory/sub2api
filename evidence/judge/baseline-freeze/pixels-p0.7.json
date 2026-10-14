@@ -1,0 +1,21 @@
+{
+  "status": "observed",
+  "current": {
+    "width": 1440,
+    "height": 900,
+    "count": 5120,
+    "mean": 27.70721367187492,
+    "p95": 70.63,
+    "p10": 9.804599999999999,
+    "whiteFraction": 0,
+    "bbox": [
+      607,
+      407,
+      695,
+      493
+    ],
+    "diameter": 87.99431799837987,
+    "threshold": 8
+  },
+  "note": "standalone pixels only; no claim about mesh, timing or smoothness"
+}

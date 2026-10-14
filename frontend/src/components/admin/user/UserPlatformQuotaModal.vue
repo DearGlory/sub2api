@@ -42,7 +42,7 @@
                   />
                   <button
                     type="button"
-                    class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
+                    class="text-xs text-gray-500 hover:text-amber-500 disabled:opacity-50"
                     :disabled="!!resetting[`${row.platform}.daily`] || !savedConfigured.has(row.platform)"
                     :title="t(savedConfigured.has(row.platform) ? 'admin.users.platformQuota.reset.button' : 'admin.users.platformQuota.reset.unavailable')"
                     @click="onReset(row.platform, 'daily')"
@@ -61,7 +61,7 @@
                   />
                   <button
                     type="button"
-                    class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
+                    class="text-xs text-gray-500 hover:text-amber-500 disabled:opacity-50"
                     :disabled="!!resetting[`${row.platform}.weekly`] || !savedConfigured.has(row.platform)"
                     :title="t(savedConfigured.has(row.platform) ? 'admin.users.platformQuota.reset.button' : 'admin.users.platformQuota.reset.unavailable')"
                     @click="onReset(row.platform, 'weekly')"
@@ -80,7 +80,7 @@
                   />
                   <button
                     type="button"
-                    class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
+                    class="text-xs text-gray-500 hover:text-amber-500 disabled:opacity-50"
                     :disabled="!!resetting[`${row.platform}.monthly`] || !savedConfigured.has(row.platform)"
                     :title="t(savedConfigured.has(row.platform) ? 'admin.users.platformQuota.reset.button' : 'admin.users.platformQuota.reset.unavailable')"
                     @click="onReset(row.platform, 'monthly')"

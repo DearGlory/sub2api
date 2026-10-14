@@ -3,7 +3,7 @@
     <div v-if="loading" class="flex items-center justify-center py-3">
       <LoadingSpinner />
     </div>
-    <div v-else-if="items.length === 0" class="py-2 text-center text-xs text-gray-400">
+    <div v-else-if="items.length === 0" class="py-2 text-center text-xs text-gray-500">
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
     <table v-else class="w-full text-xs">
@@ -28,7 +28,7 @@
           <td v-if="showAccountCost" class="py-1 text-right text-orange-500 dark:text-orange-400">
             ${{ formatCost(user.account_cost) }}
           </td>
-          <td class="py-1 pr-1 text-right text-gray-400 dark:text-gray-500">
+          <td class="py-1 pr-1 text-right text-gray-500 dark:text-gray-400">
             ${{ formatCost(user.cost) }}
           </td>
         </tr>

@@ -4,7 +4,7 @@
       <label class="input-label mb-0">{{ t('admin.accounts.opencodeGo.protocolRules.title') }}</label>
       <button
         type="button"
-        class="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400"
+        class="text-xs text-primary-700 hover:text-primary-700 dark:text-primary-400"
         @click="restoreDefaults"
       >
         {{ t('admin.accounts.opencodeGo.protocolRules.restoreDefaults') }}

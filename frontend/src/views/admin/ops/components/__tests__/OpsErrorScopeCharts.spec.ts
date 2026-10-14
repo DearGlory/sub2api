@@ -82,6 +82,35 @@ const globalStubs = {
 }
 
 describe('Ops SLA-scoped error charts', () => {
+  it('uses the existing dark tooltip and labels on cosmos with a light preference', () => {
+    const root = document.documentElement
+    const originalClass = root.className
+    const originalUniverseTheme = root.dataset.universeTheme
+    root.classList.remove('dark')
+    root.dataset.universeTheme = 'cosmos'
+    const wrapper = mount(OpsErrorDistributionChart, {
+      props: {
+        loading: false,
+        data: { total: 2, items: [{ status_code: 500, total: 2, sla: 2, business_limited: 0 }] },
+      },
+      global: globalStubs,
+    })
+
+    try {
+      const options = wrapper.findComponent({ name: 'Doughnut' }).props('options')
+      expect(options.plugins.legend.display).toBe(false)
+      expect(options.plugins.tooltip).toMatchObject({
+        backgroundColor: '#1f2937', titleColor: '#f3f4f6', bodyColor: '#d1d5db',
+      })
+      expect(root.classList.contains('dark')).toBe(false)
+    } finally {
+      wrapper.unmount()
+      root.className = originalClass
+      if (originalUniverseTheme === undefined) delete root.dataset.universeTheme
+      else root.dataset.universeTheme = originalUniverseTheme
+    }
+  })
+
   it('错误分布图按 SLA 错误数统计，不把业务限制错误算进请求错误分布', () => {
     const wrapper = mount(OpsErrorDistributionChart, {
       props: {
