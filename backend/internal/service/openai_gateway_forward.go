@@ -277,7 +277,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		// canonicalImageIntentBody 仍是 failover hint，handler 持有的原始 body 不动。
 		passthroughBody := originalBody
 		body = nil
-		originalBody = nil
+		// ineffassign 只追踪后续读取：此赋值是内存释放措施，在长时间流式透传前
+		// 丢掉 handler body 的本地别名，避免整个透传期间重复驻留这份大 buffer
+		// （覆盖断言见 openai_gateway_passthrough_replay_test.go 的 HeapAlloc 检查）。
+		originalBody = nil //nolint:ineffassign // 仅为释放引用，删除会恢复旧的高内存驻留行为
 		requestView = openAIRequestView{}
 		return s.forwardOpenAIPassthrough(
 			ctx,

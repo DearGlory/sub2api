@@ -207,7 +207,9 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 
 	// Retain only the small billing field once request retries are finished.
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(patchedBody, originalModel)
-	patchedBody = nil
+	// ineffassign 只追踪后续读取：此赋值是内存释放措施，重试已结束，丢掉上游请求体
+	// 的本地别名，避免整个流式响应期间继续驻留（覆盖断言见 grok_body_retention_test.go）。
+	patchedBody = nil //nolint:ineffassign // 仅为释放引用，删除会恢复旧的高内存驻留行为
 
 	// Attach model so rate-limit snapshots can fan out a team+model cool.
 	stateCtx := withGrokTeamRateLimitModel(ctx, upstreamModel)

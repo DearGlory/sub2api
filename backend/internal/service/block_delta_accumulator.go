@@ -33,24 +33,25 @@ type blockDeltaAccumulator struct {
 
 // appendText folds a text_delta fragment.
 func (a *blockDeltaAccumulator) appendText(fragment string) {
-	a.text.WriteString(fragment)
+	// strings.Builder.WriteString never returns a non-nil error; discard explicitly.
+	_, _ = a.text.WriteString(fragment)
 }
 
 // appendThinking folds a thinking_delta fragment.
 func (a *blockDeltaAccumulator) appendThinking(fragment string) {
-	a.thinking.WriteString(fragment)
+	_, _ = a.thinking.WriteString(fragment)
 }
 
 // appendSignature folds a signature_delta fragment.
 func (a *blockDeltaAccumulator) appendSignature(fragment string) {
-	a.signature.WriteString(fragment)
+	_, _ = a.signature.WriteString(fragment)
 }
 
 // appendInput folds an input_json_delta fragment. The fragments are the raw
 // pieces of a JSON object being streamed one slice at a time; they are
 // concatenated as-is and only validated downstream.
 func (a *blockDeltaAccumulator) appendInput(fragment string) {
-	a.input.WriteString(fragment)
+	_, _ = a.input.WriteString(fragment)
 }
 
 // flushInto writes the accumulated fragments onto the content block using the

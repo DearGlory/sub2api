@@ -47,7 +47,7 @@ func TestPrivateDiagnostic(t *testing.T) {
 		NumGC     uint32
 	}
 	err = json.NewDecoder(resp.Body).Decode(&stats)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if err != nil || stats.HeapAlloc == 0 {
 		t.Fatalf("invalid memory stats: %+v %v", stats, err)
 	}
@@ -60,8 +60,8 @@ func TestPrivateDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 	n, err := io.Copy(io.Discard, gz)
-	gz.Close()
-	resp.Body.Close()
+	_ = gz.Close()
+	_ = resp.Body.Close()
 	if err != nil || n == 0 {
 		t.Fatalf("invalid profile %d %v", n, err)
 	}
@@ -70,7 +70,7 @@ func TestPrivateDiagnostic(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode < 400 {
 			t.Fatalf("unexpected enabled endpoint %s", path)
 		}
@@ -79,7 +79,7 @@ func TestPrivateDiagnostic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("POST status %d", resp.StatusCode)
 	}
@@ -97,7 +97,9 @@ func TestRejectUnsafePaths(t *testing.T) {
 		}
 	}
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(dir, "existing")
 	if err := os.WriteFile(path, []byte("keep"), 0600); err != nil {
 		t.Fatal(err)

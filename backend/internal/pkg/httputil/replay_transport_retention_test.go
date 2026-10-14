@@ -43,7 +43,7 @@ func TestReplayTransportReleasesBodyAfterResponseHeaders(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		w.(http.Flusher).Flush()
+		_ = http.NewResponseController(w).Flush()
 		select {
 		case <-finish:
 		case <-r.Context().Done():
@@ -94,7 +94,7 @@ func TestReplayTransportReleasesBodyAfterResponseHeaders(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	runtime.GC()
 	runtime.GC()
 	runtime.ReadMemStats(&after)
@@ -108,7 +108,7 @@ func TestReplayTransportReleasesBodyAfterResponseHeaders(t *testing.T) {
 	if err != nil || string(data) != "ok" {
 		t.Fatalf("response=%q err=%v", data, err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	runtime.GC()
 	runtime.GC()
 	runtime.ReadMemStats(&after)

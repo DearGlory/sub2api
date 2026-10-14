@@ -51,7 +51,7 @@ func Start(path string) (func(), error) {
 	listener.SetUnlinkOnClose(false)
 	owned, err := os.Lstat(path)
 	if err != nil {
-		listener.Close()
+		_ = listener.Close()
 		return nil, err
 	}
 	cleanup := func() {
@@ -60,7 +60,7 @@ func Start(path string) (func(), error) {
 		}
 	}
 	if err := os.Chmod(path, 0600); err != nil {
-		listener.Close()
+		_ = listener.Close()
 		cleanup()
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func Start(path string) (func(), error) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", "GET")
-			http.Error(w, "method not allowed", 405)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		if r.URL.Path != "/memstats" && r.URL.Path != "/heap" && r.URL.Path != "/allocs" && r.URL.Path != "/goroutine" {
@@ -91,7 +91,7 @@ func Start(path string) (func(), error) {
 		case busy <- struct{}{}:
 			defer func() { <-busy }()
 		default:
-			http.Error(w, "diagnostic busy", 429)
+			http.Error(w, "diagnostic busy", http.StatusTooManyRequests)
 			return
 		}
 		if r.URL.Path == "/memstats" {
