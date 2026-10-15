@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
@@ -1042,6 +1043,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	compactModelFallbackRetried := false
 	agentTaskRecoveryTried := false
 	rejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
+	var responseLineageDigests []string
+	var retainedReplays []*openAIPassthroughReplay
+	defer func() {
+		if relErr := releaseOpenAIPassthroughReplays(retainedReplays); relErr != nil {
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] compact replay cleanup failed: %v", relErr)
+		}
+	}()
 	for {
 		// Build upstream request
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
@@ -1071,6 +1079,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		// Send request
 		upstreamStart := time.Now()
 		resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
+		// Transport replay is finished; an issued upload reader keeps its own bytes.
+		releaseOpenAIPassthroughUpstreamRequest(upstreamReq)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if headerGuard != nil && headerGuard.stopHeaderWait() {
 			if resp != nil && resp.Body != nil {
@@ -1128,7 +1138,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				if decodeErr != nil {
 					return nil, decodeErr
 				}
-				invalidDigests := collectOpenAIEncryptedContentDigestsRaw(lineageEntryBody)
+				invalidDigests := responseLineageDigests
+				if lineageEntryBody != nil {
+					invalidDigests = collectOpenAIEncryptedContentDigestsRaw(lineageEntryBody)
+				}
 				if trimOpenAIEncryptedReasoningItems(decoded) {
 					body, err = marshalOpenAIUpstreamJSON(decoded)
 					if err != nil {
@@ -1220,7 +1233,26 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		serviceTier := extractOpenAIServiceTierFromBody(body)
-		// 上游接受后只保留计费需要的标量，避免响应处理期间继续保活完整 input/tools map。
+		var responseReplay *openAIPassthroughReplay
+		if isExplicitOpenAICompactContext(c) {
+			if lineageEntryBody != nil {
+				responseLineageDigests = collectOpenAIEncryptedContentDigestsRaw(lineageEntryBody)
+				if len(responseLineageDigests) > 0 && lineageSessionHash == "" {
+					lineageSessionHash = s.GenerateSessionHash(c, lineageEntryBody)
+				}
+			}
+			responseReplay, err = s.parkOpenAIPassthroughCompactReplay(body)
+			if err != nil {
+				return nil, err
+			}
+			retainedReplays = append(retainedReplays, responseReplay)
+		}
+		// HTTP errors above still replay in memory; successful responses only need
+		// billing scalars and an explicitly bounded compact fallback source.
+		body = nil
+		originalBody = nil //nolint:ineffassign // Release this frame's rewritten-body alias before response streaming.
+		lineageEntryBody = nil
+		requestView = openAIRequestView{}
 		reqBody = nil
 
 		// Handle normal response
@@ -1234,6 +1266,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			streamResult, err := s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, upstreamModel, reasoningEffortValue)
 			if err != nil {
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
+					var restoreErr error
+					body, restoreErr = restoreOpenAICompactReplayForReadError(ctx, responseReplay, err)
+					if restoreErr != nil {
+						return nil, restoreErr
+					}
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
 						c, account, requestedModel, body, http.StatusBadRequest, signal.message, signal.payload, compactModelFallbackRetried,
 					); retry {
@@ -1281,6 +1318,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			nonStreamResult, err := s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
 			if err != nil {
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
+					var restoreErr error
+					body, restoreErr = restoreOpenAICompactReplayForReadError(ctx, responseReplay, err)
+					if restoreErr != nil {
+						return nil, restoreErr
+					}
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
 						c, account, requestedModel, body, http.StatusBadRequest, signal.message, signal.payload, compactModelFallbackRetried,
 					); retry {
@@ -1415,10 +1457,11 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// previous_response_id，避免携带状态字段被上游拒绝。
 	body = normalizeDeepSeekResponsesRequestBody(account, body)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, nil)
 	if err != nil {
 		return nil, err
 	}
+	pkghttputil.BindReleasableRequestBody(req, body)
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
 
 	// Build authentication for this request. Agent Identity signs a fresh

@@ -325,6 +325,34 @@ type openAIPassthroughReadDecision struct {
 	err           error
 }
 
+// Restore only a compact read failure, preserving cancellation before disk I/O.
+// Normal Forward keeps its own retry and error-response semantics after restore.
+func restoreOpenAICompactReplayForReadError(ctx context.Context, replay *openAIPassthroughReplay, handleErr error) ([]byte, error) {
+	if errors.Is(handleErr, context.Canceled) || errors.Is(handleErr, context.DeadlineExceeded) {
+		return nil, handleErr
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return nil, errors.Join(ctx.Err(), handleErr)
+	}
+	if _, ok := asOpenAICompactFallbackSignal(handleErr); !ok {
+		return nil, handleErr
+	}
+	body, err := replay.bytes()
+	if ctx != nil && ctx.Err() != nil {
+		return nil, errors.Join(ctx.Err(), handleErr)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := replay.release(); err != nil {
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] compact replay cleanup failed after restore: %v", err)
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return nil, errors.Join(ctx.Err(), handleErr)
+	}
+	return body, nil
+}
+
 func releaseOpenAIPassthroughUpstreamRequest(req *http.Request) {
 	if req == nil {
 		return
@@ -356,7 +384,6 @@ func (s *OpenAIGatewayService) decideOpenAIPassthroughReadError(
 			_ = resp.Body.Close()
 		}
 	}
-	canceled := errors.Is(handleErr, context.Canceled) || (ctx != nil && errors.Is(ctx.Err(), context.Canceled))
 	signal, ok := asOpenAICompactFallbackSignal(handleErr)
 	var ctxErr error
 	if ctx != nil {
@@ -375,28 +402,12 @@ func (s *OpenAIGatewayService) decideOpenAIPassthroughReadError(
 	}
 	if replay == nil {
 		closeBody()
-		if canceled {
-			return openAIPassthroughReadDecision{err: handleErr}
-		}
 		return openAIPassthroughReadDecision{err: errors.New("openai passthrough compact replay missing")}
 	}
-	restored, restoreErr := replay.bytes()
+	restored, restoreErr := restoreOpenAICompactReplayForReadError(ctx, replay, handleErr)
 	if restoreErr != nil {
 		closeBody()
-		if canceled {
-			return openAIPassthroughReadDecision{err: handleErr}
-		}
 		return openAIPassthroughReadDecision{err: restoreErr}
-	}
-	if relErr := replay.release(); relErr != nil {
-		// The bytes are already restored, so compact retry and the error
-		// handler still run. The reservation stays held until a later release
-		// succeeds; the log is the record that cleanup did not succeed.
-		logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] compact replay cleanup failed after restore: %v", relErr)
-		if canceled {
-			closeBody()
-			return openAIPassthroughReadDecision{err: handleErr}
-		}
 	}
 	if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
 		c, account, requestedModel, restored, handleErr, alreadyRetried, resp,
