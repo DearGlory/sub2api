@@ -128,7 +128,9 @@ func TestRootcauseNormalForwardLargeCompactEncryptedRecoverySessionAcceptance(t 
 					var next map[string]any
 					require.NoError(t, json.Unmarshal(nextBody, &next))
 					next["previous_response_id"] = "resp_compact_acceptance"
-					items := next["input"].([]any)
+					items, ok := next["input"].([]any)
+					require.True(t, ok)
+					require.NotEmpty(t, items)
 					next["input"] = append(items[:len(items)-1],
 						map[string]any{"type": "message", "role": "user", "content": "next turn"},
 						items[len(items)-1])
