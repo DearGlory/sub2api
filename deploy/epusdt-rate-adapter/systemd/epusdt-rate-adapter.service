@@ -1,0 +1,35 @@
+[Unit]
+Description=EPUSDT read-only Binance CNY/USDT rate adapter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=epusdt-rate
+Group=epusdt-rate
+WorkingDirectory=/opt/epusdt-rate-adapter
+ExecStart=/usr/bin/python3 /opt/epusdt-rate-adapter/rate_adapter.py --port 18084 --timeout 5 --cache-ttl 60 --max-age 300 --cache-file /var/lib/epusdt-rate-adapter/quote.json
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=10s
+TimeoutStopSec=5s
+KillSignal=SIGINT
+UMask=0077
+
+# systemd creates this writable state directory for the dedicated service user.
+StateDirectory=epusdt-rate-adapter
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
