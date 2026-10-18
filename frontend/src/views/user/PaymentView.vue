@@ -1026,7 +1026,17 @@ function closeRenewalModal() {
 }
 
 async function handleSubmitRecharge() {
-  if (!canSubmit.value || submitting.value) return
+  if (submitting.value) return
+  // A background tab can delay the expiry timer; never trust a cached computed
+  // quote-readiness value at the moment the user submits a payment.
+  if (isEpusdt.value && epusdtCurrency.value === 'CNY') {
+    const expiresAt = Date.parse(epusdtRate.value?.expires_at || '')
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      await loadEpusdtRate()
+      return
+    }
+  }
+  if (!canSubmit.value) return
   await createOrder(validAmount.value, 'balance')
 }
 

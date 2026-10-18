@@ -1084,6 +1084,41 @@ describe('PaymentView EPUSDT network selection', () => {
     expect(wrapper.find('[data-testid="epusdt-rate-status"]').text()).toContain('payment.epusdtRateError')
   })
 
+  it('rechecks quote expiry when a suspended tab submits before its timer runs', async () => {
+    const now = Date.now()
+    const fixture = checkoutInfoWithPlansFixture()
+    getEpusdtRate.mockResolvedValueOnce({ data: {
+      currency: 'CNY', asset: 'USDT', usdt_per_unit: 1 / 6.7,
+      source: 'binance-p2p', trade_type: 'BUY',
+      fetched_at: new Date(now).toISOString(),
+      expires_at: new Date(now + 60_000).toISOString(),
+    } }).mockRejectedValue(new Error('refresh unavailable'))
+    getCheckoutInfo.mockResolvedValue({ data: {
+      ...fixture.data,
+      methods: { epusdt: { ...fixture.data.methods.wxpay, currency: 'CNY', networks: ['tron'] } },
+      epusdt_enabled: true,
+    } })
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 67)
+    await wrapper.get('[data-testid="epusdt-network-select"]').setValue('tron')
+    await flushPromises()
+    expect(paymentButton(wrapper).element.disabled).toBe(false)
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 60_001)
+    try {
+      await paymentButton(wrapper).trigger('click')
+      await flushPromises()
+      expect(createOrder).not.toHaveBeenCalled()
+      expect(getEpusdtRate).toHaveBeenCalledTimes(2)
+      expect(paymentButton(wrapper).element.disabled).toBe(true)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('uses independent USD pricing without global bonuses or discounts', async () => {
     const fixture = checkoutInfoWithPlansFixture()
     getCheckoutInfo.mockReset().mockResolvedValue({ data: {
