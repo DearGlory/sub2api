@@ -22,6 +22,18 @@ import (
 )
 
 func TestEpusdtCNYCreatedSnapshotToSignedCallbackCreditsOnce(t *testing.T) {
+	for _, gatewaySelection := range []bool{false, true} {
+		name := "legacy_concrete_order"
+		if gatewaySelection {
+			name = "unified_gateway_selection"
+		}
+		t.Run(name, func(t *testing.T) {
+			testEpusdtCNYCreatedSnapshotToSignedCallback(t, gatewaySelection)
+		})
+	}
+}
+
+func testEpusdtCNYCreatedSnapshotToSignedCallback(t *testing.T, gatewaySelection bool) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
 	ensureEpusdtPaymentClaimsTable(t, ctx, client)
@@ -37,8 +49,12 @@ func TestEpusdtCNYCreatedSnapshotToSignedCallbackCreditsOnce(t *testing.T) {
 			http.Error(w, "bad test request", 400)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"status_code": 200, "message": "success", "data": map[string]any{
-			"trade_id": "cny-integration-trade", "order_id": received["order_id"], "currency": "CNY", "token": "USDT", "amount": 67, "actual_amount": 10, "payment_url": "/pay/test",
+		token, actualAmount, status := "USDT", 10.0, 1
+		if gatewaySelection {
+			token, actualAmount, status = "", 0, 4
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status_code": 200, "message": "success", "data": map[string]any{
+			"trade_id": "cny-integration-trade", "order_id": received["order_id"], "currency": "CNY", "token": token, "amount": 67, "actual_amount": actualAmount, "status": status, "payment_url": "/pay/test",
 		}})
 	}))
 	defer server.Close()
@@ -52,6 +68,11 @@ func TestEpusdtCNYCreatedSnapshotToSignedCallbackCreditsOnce(t *testing.T) {
 	require.InDelta(t, 10.0, 67*quote.USDTPerUnit, 1e-12)
 	sel := &payment.InstanceSelection{InstanceID: "cny-test", ProviderKey: payment.TypeEpusdt, Config: cfg}
 	req := CreateOrderRequest{UserID: user.ID, Amount: 67, PaymentType: payment.TypeEpusdt, OrderType: payment.OrderTypeBalance, RequestedNetwork: "tron", EpusdtBalanceMultiplier: 1, EpusdtGraceMinutes: 5, QuoteSource: quote.Source, QuoteUSDTPerUnit: quote.USDTPerUnit, QuoteFetchedAt: quote.FetchedAt, QuoteExpiresAt: quote.ExpiresAt}
+	if gatewaySelection {
+		req.RequestedNetwork = ""
+		delete(cfg, "network")
+		delete(cfg, "networks")
+	}
 	credited := 0.0
 	userRepo := &mockUserRepo{getByIDUser: &User{ID: user.ID}}
 	userRepo.updateBalanceFn = func(_ context.Context, _ int64, amount float64) error { credited += amount; return nil }
@@ -63,12 +84,24 @@ func TestEpusdtCNYCreatedSnapshotToSignedCallbackCreditsOnce(t *testing.T) {
 	_, err = svc.invokeProvider(ctx, order, req, settings, 67, "67.00", 67, nil, sel)
 	require.NoError(t, err)
 	require.Equal(t, "CNY", received["currency"])
-	require.Equal(t, "tron", received["network"])
+	if gatewaySelection {
+		require.NotContains(t, received, "network")
+		require.NotContains(t, received, "token")
+	} else {
+		require.Equal(t, "tron", received["network"])
+	}
 	require.Equal(t, float64(67), received["amount"])
 	persisted := mustGetPaymentOrder(t, ctx, client, order.ID)
 	require.Equal(t, "CNY", PaymentOrderCurrency(persisted))
 	require.Equal(t, 67.0, persisted.Amount)
-	require.Equal(t, 10.0, psOrderProviderSnapshot(persisted).GatewayExpectedUSDT)
+	if gatewaySelection {
+		require.Zero(t, psOrderProviderSnapshot(persisted).GatewayExpectedUSDT)
+		require.Equal(t, "select_network", psOrderProviderSnapshot(persisted).GatewayCheckoutMode)
+		require.Equal(t, "cny-integration-trade", psOrderProviderSnapshot(persisted).GatewayCreatedTradeNo)
+		require.NotContains(t, persisted.ProviderSnapshot, "requested_network")
+	} else {
+		require.Equal(t, 10.0, psOrderProviderSnapshot(persisted).GatewayExpectedUSDT)
+	}
 	stale := clonePaymentOrderSnapshot(persisted.ProviderSnapshot)
 	stale["expires_at"] = time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)
 	expiredOrder, err := client.PaymentOrder.UpdateOneID(order.ID).SetProviderSnapshot(stale).Save(ctx)

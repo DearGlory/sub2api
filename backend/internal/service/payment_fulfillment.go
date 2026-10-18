@@ -571,6 +571,10 @@ func (s *PaymentService) toPaidEpusdt(ctx context.Context, o *dbent.PaymentOrder
 	if tradeNo == "" || strings.IndexFunc(tradeNo, unicode.IsControl) >= 0 || len(tradeNo) > 128 {
 		return fmt.Errorf("invalid USDT upstream trade")
 	}
+	gatewaySelection := snapshot.GatewayCheckoutMode == "select_network"
+	if gatewaySelection && (snapshot.GatewayCreatedTradeNo == "" || tradeNo != snapshot.GatewayCreatedTradeNo || metadata["network_verification"] != "gateway_signed") {
+		return fmt.Errorf("USDT checkout receipt does not match its signed gateway order")
+	}
 
 	if current.Status == OrderStatusCompleted || current.Status == OrderStatusRefunded {
 		// Terminal replay must not reserve new chain or gateway evidence.
@@ -611,9 +615,10 @@ func (s *PaymentService) toPaidEpusdt(ctx context.Context, o *dbent.PaymentOrder
 	}
 	if needsPaymentTransition {
 		deadline, hasDeadline := effectiveEpusdtAutoCreditDeadline(current, snapshot)
-		// Both values are the gateway's serialized amount, not a local FX
-		// calculation. Changed or absent CNY receipt amounts require review.
-		amountMismatch := currency == "CNY" && (!finitePositive(snapshot.GatewayExpectedUSDT) || actualAmount != snapshot.GatewayExpectedUSDT)
+		// Legacy concrete orders have an initial token amount. Unified checkout
+		// freezes only CNY here; the signed, trade-bound receipt supplies USDT
+		// after network selection and never changes the credited balance.
+		amountMismatch := currency == "CNY" && !gatewaySelection && (!finitePositive(snapshot.GatewayExpectedUSDT) || actualAmount != snapshot.GatewayExpectedUSDT)
 		if !hasDeadline || now.After(deadline) || amountMismatch {
 			if err := tx.Rollback(); err != nil {
 				slog.Warn("rollback late USDT payment transaction failed", "orderID", current.ID, "error", err)

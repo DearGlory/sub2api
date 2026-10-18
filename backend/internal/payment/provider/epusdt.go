@@ -59,7 +59,7 @@ type epusdtStatusData struct {
 
 func NewEPUSDT(instanceID string, config map[string]string) (*EPUSDT, error) {
 	cfg := cloneStringMap(config)
-	for _, key := range []string{"pid", "secretKey", "apiBase", "notifyUrl", "returnUrl", "token", "network", "currency"} {
+	for _, key := range []string{"pid", "secretKey", "apiBase", "notifyUrl", "returnUrl", "token", "currency"} {
 		if strings.TrimSpace(cfg[key]) == "" {
 			return nil, fmt.Errorf("epusdt config missing required key: %s", key)
 		}
@@ -94,12 +94,12 @@ func NewEPUSDT(instanceID string, config map[string]string) (*EPUSDT, error) {
 	if len(pid) > 64 {
 		return nil, fmt.Errorf("epusdt pid is too long")
 	}
-	if token == "" || network == "" {
-		return nil, fmt.Errorf("epusdt token and network are required")
-	}
-	networks, err := normalizeEPUSDTNetworks(network, cfg["networks"])
-	if err != nil {
-		return nil, err
+	var networks []string
+	if network != "" || strings.TrimSpace(cfg["networks"]) != "" {
+		networks, err = normalizeEPUSDTNetworks(network, cfg["networks"])
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	cfg["apiBase"] = base
@@ -241,9 +241,13 @@ func (e *EPUSDT) CreatePayment(ctx context.Context, req payment.CreatePaymentReq
 	if orderID == "" || len([]byte(orderID)) > 32 {
 		return nil, fmt.Errorf("epusdt create payment: order id must be 1-32 bytes")
 	}
-	network, err := e.requestedNetwork(req.RequestedNetwork)
-	if err != nil {
-		return nil, fmt.Errorf("epusdt create payment: %w", err)
+	selectAtGateway := strings.TrimSpace(req.RequestedNetwork) == ""
+	network := ""
+	if !selectAtGateway {
+		network, err = e.requestedNetwork(req.RequestedNetwork)
+		if err != nil {
+			return nil, fmt.Errorf("epusdt create payment: %w", err)
+		}
 	}
 
 	notifyURL := strings.TrimSpace(req.NotifyURL)
@@ -271,12 +275,14 @@ func (e *EPUSDT) CreatePayment(ctx context.Context, req payment.CreatePaymentReq
 		"pid":          e.config["pid"],
 		"order_id":     orderID,
 		"currency":     e.config["currency"],
-		"token":        e.config["token"],
-		"network":      network,
 		"amount":       amount,
 		"notify_url":   notifyURL,
 		"redirect_url": returnURL,
 		"name":         strings.TrimSpace(req.Subject),
+	}
+	if !selectAtGateway {
+		payload["token"] = e.config["token"]
+		payload["network"] = network
 	}
 	payload["signature"] = epusdtSign(payload, e.config["secretKey"])
 
@@ -292,21 +298,25 @@ func (e *EPUSDT) CreatePayment(ctx context.Context, req payment.CreatePaymentReq
 	if data.OrderID != "" && data.OrderID != orderID {
 		return nil, fmt.Errorf("epusdt create payment: order id mismatch")
 	}
-	if strings.EqualFold(e.config["currency"], "CNY") {
+	if selectAtGateway || strings.EqualFold(e.config["currency"], "CNY") {
 		if data.OrderID != orderID {
 			return nil, fmt.Errorf("epusdt create payment: order id mismatch")
 		}
-		if !isFinitePositive(data.ActualAmount) {
+		if !selectAtGateway && !isFinitePositive(data.ActualAmount) {
 			return nil, fmt.Errorf("epusdt create payment: missing actual USDT amount")
 		}
-		if !strings.EqualFold(strings.TrimSpace(data.Currency), "CNY") {
+		if !strings.EqualFold(strings.TrimSpace(data.Currency), e.config["currency"]) {
 			return nil, fmt.Errorf("epusdt create payment: currency mismatch")
 		}
-		if !strings.EqualFold(strings.TrimSpace(data.Token), "USDT") {
+		if selectAtGateway {
+			if data.Status != 4 || strings.TrimSpace(data.Token) != "" || data.ActualAmount != 0 {
+				return nil, fmt.Errorf("epusdt create payment: invalid network-selection checkout")
+			}
+		} else if !strings.EqualFold(strings.TrimSpace(data.Token), "USDT") {
 			return nil, fmt.Errorf("epusdt create payment: token mismatch")
 		}
-		requestedMinor, requestedErr := payment.AmountToMinorUnit(strconv.FormatFloat(amount, 'f', -1, 64), "CNY")
-		responseMinor, responseErr := payment.AmountToMinorUnit(strconv.FormatFloat(data.Amount, 'f', -1, 64), "CNY")
+		requestedMinor, requestedErr := payment.AmountToMinorUnit(strconv.FormatFloat(amount, 'f', -1, 64), e.config["currency"])
+		responseMinor, responseErr := payment.AmountToMinorUnit(strconv.FormatFloat(data.Amount, 'f', -1, 64), e.config["currency"])
 		if requestedErr != nil || responseErr != nil || requestedMinor != responseMinor {
 			return nil, fmt.Errorf("epusdt create payment: amount mismatch")
 		}
@@ -316,7 +326,12 @@ func (e *EPUSDT) CreatePayment(ctx context.Context, req payment.CreatePaymentReq
 		return nil, err
 	}
 
+	checkoutMode := ""
+	if selectAtGateway {
+		checkoutMode = "select_network"
+	}
 	return &payment.CreatePaymentResponse{
+		GatewayCheckoutMode: checkoutMode,
 		TradeNo:             data.TradeID,
 		PayURL:              payURL,
 		Currency:            e.config["currency"],

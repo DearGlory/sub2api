@@ -19,6 +19,8 @@ describe('PROVIDER_CONFIG_FIELDS.epusdt', () => {
     expect(findField('epusdt', 'currency')?.defaultValue).toBe('CNY')
     expect(findField('epusdt', 'currency')?.options).toEqual([{ value: 'CNY', label: 'CNY' }, { value: 'USD', label: 'USD' }])
     expect(findField('epusdt', 'rateApi')?.optional).toBe(true)
+    expect(findField('epusdt', 'network')).toBeUndefined()
+    expect(findField('epusdt', 'networks')).toBeUndefined()
   })
 })
 

@@ -159,6 +159,7 @@ type CreatePaymentResponse struct {
 	IntentID            string                  // 前端 SDK 需要的服务商支付意图 ID
 	Currency            string                  // 服务商支付币种
 	GatewayExpectedUSDT float64                 // EPUSDT CNY create response actual_amount
+	GatewayCheckoutMode string                  // EPUSDT select_network defers chain and amount to gateway checkout
 	CountryCode         string                  // 服务商收银台国家/地区代码
 	PaymentEnv          string                  // 服务商前端环境标识
 	ResultType          CreatePaymentResultType // Typed result contract for frontend flows

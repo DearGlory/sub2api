@@ -109,12 +109,7 @@
                 @select="selectedMethod = $event"
               />
             </div>
-            <div v-if="selectedMethod === 'epusdt' && selectedNetworks.length > 0" class="card p-6">
-              <label for="epusdt-network" class="input-label">{{ t('payment.epusdtNetwork') }}</label>
-              <select id="epusdt-network" v-model="selectedNetwork" class="input" data-testid="epusdt-network-select">
-                <option disabled value="">{{ t('payment.epusdtSelectNetwork') }}</option>
-                <option v-for="network in selectedNetworks" :key="network" :value="network">{{ network.toUpperCase() }}</option>
-              </select>
+            <div v-if="selectedMethod === 'epusdt'" class="card p-6">
               <p class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ t('payment.epusdtNetworkHint') }}</p>
               <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.epusdtSettlementHint', { currency: epusdtCurrency }) }}</p>
               <p class="mt-2 text-xs text-green-700 dark:text-green-300">{{ t('payment.epusdtAutoSettlementHint') }}</p>
@@ -627,7 +622,6 @@ const externalCardPurchaseName = computed(() => externalCardPurchaseDisplayName(
 const externalCardPurchaseDescription = computed(() => externalCardPurchaseDisplayName(appStore.cachedPublicSettings?.external_card_purchase_description, t('payment.externalCardPurchase.redeemHint')))
 const externalCardPurchaseShowsEmbed = computed(() => normalizeExternalCardPurchaseDisplayMode(appStore.cachedPublicSettings?.external_card_purchase_display_mode) !== 'new_window')
 const internalPaymentEnabled = computed(() => appStore.cachedPublicSettings?.payment_enabled !== false)
-const selectedNetwork = ref('')
 
 const tabs = computed(() => {
   const result: { key: 'recharge' | 'subscription' | 'external'; label: string }[] = []
@@ -651,13 +645,6 @@ const visibleMethods = computed(() => {
   if (checkout.value.epusdt_enabled !== true) delete methods.epusdt
   return methods
 })
-const selectedNetworks = computed(() => {
-  const raw = visibleMethods.value.epusdt?.networks ?? []
-  return [...new Set(raw.map(network => network.trim().toLowerCase()).filter(Boolean))]
-})
-watch(selectedNetworks, (networks) => {
-  if (!networks.includes(selectedNetwork.value)) selectedNetwork.value = ''
-}, { immediate: true })
 const enabledMethods = computed(() => Object.keys(visibleMethods.value))
 const validAmount = computed(() => amount.value ?? 0)
 const balanceRechargeMultiplier = computed(() => {
@@ -911,7 +898,6 @@ const canSubmit = computed(() =>
     && selectedLimit.value?.available !== false
     && (selectedMethod.value !== 'epusdt' || (
       checkout.value.epusdt_enabled === true
-      && selectedNetworks.value.includes(selectedNetwork.value)
       && amountError.value === ''
       && (epusdtCurrency.value !== 'CNY' || epusdtRateReady.value)
     ))
@@ -1062,7 +1048,6 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
       forceQRCode: !!(checkout.value.alipay_force_qrcode && normalizeVisibleMethod(requestType) === 'alipay'),
       mobilePrecreateDeepLink: checkout.value.alipay_mobile_precreate_deep_link === true,
-      requestedNetwork: visibleMethod === 'epusdt' ? selectedNetwork.value : undefined,
     })
     if (options.openid) {
       payload.openid = options.openid

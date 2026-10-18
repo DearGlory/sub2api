@@ -40,6 +40,8 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		if !cfg.EpusdtEnabled {
 			return nil, infraerrors.Forbidden("EPUSDT_DISABLED", "USDT recharge is disabled")
 		}
+		// Network selection belongs to the gateway, including legacy clients.
+		req.RequestedNetwork = ""
 		req.EpusdtBalanceMultiplier = cfg.EpusdtBalanceMultiplier
 		req.EpusdtGraceMinutes = cfg.EpusdtGraceMinutes
 		if req.EpusdtGraceMinutes < 0 {
@@ -153,9 +155,6 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
 		if req.OrderType != payment.OrderTypeBalance {
 			return nil, infraerrors.BadRequest("UNSUPPORTED_PAYMENT_ORDER", "EPUSDT only supports balance recharge")
-		}
-		if strings.TrimSpace(req.RequestedNetwork) == "" {
-			return nil, infraerrors.BadRequest("NETWORK_REQUIRED", "a USDT network must be selected")
 		}
 		if (cfg.EpusdtMinAmount > 0 && req.Amount < cfg.EpusdtMinAmount) || (cfg.EpusdtMaxAmount > 0 && req.Amount > cfg.EpusdtMaxAmount) {
 			return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount is outside USDT limits").WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.EpusdtMinAmount), "max": fmt.Sprintf("%.2f", cfg.EpusdtMaxAmount)})
@@ -578,14 +577,19 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		SetNillableQrCode(psNilIfEmpty(pr.QRCode)).
 		SetNillableProviderInstanceID(psNilIfEmpty(sel.InstanceID)).
 		SetNillableProviderKey(psNilIfEmpty(sel.ProviderKey))
-	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt &&
-		strings.EqualFold(PaymentOrderCurrency(order), payment.DefaultPaymentCurrency) &&
-		finitePositive(pr.GatewayExpectedUSDT) {
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
 		snapshot := clonePaymentOrderSnapshot(order.ProviderSnapshot)
 		if snapshot == nil {
 			snapshot = map[string]any{"schema_version": 2}
 		}
-		snapshot["gateway_expected_usdt"] = pr.GatewayExpectedUSDT
+		if pr.GatewayCheckoutMode == "select_network" {
+			snapshot["gateway_checkout_mode"] = pr.GatewayCheckoutMode
+			snapshot["gateway_created_trade_no"] = pr.TradeNo
+			delete(snapshot, "gateway_expected_usdt")
+			delete(snapshot, "requested_network")
+		} else if finitePositive(pr.GatewayExpectedUSDT) {
+			snapshot["gateway_expected_usdt"] = pr.GatewayExpectedUSDT
+		}
 		orderUpdate.SetProviderSnapshot(snapshot)
 	}
 	_, err = orderUpdate.Save(ctx)

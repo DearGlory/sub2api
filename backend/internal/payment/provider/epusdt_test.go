@@ -243,7 +243,7 @@ func TestEPUSDTVerifyNotificationReturnsSignedSuccess(t *testing.T) {
 
 func TestEPUSDTRejectsUntrustedPaymentURLAndRefund(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"status_code":200,"message":"success","data":{"trade_id":"trade-123","order_id":"order-123","payment_url":"https://evil.example.test/pay"}}`))
+		_, _ = w.Write([]byte(`{"status_code":200,"message":"success","data":{"trade_id":"trade-123","order_id":"order-123","amount":1,"currency":"USD","status":4,"actual_amount":0,"token":"","payment_url":"https://evil.example.test/pay"}}`))
 	}))
 	defer server.Close()
 	prov := newTestEPUSDT(t, server)

@@ -891,7 +891,7 @@ describe('PaymentView subscription feature flag', () => {
   })
 })
 
-describe('PaymentView EPUSDT network selection', () => {
+describe('PaymentView unified EPUSDT checkout', () => {
   const mounted: ReturnType<typeof shallowMount>[] = []
   const originalLocation = window.location
 
@@ -1104,7 +1104,6 @@ describe('PaymentView EPUSDT network selection', () => {
     mounted.push(wrapper)
     await flushPromises()
     wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 67)
-    await wrapper.get('[data-testid="epusdt-network-select"]').setValue('tron')
     await flushPromises()
     expect(paymentButton(wrapper).element.disabled).toBe(false)
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 60_001)
@@ -1163,18 +1162,15 @@ describe('PaymentView EPUSDT network selection', () => {
     expect(createOrder).not.toHaveBeenCalled()
   })
 
-  it('requires an explicit network selection instead of silently choosing the first one', async () => {
+  it('shows one USDT entry and leaves network selection to the gateway', async () => {
     const wrapper = await mountEpusdt(['tron', 'bsc'])
-    const select = wrapper.get<HTMLSelectElement>('[data-testid="epusdt-network-select"]')
-    expect(select.element.value).toBe('')
-    expect(paymentButton(wrapper).element.disabled).toBe(true)
-    await paymentButton(wrapper).trigger('click')
-    expect(createOrder).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="epusdt-network-select"]').exists()).toBe(false)
+    expect(paymentButton(wrapper).element.disabled).toBe(false)
+    expect(wrapper.text()).toContain('payment.epusdtNetworkHint')
   })
 
-  it('sends the chosen network through the mounted checkout page', async () => {
+  it('creates a unified USDT checkout without a requested network', async () => {
     const wrapper = await mountEpusdt(['tron', 'bsc'])
-    await wrapper.get('[data-testid="epusdt-network-select"]').setValue('bsc')
     expect(paymentButton(wrapper).element.disabled).toBe(false)
     await paymentButton(wrapper).trigger('click')
     await flushPromises()
@@ -1183,15 +1179,16 @@ describe('PaymentView EPUSDT network selection', () => {
       amount: 20,
       payment_type: 'epusdt',
       order_type: 'balance',
-      requested_network: 'bsc',
     }))
   })
 
-  it('blocks checkout when no network is enabled', async () => {
+  it('does not require Sub2API to duplicate the gateway network list', async () => {
     const wrapper = await mountEpusdt([])
-    expect(paymentButton(wrapper).element.disabled).toBe(true)
+    expect(paymentButton(wrapper).element.disabled).toBe(false)
     await paymentButton(wrapper).trigger('click')
-    expect(createOrder).not.toHaveBeenCalled()
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder.mock.calls[0][0]).not.toHaveProperty('requested_network')
   })
 
   it('switches away from USDT when opening a subscription', async () => {

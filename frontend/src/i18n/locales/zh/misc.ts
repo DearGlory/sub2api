@@ -345,7 +345,7 @@ export default {
     epusdtEstimatedHint: '预估USDT，以收银台最终金额为准',
     epusdtRateSource: '报价来源：{source}',
     epusdtRateSourceBinanceP2P: '币安 P2P',
-    epusdtNetworkHint: '请选择实际转账网络，并核对收银台最终显示的网络、USDT 金额和收款地址。若在收银台切换网络，请以切换后的付款信息为准。',
+    epusdtNetworkHint: '点击充值后前往 EPUSDT 收银台选择网络，并按收银台最终显示的 USDT 金额和收款地址转账。本站无需选择网络。',
     fee: '手续费',
     actualPay: '实付金额',
     createOrder: '确认支付',

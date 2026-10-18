@@ -13,23 +13,25 @@ import (
 )
 
 type paymentOrderProviderSnapshot struct {
-	SchemaVersion       int
-	ProviderInstanceID  string
-	ProviderKey         string
-	PaymentMode         string
-	MerchantAppID       string
-	MerchantID          string
-	Currency            string
-	Asset               string
-	RequestedNetwork    string
-	GraceMinutes        int
-	GraceMinutesSet     bool
-	AutoCreditDeadline  time.Time
-	QuoteSource         string
-	USDTPerUnit         float64
-	QuoteFetchedAt      time.Time
-	QuoteExpiresAt      time.Time
-	GatewayExpectedUSDT float64
+	SchemaVersion         int
+	ProviderInstanceID    string
+	ProviderKey           string
+	PaymentMode           string
+	MerchantAppID         string
+	MerchantID            string
+	Currency              string
+	Asset                 string
+	RequestedNetwork      string
+	GraceMinutes          int
+	GraceMinutesSet       bool
+	AutoCreditDeadline    time.Time
+	QuoteSource           string
+	USDTPerUnit           float64
+	QuoteFetchedAt        time.Time
+	QuoteExpiresAt        time.Time
+	GatewayExpectedUSDT   float64
+	GatewayCheckoutMode   string
+	GatewayCreatedTradeNo string
 }
 
 func psOrderProviderSnapshot(order *dbent.PaymentOrder) *paymentOrderProviderSnapshot {
@@ -38,23 +40,25 @@ func psOrderProviderSnapshot(order *dbent.PaymentOrder) *paymentOrderProviderSna
 	}
 
 	snapshot := &paymentOrderProviderSnapshot{
-		SchemaVersion:       psSnapshotIntValue(order.ProviderSnapshot["schema_version"]),
-		ProviderInstanceID:  psSnapshotStringValue(order.ProviderSnapshot["provider_instance_id"]),
-		ProviderKey:         psSnapshotStringValue(order.ProviderSnapshot["provider_key"]),
-		PaymentMode:         psSnapshotStringValue(order.ProviderSnapshot["payment_mode"]),
-		MerchantAppID:       psSnapshotStringValue(order.ProviderSnapshot["merchant_app_id"]),
-		MerchantID:          psSnapshotStringValue(order.ProviderSnapshot["merchant_id"]),
-		Currency:            psSnapshotStringValue(order.ProviderSnapshot["currency"]),
-		Asset:               psSnapshotStringValue(order.ProviderSnapshot["asset"]),
-		RequestedNetwork:    psSnapshotStringValue(order.ProviderSnapshot["requested_network"]),
-		GraceMinutes:        psSnapshotIntValue(order.ProviderSnapshot["grace_minutes"]),
-		GraceMinutesSet:     hasPaymentOrderSnapshotKey(order.ProviderSnapshot, "grace_minutes"),
-		AutoCreditDeadline:  psSnapshotTimeValue(order.ProviderSnapshot["auto_credit_deadline"]),
-		QuoteSource:         psSnapshotStringValue(order.ProviderSnapshot["quote_source"]),
-		USDTPerUnit:         psSnapshotFloatValue(order.ProviderSnapshot["usdt_per_unit"]),
-		QuoteFetchedAt:      psSnapshotTimeValue(order.ProviderSnapshot["fetched_at"]),
-		QuoteExpiresAt:      psSnapshotTimeValue(order.ProviderSnapshot["expires_at"]),
-		GatewayExpectedUSDT: psSnapshotFloatValue(order.ProviderSnapshot["gateway_expected_usdt"]),
+		SchemaVersion:         psSnapshotIntValue(order.ProviderSnapshot["schema_version"]),
+		ProviderInstanceID:    psSnapshotStringValue(order.ProviderSnapshot["provider_instance_id"]),
+		ProviderKey:           psSnapshotStringValue(order.ProviderSnapshot["provider_key"]),
+		PaymentMode:           psSnapshotStringValue(order.ProviderSnapshot["payment_mode"]),
+		MerchantAppID:         psSnapshotStringValue(order.ProviderSnapshot["merchant_app_id"]),
+		MerchantID:            psSnapshotStringValue(order.ProviderSnapshot["merchant_id"]),
+		Currency:              psSnapshotStringValue(order.ProviderSnapshot["currency"]),
+		Asset:                 psSnapshotStringValue(order.ProviderSnapshot["asset"]),
+		RequestedNetwork:      psSnapshotStringValue(order.ProviderSnapshot["requested_network"]),
+		GraceMinutes:          psSnapshotIntValue(order.ProviderSnapshot["grace_minutes"]),
+		GraceMinutesSet:       hasPaymentOrderSnapshotKey(order.ProviderSnapshot, "grace_minutes"),
+		AutoCreditDeadline:    psSnapshotTimeValue(order.ProviderSnapshot["auto_credit_deadline"]),
+		QuoteSource:           psSnapshotStringValue(order.ProviderSnapshot["quote_source"]),
+		USDTPerUnit:           psSnapshotFloatValue(order.ProviderSnapshot["usdt_per_unit"]),
+		QuoteFetchedAt:        psSnapshotTimeValue(order.ProviderSnapshot["fetched_at"]),
+		QuoteExpiresAt:        psSnapshotTimeValue(order.ProviderSnapshot["expires_at"]),
+		GatewayExpectedUSDT:   psSnapshotFloatValue(order.ProviderSnapshot["gateway_expected_usdt"]),
+		GatewayCheckoutMode:   psSnapshotStringValue(order.ProviderSnapshot["gateway_checkout_mode"]),
+		GatewayCreatedTradeNo: psSnapshotStringValue(order.ProviderSnapshot["gateway_created_trade_no"]),
 	}
 	if snapshot.SchemaVersion == 0 &&
 		snapshot.ProviderInstanceID == "" &&
