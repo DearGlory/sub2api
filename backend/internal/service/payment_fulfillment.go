@@ -266,6 +266,9 @@ func claimEpusdtBlockTransaction(ctx context.Context, client *dbent.Client, bloc
 	if err := rows.Scan(&claimedOrderID, &claimedTradeNo, &claimedAmount, &claimedActualAmount); err != nil {
 		return 0, err
 	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
 	if claimedOrderID != orderID {
 		return claimedOrderID, nil
 	}
