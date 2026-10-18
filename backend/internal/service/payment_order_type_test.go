@@ -43,12 +43,12 @@ func TestDailyLimitUsesOrderSeparatesEpusdtBalanceOrders(t *testing.T) {
 	alipayOrder := &dbent.PaymentOrder{OrderType: payment.OrderTypeBalance, PaymentType: payment.TypeAlipay}
 	subscriptionOrder := &dbent.PaymentOrder{OrderType: payment.OrderTypeSubscription, PaymentType: payment.TypeAlipay}
 
-	require.True(t, dailyLimitUsesOrder(usdtOrder, payment.TypeEpusdt))
-	require.False(t, dailyLimitUsesOrder(alipayOrder, payment.TypeEpusdt))
-	require.True(t, dailyLimitUsesOrder(alipayOrder, payment.TypeAlipay))
-	require.False(t, dailyLimitUsesOrder(usdtOrder, payment.TypeAlipay))
-	require.True(t, dailyLimitUsesOrder(subscriptionOrder, payment.TypeAlipay))
-	require.False(t, dailyLimitUsesOrder(subscriptionOrder, payment.TypeEpusdt))
+	require.True(t, dailyLimitUsesOrderInCurrency(usdtOrder, payment.TypeEpusdt, ""))
+	require.False(t, dailyLimitUsesOrderInCurrency(alipayOrder, payment.TypeEpusdt, ""))
+	require.True(t, dailyLimitUsesOrderInCurrency(alipayOrder, payment.TypeAlipay, ""))
+	require.False(t, dailyLimitUsesOrderInCurrency(usdtOrder, payment.TypeAlipay, ""))
+	require.True(t, dailyLimitUsesOrderInCurrency(subscriptionOrder, payment.TypeAlipay, ""))
+	require.False(t, dailyLimitUsesOrderInCurrency(subscriptionOrder, payment.TypeEpusdt, ""))
 }
 
 func TestFulfillmentRejectsUnknownOrderType(t *testing.T) {

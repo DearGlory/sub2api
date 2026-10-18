@@ -75,8 +75,7 @@ func TestParseEpusdtCNYRateDocumentRejectsDuplicateFields(t *testing.T) {
 
 func TestCalculateEpusdtCNYGatewayAmountUsesNativeCNY(t *testing.T) {
 	quote := EpusdtRateQuote{Currency: "CNY", Asset: "USDT", USDTPerUnit: 1 / 6.7}
-	require.InDelta(t, 10.0, calculateEpusdtGatewayUSDT(67, quote), 1e-12)
-	require.InDelta(t, 10.0, calculateEpusdtGatewayUSDT(67, quote), 1e-12)
+	require.InDelta(t, 10.0, 67*quote.USDTPerUnit, 1e-12)
 }
 
 func TestPaymentProviderConfigCurrencyKeepsEpusdtUSDCompatibility(t *testing.T) {

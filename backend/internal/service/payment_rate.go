@@ -288,10 +288,3 @@ func consumeJSONValue(decoder *json.Decoder) (any, error) {
 func finitePositive(value float64) bool {
 	return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
 }
-
-func calculateEpusdtGatewayUSDT(cnyAmount float64, quote EpusdtRateQuote) float64 {
-	if !finitePositive(cnyAmount) || !finitePositive(quote.USDTPerUnit) {
-		return 0
-	}
-	return cnyAmount * quote.USDTPerUnit
-}

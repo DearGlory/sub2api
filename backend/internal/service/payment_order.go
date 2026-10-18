@@ -397,10 +397,6 @@ func paymentOrderSnapshotWxpayAppID(sel *payment.InstanceSelection, req CreateOr
 	return strings.TrimSpace(sel.Config["appId"])
 }
 
-func dailyLimitUsesOrder(o *dbent.PaymentOrder, paymentType string) bool {
-	return dailyLimitUsesOrderInCurrency(o, paymentType, "")
-}
-
 func dailyLimitUsesOrderInCurrency(o *dbent.PaymentOrder, paymentType, currency string) bool {
 	if o == nil {
 		return false
