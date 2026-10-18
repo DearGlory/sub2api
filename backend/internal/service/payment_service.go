@@ -4,18 +4,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
+	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 // --- Order Status Constants ---
@@ -71,20 +78,24 @@ func generateRandomString(n int) string {
 }
 
 type CreateOrderRequest struct {
-	UserID          int64
-	Amount          float64
-	PaymentType     string
-	OpenID          string
-	ClientIP        string
-	IsMobile        bool
-	IsWeChatBrowser bool
-	SrcHost         string
-	SrcURL          string
-	ReturnURL       string
-	PaymentSource   string
-	OrderType       string
-	PlanID          int64
-	Locale          string
+	UserID                   int64
+	Amount                   float64
+	PaymentType              string
+	OpenID                   string
+	ClientIP                 string
+	IsMobile                 bool
+	IsWeChatBrowser          bool
+	SrcHost                  string
+	SrcURL                   string
+	ReturnURL                string
+	PaymentSource            string
+	OrderType                string
+	RequestedNetwork         string
+	EpusdtBalanceMultiplier  float64
+	EpusdtGraceMinutes       int
+	EpusdtAutoCreditDeadline time.Time
+	PlanID                   int64
+	Locale                   string
 }
 
 type CreateOrderResponse struct {
@@ -120,6 +131,34 @@ type OrderListParams struct {
 	OrderType   string
 	PaymentType string
 	Keyword     string
+}
+
+const (
+	PaymentManualReviewAction   = "PAYMENT_MANUAL_NETWORK_REVIEW"
+	PaymentManualApprovedAction = "PAYMENT_MANUAL_REVIEW_APPROVED"
+	PaymentManualRejectedAction = "PAYMENT_MANUAL_REVIEW_REJECTED"
+)
+
+type PaymentManualReview struct {
+	OrderID          int64     `json:"order_id"`
+	OutTradeNo       string    `json:"out_trade_no"`
+	UserID           int64     `json:"user_id"`
+	Amount           float64   `json:"amount"`
+	PayAmount        float64   `json:"pay_amount"`
+	Currency         string    `json:"currency"`
+	RequestedNetwork string    `json:"requested_network"`
+	TradeNo          string    `json:"trade_no"`
+	Status           string    `json:"status"`
+	Detail           string    `json:"detail"`
+	CreatedAt        time.Time `json:"created_at"`
+	Operator         string    `json:"operator"`
+}
+
+type PaymentManualReviewPage struct {
+	Items    []PaymentManualReview `json:"items"`
+	Total    int                   `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"page_size"`
 }
 
 type RefundPlan struct {
@@ -385,4 +424,243 @@ func applyPagination(pageSize, page int) (size, pg int) {
 		pg = 1
 	}
 	return size, pg
+}
+
+func (s *PaymentService) ListPaymentManualReviews(ctx context.Context, page, pageSize int) (*PaymentManualReviewPage, error) {
+	size, pg := applyPagination(pageSize, page)
+	logs, err := s.entClient.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(PaymentManualReviewAction)).Order(paymentauditlog.ByCreatedAt(sql.OrderDesc())).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list payment manual reviews: %w", err)
+	}
+	items := make([]PaymentManualReview, 0, len(logs))
+	seen := make(map[string]bool)
+	for _, log := range logs {
+		if seen[log.OrderID] {
+			continue
+		}
+		seen[log.OrderID] = true
+		decisions, queryErr := s.entClient.PaymentAuditLog.Query().Where(paymentauditlog.OrderIDEQ(log.OrderID), paymentauditlog.ActionIn(PaymentManualApprovedAction, PaymentManualRejectedAction)).Limit(1).All(ctx)
+		if queryErr != nil {
+			return nil, queryErr
+		}
+		if len(decisions) != 0 {
+			continue
+		}
+		oid, parseErr := strconv.ParseInt(log.OrderID, 10, 64)
+		if parseErr != nil {
+			continue
+		}
+		o, getErr := s.entClient.PaymentOrder.Get(ctx, oid)
+		if getErr != nil {
+			continue
+		}
+		items = append(items, PaymentManualReview{
+			OrderID:          o.ID,
+			OutTradeNo:       o.OutTradeNo,
+			UserID:           o.UserID,
+			Amount:           o.Amount,
+			PayAmount:        o.PayAmount,
+			Currency:         PaymentOrderCurrency(o),
+			RequestedNetwork: manualReviewRequestedNetwork(o),
+			TradeNo:          manualReviewTradeNo(log.Detail),
+			Status:           o.Status,
+			Detail:           log.Detail,
+			CreatedAt:        log.CreatedAt,
+			Operator:         log.Operator,
+		})
+	}
+	total := len(items)
+	start := (pg - 1) * size
+	if start > total {
+		start = total
+	}
+	end := start + size
+	if end > total {
+		end = total
+	}
+	return &PaymentManualReviewPage{Items: items[start:end], Total: total, Page: pg, PageSize: size}, nil
+}
+
+func (s *PaymentService) ApprovePaymentManualReview(ctx context.Context, orderID int64, operator, note string) error {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return infraerrors.BadRequest("REVIEW_NOTE_REQUIRED", "approval note is required")
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin approve manual payment review: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	o, err := paymentOrderForManualReviewUpdate(txCtx, tx, orderID)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return infraerrors.NotFound("NOT_FOUND", "order not found")
+		}
+		return fmt.Errorf("load manual payment review order: %w", err)
+	}
+	if payment.GetBasePaymentType(o.PaymentType) != payment.TypeEpusdt {
+		return infraerrors.BadRequest("INVALID_PROVIDER", "manual review is only available for USDT orders")
+	}
+	decision, checkErr := manualReviewDecisionWithClient(txCtx, client, orderID)
+	if checkErr != nil {
+		return checkErr
+	}
+	if decision == PaymentManualApprovedAction {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit existing approved manual payment review: %w", err)
+		}
+		return s.executeFulfillment(ctx, orderID)
+	}
+	if decision != "" {
+		return nil
+	}
+	review, reviewErr := latestManualReviewWithClient(txCtx, client, orderID)
+	if reviewErr != nil {
+		return reviewErr
+	}
+	tradeNo := manualReviewTradeNo(review.Detail)
+	if tradeNo == "" {
+		return infraerrors.BadRequest("MANUAL_REVIEW_EVIDENCE_MISSING", "manual review has no upstream trade")
+	}
+	if existing, queryErr := client.PaymentOrder.Query().Where(paymentorder.PaymentTypeEQ(payment.TypeEpusdt), paymentorder.PaymentTradeNoEQ(tradeNo), paymentorder.IDNEQ(orderID)).Exist(txCtx); queryErr != nil {
+		return queryErr
+	} else if existing {
+		return infraerrors.Conflict("MANUAL_REVIEW_TRADE_REUSED", "upstream trade is already bound to another order")
+	}
+	if o.PaymentTradeNo != "" {
+		return infraerrors.BadRequest("MANUAL_REVIEW_ALREADY_SETTLED", "manual review already has an upstream trade")
+	}
+	updated, err := client.PaymentOrder.Update().Where(
+		paymentorder.IDEQ(orderID),
+		paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired),
+		paymentorder.PaymentTradeNoEQ(""),
+	).SetStatus(OrderStatusPaid).SetPayAmount(o.PayAmount).SetPaymentTradeNo(tradeNo).SetPaidAt(time.Now()).Save(txCtx)
+	if err != nil {
+		return fmt.Errorf("approve manual payment review: %w", err)
+	}
+	if updated == 0 {
+		return infraerrors.Conflict("MANUAL_REVIEW_STATE_CHANGED", "order is no longer awaiting manual review")
+	}
+	if err := writePaymentAuditLogErr(txCtx, client, orderID, PaymentManualApprovedAction, operator, map[string]any{"note": note, "amount": o.PayAmount, "tradeNo": tradeNo}); err != nil {
+		return fmt.Errorf("approve manual payment review: write audit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit approved manual payment review: %w", err)
+	}
+	return s.executeFulfillment(ctx, orderID)
+}
+
+func (s *PaymentService) RejectPaymentManualReview(ctx context.Context, orderID int64, operator, note string) error {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return infraerrors.BadRequest("REVIEW_NOTE_REQUIRED", "rejection note is required")
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin reject manual payment review: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	o, err := paymentOrderForManualReviewUpdate(txCtx, tx, orderID)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return infraerrors.NotFound("NOT_FOUND", "order not found")
+		}
+		return fmt.Errorf("load manual payment review order: %w", err)
+	}
+	if payment.GetBasePaymentType(o.PaymentType) != payment.TypeEpusdt {
+		return infraerrors.BadRequest("INVALID_PROVIDER", "manual review is only available for USDT orders")
+	}
+	decision, checkErr := manualReviewDecisionWithClient(txCtx, client, orderID)
+	if checkErr != nil {
+		return checkErr
+	}
+	if decision != "" {
+		return nil
+	}
+	if _, reviewErr := latestManualReviewWithClient(txCtx, client, orderID); reviewErr != nil {
+		return reviewErr
+	}
+	updated, err := client.PaymentOrder.Update().Where(paymentorder.IDEQ(orderID), paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired)).SetStatus(OrderStatusFailed).SetFailedAt(time.Now()).SetFailedReason("manual payment review rejected").Save(txCtx)
+	if err != nil {
+		return fmt.Errorf("reject manual payment review: %w", err)
+	}
+	if updated == 0 {
+		return infraerrors.Conflict("MANUAL_REVIEW_STATE_CHANGED", "order is no longer awaiting manual review")
+	}
+	if err := writePaymentAuditLogErr(txCtx, client, orderID, PaymentManualRejectedAction, operator, map[string]any{"note": note}); err != nil {
+		return fmt.Errorf("reject manual payment review: write audit: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit rejected manual payment review: %w", err)
+	}
+	return nil
+}
+
+func paymentOrderForManualReviewUpdate(ctx context.Context, tx *dbent.Tx, orderID int64) (*dbent.PaymentOrder, error) {
+	query := tx.Client().PaymentOrder.Query().Where(paymentorder.IDEQ(orderID))
+	if tx.Client().Driver().Dialect() != dialect.SQLite {
+		return query.ForUpdate().Only(ctx)
+	}
+	return query.Only(ctx)
+}
+
+func latestManualReviewWithClient(ctx context.Context, client *dbent.Client, orderID int64) (*dbent.PaymentAuditLog, error) {
+	log, err := client.PaymentAuditLog.Query().Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(orderID, 10)), paymentauditlog.ActionEQ(PaymentManualReviewAction)).Order(paymentauditlog.ByCreatedAt(sql.OrderDesc())).Limit(1).Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, infraerrors.NotFound("MANUAL_REVIEW_NOT_FOUND", "no pending manual review for this order")
+		}
+		return nil, err
+	}
+	return log, nil
+}
+
+func manualReviewDecisionWithClient(ctx context.Context, client *dbent.Client, orderID int64) (string, error) {
+	decision, err := client.PaymentAuditLog.Query().
+		Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(orderID, 10)), paymentauditlog.ActionIn(PaymentManualApprovedAction, PaymentManualRejectedAction)).
+		Order(paymentauditlog.ByCreatedAt(sql.OrderDesc())).
+		First(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return decision.Action, nil
+}
+
+func hasManualReviewDecisionWithClient(ctx context.Context, client *dbent.Client, orderID int64) (bool, error) {
+	decision, err := manualReviewDecisionWithClient(ctx, client, orderID)
+	return decision != "", err
+}
+
+func (s *PaymentService) latestManualReview(ctx context.Context, orderID int64) (*dbent.PaymentAuditLog, error) {
+	return latestManualReviewWithClient(ctx, s.entClient, orderID)
+}
+
+func (s *PaymentService) hasManualReviewDecision(ctx context.Context, orderID int64) (bool, error) {
+	return hasManualReviewDecisionWithClient(ctx, s.entClient, orderID)
+}
+
+func manualReviewRequestedNetwork(order *dbent.PaymentOrder) string {
+	if snap := psOrderProviderSnapshot(order); snap != nil {
+		return snap.RequestedNetwork
+	}
+	return ""
+}
+
+func manualReviewTradeNo(detail string) string {
+	var value map[string]any
+	if json.Unmarshal([]byte(detail), &value) == nil {
+		if trade, ok := value["tradeNo"].(string); ok {
+			return trade
+		}
+	}
+	return ""
 }

@@ -16,9 +16,10 @@ const VISIBLE_METHOD_ALIASES = {
   wxpay_direct: 'wxpay',
   stripe: 'stripe',
   airwallex: 'airwallex',
+  epusdt: 'epusdt',
 } as const
 
-export type VisiblePaymentMethod = 'alipay' | 'wxpay' | 'stripe' | 'airwallex'
+export type VisiblePaymentMethod = 'alipay' | 'wxpay' | 'stripe' | 'airwallex' | 'epusdt'
 export type StripeVisibleMethod = 'alipay' | 'wechat_pay'
 export type PaymentLaunchKind =
   | 'qr_waiting'
@@ -88,6 +89,7 @@ export interface BuildCreateOrderPayloadInput {
   forceQRCode?: boolean
   /** When true, keep the real mobile signal so the backend can select precreate */
   mobilePrecreateDeepLink?: boolean
+  requestedNetwork?: string
 }
 
 type CreateOrderFlowResult = CreateOrderResult & {
@@ -141,6 +143,9 @@ export function buildCreateOrderPayload(input: BuildCreateOrderPayloadInput): Cr
   }
   if (normalizedOrigin) {
     payload.return_url = `${normalizedOrigin}/payment/result`
+  }
+  if (visibleMethod === 'epusdt' && input.requestedNetwork?.trim()) {
+    payload.requested_network = input.requestedNetwork.trim().toLowerCase()
   }
 
   return payload

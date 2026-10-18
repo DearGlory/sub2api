@@ -88,12 +88,39 @@ function mountDialog(options: { editing?: ProviderInstance | null } = {}) {
           template: '<div />',
         },
         ToggleSwitch: {
+          name: 'ToggleSwitch',
+          props: ['label', 'checked'],
           template: '<div />',
         },
       },
     },
   })
 }
+
+describe('PaymentProviderDialog EPUSDT constraints', () => {
+  it('disables a new EPUSDT instance by default', async () => {
+    const wrapper = mountDialog()
+    ;(wrapper.vm as unknown as { reset: (key: string) => void }).reset('epusdt')
+    await nextTick()
+    const toggles = wrapper.findAllComponents({ name: 'ToggleSwitch' })
+    expect(toggles[0].props('checked')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('never submits enabled refunds for a stale EPUSDT instance', async () => {
+    const provider = providerFactory({
+      provider_key: 'epusdt', name: 'USDT', supported_types: ['epusdt'],
+      payment_mode: 'redirect', refund_enabled: true, allow_user_refund: true,
+      config: { pid: 'merchant-test', apiBase: 'https://gateway.example.test', token: 'USDT', network: 'tron', networks: 'tron,bsc', currency: 'USD' },
+    })
+    const wrapper = mountDialog({ editing: provider })
+    ;(wrapper.vm as unknown as { loadProvider: (provider: ProviderInstance) => void }).loadProvider(provider)
+    await nextTick()
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ refund_enabled: false, allow_user_refund: false, payment_mode: 'redirect' })
+    wrapper.unmount()
+  })
+})
 
 describe('PaymentProviderDialog callback URLs', () => {
   it.each([

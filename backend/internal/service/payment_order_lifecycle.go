@@ -127,7 +127,11 @@ func (s *PaymentService) cancelCore(ctx context.Context, o *dbent.PaymentOrder, 
 			return checkPaidResultAlreadyPaid, nil
 		}
 	}
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusPending)).SetStatus(fs).Save(ctx)
+	update := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusPending)).SetStatus(fs)
+	if snapshot := freezeEpusdtAutoCreditDeadline(o, fs, time.Now()); snapshot != nil {
+		update.SetProviderSnapshot(snapshot)
+	}
+	c, err := update.Save(ctx)
 	if err != nil {
 		return "", fmt.Errorf("update order status: %w", err)
 	}

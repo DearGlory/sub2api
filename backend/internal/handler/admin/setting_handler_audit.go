@@ -437,6 +437,21 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.PurchaseSubscriptionURL != after.PurchaseSubscriptionURL {
 		changed = append(changed, "purchase_subscription_url")
 	}
+	if before.ExternalCardPurchaseEnabled != after.ExternalCardPurchaseEnabled {
+		changed = append(changed, "external_card_purchase_enabled")
+	}
+	if before.ExternalCardPurchaseURL != after.ExternalCardPurchaseURL {
+		changed = append(changed, "external_card_purchase_url")
+	}
+	if before.ExternalCardPurchaseName != after.ExternalCardPurchaseName {
+		changed = append(changed, "external_card_purchase_name")
+	}
+	if before.ExternalCardPurchaseDescription != after.ExternalCardPurchaseDescription {
+		changed = append(changed, "external_card_purchase_description")
+	}
+	if before.ExternalCardPurchaseDisplayMode != after.ExternalCardPurchaseDisplayMode {
+		changed = append(changed, "external_card_purchase_display_mode")
+	}
 	if before.TableDefaultPageSize != after.TableDefaultPageSize {
 		changed = append(changed, "table_default_page_size")
 	}

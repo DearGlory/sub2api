@@ -241,6 +241,11 @@ export interface PublicSettings {
   home_content: string
   compact_home_enabled: boolean
   hide_ccs_import_button: boolean
+  external_card_purchase_enabled?: boolean
+  external_card_purchase_url?: string
+  external_card_purchase_name?: string
+  external_card_purchase_description?: string
+  external_card_purchase_display_mode?: 'embed' | 'new_window' | 'both'
   payment_enabled: boolean
   risk_control_enabled: boolean
   table_default_page_size: number

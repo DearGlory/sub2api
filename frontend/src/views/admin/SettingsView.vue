@@ -7608,6 +7608,8 @@
           </div>
         </div>
 
+
+
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -8119,6 +8121,49 @@
         <!-- Tab: Email -->
         <!-- Tab: Payment -->
         <div v-show="activeTab === 'payment'" class="space-y-6">
+          <div class="card" data-testid="external-card-settings">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.settings.features.externalCardPurchase.title') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.features.externalCardPurchase.description') }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.externalCardPurchase.enabled') }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.externalCardPurchase.enabledHint') }}
+                  </p>
+                </div>
+                <Toggle v-model="form.external_card_purchase_enabled" />
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.externalCardPurchase.name') }}</label>
+                <input v-model="form.external_card_purchase_name" data-testid="external-card-name" type="text" class="input" maxlength="200" />
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.externalCardPurchase.entryDescription') }}</label>
+                <textarea v-model="form.external_card_purchase_description" data-testid="external-card-description" class="input min-h-20" maxlength="2000" />
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.externalCardPurchase.displayMode') }}</label>
+                <select v-model="form.external_card_purchase_display_mode" data-testid="external-card-display-mode" class="input">
+                  <option value="both">{{ t('admin.settings.features.externalCardPurchase.displayModes.both') }}</option>
+                    <option value="new_window">{{ t('admin.settings.features.externalCardPurchase.displayModes.newWindow') }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.externalCardPurchase.url') }}</label>
+                <input v-model="form.external_card_purchase_url" type="url" class="input" placeholder="https://catfk.com/shop/GloryCode" />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.externalCardPurchase.urlHint') }}</p>
+              </div>
+            </div>
+          </div>
           <!-- Payment System Settings -->
           <div class="card">
             <div
@@ -8650,6 +8695,53 @@
             </div>
           </div>
 
+          <div class="card" data-testid="epusdt-settings">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.settings.payment.epusdt.title') }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.epusdt.description') }}</p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.settings.payment.epusdt.enabled') }}</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.epusdt.enabledHint') }}</p>
+                </div>
+                <Toggle v-model="form.payment_epusdt_enabled" />
+              </div>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <label for="epusdt-multiplier" class="input-label">{{ t('admin.settings.payment.epusdt.multiplier') }}</label>
+                  <input id="epusdt-multiplier" v-model.number="form.payment_epusdt_balance_multiplier" type="number" min="0.01" step="0.01" class="input" data-testid="epusdt-multiplier" />
+                </div>
+                <div>
+                  <label for="epusdt-fee-rate" class="input-label">{{ t('admin.settings.payment.epusdt.feeRate') }}</label>
+                  <input id="epusdt-fee-rate" v-model.number="form.payment_epusdt_fee_rate" type="number" min="0" max="100" step="0.01" class="input" data-testid="epusdt-fee-rate" />
+                </div>
+                <div>
+                  <label for="epusdt-grace" class="input-label">{{ t('admin.settings.payment.epusdt.grace') }}</label>
+                  <input id="epusdt-grace" v-model.number="form.payment_epusdt_grace_minutes" type="number" min="0" max="1440" step="1" class="input" data-testid="epusdt-grace" />
+                </div>
+                <div>
+                  <label for="epusdt-min" class="input-label">{{ t('admin.settings.payment.epusdt.minimum') }}</label>
+                  <input id="epusdt-min" v-model.number="form.payment_epusdt_min_amount" type="number" min="0" step="0.01" class="input" />
+                </div>
+                <div>
+                  <label for="epusdt-max" class="input-label">{{ t('admin.settings.payment.epusdt.maximum') }}</label>
+                  <input id="epusdt-max" v-model.number="form.payment_epusdt_max_amount" type="number" min="0" step="0.01" class="input" />
+                </div>
+                <div>
+                  <label for="epusdt-daily" class="input-label">{{ t('admin.settings.payment.epusdt.dailyLimit') }}</label>
+                  <input id="epusdt-daily" v-model.number="form.payment_epusdt_daily_limit" type="number" min="0" step="0.01" class="input" />
+                </div>
+              </div>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.epusdt.policyHint') }}</p>
+              <div>
+                <label for="epusdt-help" class="input-label">{{ t('admin.settings.payment.epusdt.help') }}</label>
+                <textarea id="epusdt-help" v-model="form.payment_epusdt_help_text" class="input min-h-20" maxlength="2000" />
+              </div>
+            </div>
+          </div>
+
           <!-- 充值优惠阶梯（独立卡片，与服务商管理同级） -->
           <RechargeBonusTierEditor
             v-if="form.payment_enabled"
@@ -8664,7 +8756,7 @@
             :providers="providers"
             :loading="providersLoading"
             :can-create="hasAnyPaymentTypeEnabled"
-            :enabled-payment-types="form.payment_enabled_types"
+            :enabled-payment-types="providerManagementTypes"
             :all-payment-types="allPaymentTypes"
             :redirect-label="t('admin.settings.payment.easypayRedirect')"
             @refresh="loadProviders"
@@ -10034,6 +10126,11 @@ const form = reactive<SettingsForm>({
   compact_home_enabled: false,
   backend_mode_enabled: false,
   hide_ccs_import_button: false,
+  external_card_purchase_enabled: false,
+  external_card_purchase_url: "https://catfk.com/shop/GloryCode",
+  external_card_purchase_name: "购买卡密",
+  external_card_purchase_description: "购买余额码后回本站兑换。",
+  external_card_purchase_display_mode: "both",
   payment_enabled: false,
   risk_control_enabled: false,
   cyber_policy_user_allowlist: "",
@@ -10048,6 +10145,14 @@ const form = reactive<SettingsForm>({
   payment_balance_recharge_multiplier: 1,
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
+  payment_epusdt_enabled: false,
+  payment_epusdt_balance_multiplier: 1,
+  payment_epusdt_fee_rate: 0,
+  payment_epusdt_min_amount: 0,
+  payment_epusdt_max_amount: 0,
+  payment_epusdt_daily_limit: 0,
+  payment_epusdt_grace_minutes: 30,
+  payment_epusdt_help_text: "",
   payment_recharge_bonus_tiers: [],
   payment_recharge_bonus_mode: "bonus",
   payment_recharge_bonus_notice: "",
@@ -11741,6 +11846,11 @@ async function saveSettings() {
       compact_home_enabled: form.compact_home_enabled,
       backend_mode_enabled: form.backend_mode_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
+      external_card_purchase_enabled: form.external_card_purchase_enabled,
+      external_card_purchase_url: form.external_card_purchase_url.trim(),
+      external_card_purchase_name: form.external_card_purchase_name.trim(),
+      external_card_purchase_description: form.external_card_purchase_description.trim(),
+      external_card_purchase_display_mode: form.external_card_purchase_display_mode,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,
@@ -11935,6 +12045,14 @@ async function saveSettings() {
       payment_subscription_usd_to_cny_rate:
         Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,
+      payment_epusdt_enabled: form.payment_epusdt_enabled,
+      payment_epusdt_balance_multiplier: Number(form.payment_epusdt_balance_multiplier),
+      payment_epusdt_fee_rate: Number(form.payment_epusdt_fee_rate),
+      payment_epusdt_min_amount: Number(form.payment_epusdt_min_amount),
+      payment_epusdt_max_amount: Number(form.payment_epusdt_max_amount),
+      payment_epusdt_daily_limit: Number(form.payment_epusdt_daily_limit),
+      payment_epusdt_grace_minutes: Number(form.payment_epusdt_grace_minutes),
+      payment_epusdt_help_text: form.payment_epusdt_help_text.trim(),
       payment_recharge_bonus_tiers: sanitizeRechargeBonusTiersForSubmit(
         form.payment_recharge_bonus_tiers,
       ),
@@ -12850,14 +12968,20 @@ const allPaymentTypes = computed(() => [
   { value: "wxpay", label: t("payment.methods.wxpay") },
   { value: "stripe", label: t("payment.methods.stripe") },
   { value: "airwallex", label: t("payment.methods.airwallex") },
+  { value: "epusdt", label: t("payment.methods.epusdt") },
 ]);
 
 function isPaymentTypeEnabled(type: string): boolean {
   return form.payment_enabled_types.includes(type);
 }
 
+const providerManagementTypes = computed(() => [
+  ...form.payment_enabled_types,
+  ...(form.payment_epusdt_enabled && !form.payment_enabled_types.includes("epusdt") ? ["epusdt"] : []),
+]);
+
 const hasAnyPaymentTypeEnabled = computed(
-  () => form.payment_enabled_types.length > 0,
+  () => providerManagementTypes.value.length > 0,
 );
 
 function togglePaymentType(type: string) {
@@ -12907,11 +13031,12 @@ const providerKeyOptions = computed(() => [
   { value: "wxpay", label: t("admin.settings.payment.providerWxpay") },
   { value: "stripe", label: t("admin.settings.payment.providerStripe") },
   { value: "airwallex", label: t("admin.settings.payment.providerAirwallex") },
+  { value: "epusdt", label: t("admin.settings.payment.providerEpusdt") },
 ]);
 
 const enabledProviderKeyOptions = computed(() => {
   const enabled = form.payment_enabled_types;
-  return providerKeyOptions.value.filter((opt) => enabled.includes(opt.value));
+  return providerKeyOptions.value.filter((opt) => enabled.includes(opt.value) || (opt.value === "epusdt" && form.payment_epusdt_enabled));
 });
 
 const loadBalanceOptions = computed(() => [

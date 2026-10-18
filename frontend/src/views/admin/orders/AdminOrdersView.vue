@@ -17,6 +17,28 @@
           </div>
         </div>
       </div>
+      <div v-if="manualReviews.length > 0" class="card border border-amber-200 p-4 dark:border-amber-900/50" data-testid="manual-review-queue">
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <h2 class="font-semibold text-amber-800 dark:text-amber-300">{{ t('payment.admin.manualReviewTitle') }}</h2>
+            <p class="text-xs text-amber-700 dark:text-amber-400">{{ t('payment.admin.manualReviewHint') }}</p>
+          </div>
+          <button class="btn btn-secondary text-xs" :disabled="manualReviewsLoading" @click="loadManualReviews">{{ t('common.refresh') }}</button>
+        </div>
+        <div class="space-y-2">
+          <div v-for="review in manualReviews" :key="review.order_id" class="rounded-lg border border-amber-100 p-3 dark:border-amber-900/40" data-testid="manual-review-item">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span class="font-mono">#{{ review.order_id }} · {{ review.out_trade_no }}</span>
+              <span>{{ review.pay_amount.toFixed(2) }} {{ review.currency }} · {{ review.requested_network || '—' }}</span>
+            </div>
+            <div class="mt-1 text-xs text-gray-500">{{ t('payment.admin.manualReviewTrade') }}: {{ review.trade_no || '—' }}</div>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button class="btn btn-primary text-xs" @click="approveManualReview(review)">{{ t('payment.admin.manualReviewApprove') }}</button>
+              <button class="btn btn-secondary text-xs" @click="rejectManualReview(review)">{{ t('payment.admin.manualReviewReject') }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Table -->
       <OrderTable :orders="orders" :loading="ordersLoading" show-user>
@@ -123,6 +145,7 @@ import { adminPaymentAPI } from '@/api/admin/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { formatOrderDateTime } from '@/components/payment/orderUtils'
 import type { PaymentOrder } from '@/types/payment'
+import type { PaymentManualReview } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -157,6 +180,8 @@ const refundRequireForce = ref(false)
 const refundWarning = ref('')
 const refundQueryingIds = ref(new Set<number>())
 const orderAuditLogs = ref<AuditLog[]>([])
+const manualReviews = ref<PaymentManualReview[]>([])
+const manualReviewsLoading = ref(false)
 const creditedAmountSymbol = currencySymbol('USD')
 
 function paymentAmountSymbol(order: PaymentOrder | null | undefined): string {
@@ -183,6 +208,37 @@ async function loadOrders() {
     appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
   } finally { ordersLoading.value = false }
 }
+
+async function loadManualReviews() {
+  manualReviewsLoading.value = true
+  try {
+    const res = await adminPaymentAPI.getManualReviews({ page: 1, page_size: 50 })
+    manualReviews.value = res.data.items || []
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+  } finally { manualReviewsLoading.value = false }
+}
+
+async function approveManualReview(review: PaymentManualReview) {
+  const note = window.prompt(t('payment.admin.manualReviewApprovePrompt'))
+  if (!note?.trim()) return
+  try {
+    await adminPaymentAPI.approveManualReview(review.order_id, note.trim())
+    appStore.showSuccess(t('payment.admin.manualReviewApproved'))
+    await Promise.all([loadManualReviews(), loadOrders()])
+  } catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
+}
+
+async function rejectManualReview(review: PaymentManualReview) {
+  const note = window.prompt(t('payment.admin.manualReviewRejectPrompt'))
+  if (!note?.trim()) return
+  try {
+    await adminPaymentAPI.rejectManualReview(review.order_id, note.trim())
+    appStore.showSuccess(t('payment.admin.manualReviewRejected'))
+    await Promise.all([loadManualReviews(), loadOrders()])
+  } catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
+}
+
 
 function handleOrderPageChange(page: number) { orderPagination.page = page; loadOrders() }
 function handleOrderPageSizeChange(size: number) { orderPagination.page_size = size; orderPagination.page = 1; loadOrders() }
@@ -307,5 +363,5 @@ async function handleQueryRefund(order: PaymentOrder) {
 
 function formatDateTime(dateStr: string): string { return formatOrderDateTime(dateStr) }
 
-onMounted(() => loadOrders())
+onMounted(() => { loadOrders(); loadManualReviews() })
 </script>

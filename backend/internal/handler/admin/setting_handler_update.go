@@ -153,21 +153,26 @@ type UpdateSettingsRequest struct {
 	GoogleOAuthFrontendRedirectURL string `json:"google_oauth_frontend_redirect_url"`
 
 	// OEM设置
-	SiteName                    string                `json:"site_name"`
-	SiteLogo                    string                `json:"site_logo"`
-	SiteSubtitle                string                `json:"site_subtitle"`
-	APIBaseURL                  string                `json:"api_base_url"`
-	ContactInfo                 string                `json:"contact_info"`
-	DocURL                      string                `json:"doc_url"`
-	HomeContent                 string                `json:"home_content"`
-	CompactHomeEnabled          bool                  `json:"compact_home_enabled"`
-	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
-	PurchaseSubscriptionEnabled *bool                 `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL     *string               `json:"purchase_subscription_url"`
-	TableDefaultPageSize        int                   `json:"table_default_page_size"`
-	TablePageSizeOptions        []int                 `json:"table_page_size_options"`
-	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
+	SiteName                        string                `json:"site_name"`
+	SiteLogo                        string                `json:"site_logo"`
+	SiteSubtitle                    string                `json:"site_subtitle"`
+	APIBaseURL                      string                `json:"api_base_url"`
+	ContactInfo                     string                `json:"contact_info"`
+	DocURL                          string                `json:"doc_url"`
+	HomeContent                     string                `json:"home_content"`
+	CompactHomeEnabled              bool                  `json:"compact_home_enabled"`
+	HideCcsImportButton             bool                  `json:"hide_ccs_import_button"`
+	PurchaseSubscriptionEnabled     *bool                 `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL         *string               `json:"purchase_subscription_url"`
+	ExternalCardPurchaseEnabled     *bool                 `json:"external_card_purchase_enabled"`
+	ExternalCardPurchaseURL         *string               `json:"external_card_purchase_url"`
+	ExternalCardPurchaseName        *string               `json:"external_card_purchase_name"`
+	ExternalCardPurchaseDescription *string               `json:"external_card_purchase_description"`
+	ExternalCardPurchaseDisplayMode *string               `json:"external_card_purchase_display_mode"`
+	TableDefaultPageSize            int                   `json:"table_default_page_size"`
+	TablePageSizeOptions            []int                 `json:"table_page_size_options"`
+	CustomMenuItems                 *[]dto.CustomMenuItem `json:"custom_menu_items"`
+	CustomEndpoints                 *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
 	// 默认配置
 	DefaultConcurrency                        int                               `json:"default_concurrency"`
@@ -332,7 +337,15 @@ type UpdateSettingsRequest struct {
 	// Force Alipay mobile clients to use QR code payment instead of mobile redirect
 	PaymentAlipayForceQRCode *bool `json:"payment_alipay_force_qrcode"`
 	// Use Alipay face-to-face precreate and an app deep link on mobile clients.
-	PaymentAlipayMobilePrecreateDeepLink *bool `json:"payment_alipay_mobile_precreate_deep_link"`
+	PaymentAlipayMobilePrecreateDeepLink *bool    `json:"payment_alipay_mobile_precreate_deep_link"`
+	PaymentEpusdtEnabled                 *bool    `json:"payment_epusdt_enabled"`
+	PaymentEpusdtBalanceMultiplier       *float64 `json:"payment_epusdt_balance_multiplier"`
+	PaymentEpusdtFeeRate                 *float64 `json:"payment_epusdt_fee_rate"`
+	PaymentEpusdtMinAmount               *float64 `json:"payment_epusdt_min_amount"`
+	PaymentEpusdtMaxAmount               *float64 `json:"payment_epusdt_max_amount"`
+	PaymentEpusdtDailyLimit              *float64 `json:"payment_epusdt_daily_limit"`
+	PaymentEpusdtGraceMinutes            *int     `json:"payment_epusdt_grace_minutes"`
+	PaymentEpusdtHelpText                *string  `json:"payment_epusdt_help_text"`
 
 	// Channel Monitor feature switch
 	ChannelMonitorEnabled                *bool   `json:"channel_monitor_enabled"`
@@ -1238,6 +1251,27 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		purchaseURL = strings.TrimSpace(*req.PurchaseSubscriptionURL)
 	}
 
+	externalCardEnabled := previousSettings.ExternalCardPurchaseEnabled
+	if req.ExternalCardPurchaseEnabled != nil {
+		externalCardEnabled = *req.ExternalCardPurchaseEnabled
+	}
+	externalCardURL := previousSettings.ExternalCardPurchaseURL
+	if req.ExternalCardPurchaseURL != nil {
+		externalCardURL = strings.TrimSpace(*req.ExternalCardPurchaseURL)
+	}
+	externalCardName := previousSettings.ExternalCardPurchaseName
+	if req.ExternalCardPurchaseName != nil {
+		externalCardName = strings.TrimSpace(*req.ExternalCardPurchaseName)
+	}
+	externalCardDescription := previousSettings.ExternalCardPurchaseDescription
+	if req.ExternalCardPurchaseDescription != nil {
+		externalCardDescription = strings.TrimSpace(*req.ExternalCardPurchaseDescription)
+	}
+	externalCardDisplayMode := previousSettings.ExternalCardPurchaseDisplayMode
+	if req.ExternalCardPurchaseDisplayMode != nil {
+		externalCardDisplayMode = strings.TrimSpace(*req.ExternalCardPurchaseDisplayMode)
+	}
+
 	// - 启用时要求 URL 合法且非空
 	// - 禁用时允许为空；若提供了 URL 也做基本校验，避免误配置
 	if purchaseEnabled {
@@ -1252,6 +1286,39 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	} else if purchaseURL != "" {
 		if err := config.ValidateAbsoluteHTTPURL(purchaseURL); err != nil {
 			response.BadRequest(c, "Purchase Subscription URL must be an absolute http(s) URL")
+			return
+		}
+	}
+
+	if externalCardEnabled {
+		if externalCardURL == "" {
+			response.BadRequest(c, "External card purchase URL is required when enabled")
+			return
+		}
+		if err := service.ValidateExternalCardPurchaseURL(externalCardURL); err != nil {
+			response.BadRequest(c, "External card purchase URL must be an absolute HTTPS URL without credentials or fragment")
+			return
+		}
+	} else if externalCardURL != "" {
+		if err := service.ValidateExternalCardPurchaseURL(externalCardURL); err != nil {
+			response.BadRequest(c, "External card purchase URL must be an absolute HTTPS URL without credentials or fragment")
+			return
+		}
+	}
+
+	if len(externalCardName) > 200 {
+		response.BadRequest(c, "External card purchase name is too long")
+		return
+	}
+	if len(externalCardDescription) > 2000 {
+		response.BadRequest(c, "External card purchase description is too long")
+		return
+	}
+	if req.ExternalCardPurchaseDisplayMode != nil {
+		switch externalCardDisplayMode {
+		case service.ExternalCardPurchaseDisplayModeEmbed, service.ExternalCardPurchaseDisplayModeNewWindow, service.ExternalCardPurchaseDisplayModeBoth:
+		default:
+			response.BadRequest(c, "External card purchase display mode must be embed, new_window, or both")
 			return
 		}
 	}
@@ -1651,6 +1718,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HideCcsImportButton:                    req.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:            purchaseEnabled,
 		PurchaseSubscriptionURL:                purchaseURL,
+		ExternalCardPurchaseEnabled:            externalCardEnabled,
+		ExternalCardPurchaseURL:                externalCardURL,
+		ExternalCardPurchaseName:               externalCardName,
+		ExternalCardPurchaseDescription:        externalCardDescription,
+		ExternalCardPurchaseDisplayMode:        externalCardDisplayMode,
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
 		TablePageSizeOptions:                   req.TablePageSizeOptions,
 		CustomMenuItems:                        customMenuJSON,
@@ -2147,6 +2219,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			CancelRateLimitMode:           req.PaymentCancelRateLimitMode,
 			AlipayForceQRCode:             req.PaymentAlipayForceQRCode,
 			AlipayMobilePrecreateDeepLink: req.PaymentAlipayMobilePrecreateDeepLink,
+			EpusdtEnabled:                 req.PaymentEpusdtEnabled,
+			EpusdtBalanceMultiplier:       req.PaymentEpusdtBalanceMultiplier,
+			EpusdtFeeRate:                 req.PaymentEpusdtFeeRate,
+			EpusdtMinAmount:               req.PaymentEpusdtMinAmount,
+			EpusdtMaxAmount:               req.PaymentEpusdtMaxAmount,
+			EpusdtDailyLimit:              req.PaymentEpusdtDailyLimit,
+			EpusdtGraceMinutes:            req.PaymentEpusdtGraceMinutes,
+			EpusdtHelpText:                req.PaymentEpusdtHelpText,
 		}
 		if err := h.paymentConfigService.UpdatePaymentConfig(c.Request.Context(), paymentReq); err != nil {
 			response.ErrorFrom(c, err)
@@ -2315,6 +2395,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:                            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                                updatedSettings.PurchaseSubscriptionURL,
+		ExternalCardPurchaseEnabled:                            updatedSettings.ExternalCardPurchaseEnabled,
+		ExternalCardPurchaseURL:                                updatedSettings.ExternalCardPurchaseURL,
+		ExternalCardPurchaseName:                               updatedSettings.ExternalCardPurchaseName,
+		ExternalCardPurchaseDescription:                        updatedSettings.ExternalCardPurchaseDescription,
+		ExternalCardPurchaseDisplayMode:                        updatedSettings.ExternalCardPurchaseDisplayMode,
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,
 		TablePageSizeOptions:                                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
@@ -2429,6 +2514,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PaymentCancelRateLimitMode:                             updatedPaymentCfg.CancelRateLimitMode,
 		PaymentAlipayForceQRCode:                               updatedPaymentCfg.AlipayForceQRCode,
 		PaymentAlipayMobilePrecreateDeepLink:                   updatedPaymentCfg.AlipayMobilePrecreateDeepLink,
+		PaymentEpusdtEnabled:                                   updatedPaymentCfg.EpusdtEnabled,
+		PaymentEpusdtBalanceMultiplier:                         updatedPaymentCfg.EpusdtBalanceMultiplier,
+		PaymentEpusdtFeeRate:                                   updatedPaymentCfg.EpusdtFeeRate,
+		PaymentEpusdtMinAmount:                                 updatedPaymentCfg.EpusdtMinAmount,
+		PaymentEpusdtMaxAmount:                                 updatedPaymentCfg.EpusdtMaxAmount,
+		PaymentEpusdtDailyLimit:                                updatedPaymentCfg.EpusdtDailyLimit,
+		PaymentEpusdtGraceMinutes:                              updatedPaymentCfg.EpusdtGraceMinutes,
+		PaymentEpusdtHelpText:                                  updatedPaymentCfg.EpusdtHelpText,
 
 		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
 		ChannelMonitorMode:                   updatedSettings.ChannelMonitorMode,
@@ -2499,7 +2592,11 @@ func hasPaymentFields(req UpdateSettingsRequest) bool {
 		req.PaymentHelpText != nil || req.PaymentCancelRateLimitEnabled != nil ||
 		req.PaymentCancelRateLimitMax != nil || req.PaymentCancelRateLimitWindow != nil ||
 		req.PaymentCancelRateLimitUnit != nil || req.PaymentCancelRateLimitMode != nil ||
-		req.PaymentAlipayForceQRCode != nil || req.PaymentAlipayMobilePrecreateDeepLink != nil
+		req.PaymentAlipayForceQRCode != nil || req.PaymentAlipayMobilePrecreateDeepLink != nil ||
+		req.PaymentEpusdtEnabled != nil || req.PaymentEpusdtBalanceMultiplier != nil ||
+		req.PaymentEpusdtFeeRate != nil || req.PaymentEpusdtMinAmount != nil ||
+		req.PaymentEpusdtMaxAmount != nil || req.PaymentEpusdtDailyLimit != nil ||
+		req.PaymentEpusdtGraceMinutes != nil || req.PaymentEpusdtHelpText != nil
 }
 
 // ensureDingTalkSyncAttributes 在保存 settings 后，按 admin 配置的 (attr key, attr name)

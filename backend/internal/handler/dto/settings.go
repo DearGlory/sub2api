@@ -149,21 +149,26 @@ type SystemSettings struct {
 	GoogleOAuthRedirectURL            string `json:"google_oauth_redirect_url"`
 	GoogleOAuthFrontendRedirectURL    string `json:"google_oauth_frontend_redirect_url"`
 
-	SiteName                    string           `json:"site_name"`
-	SiteLogo                    string           `json:"site_logo"`
-	SiteSubtitle                string           `json:"site_subtitle"`
-	APIBaseURL                  string           `json:"api_base_url"`
-	ContactInfo                 string           `json:"contact_info"`
-	DocURL                      string           `json:"doc_url"`
-	HomeContent                 string           `json:"home_content"`
-	CompactHomeEnabled          bool             `json:"compact_home_enabled"`
-	HideCcsImportButton         bool             `json:"hide_ccs_import_button"`
-	PurchaseSubscriptionEnabled bool             `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL     string           `json:"purchase_subscription_url"`
-	TableDefaultPageSize        int              `json:"table_default_page_size"`
-	TablePageSizeOptions        []int            `json:"table_page_size_options"`
-	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
+	SiteName                        string           `json:"site_name"`
+	SiteLogo                        string           `json:"site_logo"`
+	SiteSubtitle                    string           `json:"site_subtitle"`
+	APIBaseURL                      string           `json:"api_base_url"`
+	ContactInfo                     string           `json:"contact_info"`
+	DocURL                          string           `json:"doc_url"`
+	HomeContent                     string           `json:"home_content"`
+	CompactHomeEnabled              bool             `json:"compact_home_enabled"`
+	HideCcsImportButton             bool             `json:"hide_ccs_import_button"`
+	PurchaseSubscriptionEnabled     bool             `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL         string           `json:"purchase_subscription_url"`
+	ExternalCardPurchaseEnabled     bool             `json:"external_card_purchase_enabled"`
+	ExternalCardPurchaseURL         string           `json:"external_card_purchase_url"`
+	ExternalCardPurchaseName        string           `json:"external_card_purchase_name"`
+	ExternalCardPurchaseDescription string           `json:"external_card_purchase_description"`
+	ExternalCardPurchaseDisplayMode string           `json:"external_card_purchase_display_mode"`
+	TableDefaultPageSize            int              `json:"table_default_page_size"`
+	TablePageSizeOptions            []int            `json:"table_page_size_options"`
+	CustomMenuItems                 []CustomMenuItem `json:"custom_menu_items"`
+	CustomEndpoints                 []CustomEndpoint `json:"custom_endpoints"`
 
 	DefaultConcurrency           int                          `json:"default_concurrency"`
 	DefaultBalance               float64                      `json:"default_balance"`
@@ -299,7 +304,15 @@ type SystemSettings struct {
 	// Force Alipay mobile clients to use QR code payment instead of mobile redirect
 	PaymentAlipayForceQRCode bool `json:"payment_alipay_force_qrcode"`
 	// Use Alipay face-to-face precreate and an app deep link on mobile clients.
-	PaymentAlipayMobilePrecreateDeepLink bool `json:"payment_alipay_mobile_precreate_deep_link"`
+	PaymentAlipayMobilePrecreateDeepLink bool    `json:"payment_alipay_mobile_precreate_deep_link"`
+	PaymentEpusdtEnabled                 bool    `json:"payment_epusdt_enabled"`
+	PaymentEpusdtBalanceMultiplier       float64 `json:"payment_epusdt_balance_multiplier"`
+	PaymentEpusdtFeeRate                 float64 `json:"payment_epusdt_fee_rate"`
+	PaymentEpusdtMinAmount               float64 `json:"payment_epusdt_min_amount"`
+	PaymentEpusdtMaxAmount               float64 `json:"payment_epusdt_max_amount"`
+	PaymentEpusdtDailyLimit              float64 `json:"payment_epusdt_daily_limit"`
+	PaymentEpusdtGraceMinutes            int     `json:"payment_epusdt_grace_minutes"`
+	PaymentEpusdtHelpText                string  `json:"payment_epusdt_help_text"`
 
 	// 余额、订阅到期与账号限额通知
 	BalanceLowNotifyEnabled         bool               `json:"balance_low_notify_enabled"`
@@ -400,6 +413,11 @@ type PublicSettings struct {
 	HideCcsImportButton                 bool                     `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled         bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL             string                   `json:"purchase_subscription_url"`
+	ExternalCardPurchaseEnabled         bool                     `json:"external_card_purchase_enabled"`
+	ExternalCardPurchaseURL             string                   `json:"external_card_purchase_url"`
+	ExternalCardPurchaseName            string                   `json:"external_card_purchase_name"`
+	ExternalCardPurchaseDescription     string                   `json:"external_card_purchase_description"`
+	ExternalCardPurchaseDisplayMode     string                   `json:"external_card_purchase_display_mode"`
 	TableDefaultPageSize                int                      `json:"table_default_page_size"`
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
 	CustomMenuItems                     []CustomMenuItem         `json:"custom_menu_items"`

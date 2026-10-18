@@ -40,6 +40,14 @@ const (
 	SettingCancelWindowMode              = "CANCEL_RATE_LIMIT_WINDOW_MODE"
 	SettingAlipayForceQRCode             = "ALIPAY_FORCE_QRCODE"
 	SettingAlipayMobilePrecreateDeepLink = "ALIPAY_MOBILE_PRECREATE_DEEP_LINK"
+	SettingEpusdtEnabled                 = "PAYMENT_EPUSDT_ENABLED"
+	SettingEpusdtBalanceMultiplier       = "PAYMENT_EPUSDT_BALANCE_MULTIPLIER"
+	SettingEpusdtFeeRate                 = "PAYMENT_EPUSDT_FEE_RATE"
+	SettingEpusdtMinAmount               = "PAYMENT_EPUSDT_MIN_AMOUNT"
+	SettingEpusdtMaxAmount               = "PAYMENT_EPUSDT_MAX_AMOUNT"
+	SettingEpusdtDailyLimit              = "PAYMENT_EPUSDT_DAILY_LIMIT"
+	SettingEpusdtGraceMinutes            = "PAYMENT_EPUSDT_GRACE_MINUTES"
+	SettingEpusdtHelpText                = "PAYMENT_EPUSDT_HELP_TEXT"
 )
 
 // Default values for payment configuration settings.
@@ -86,6 +94,15 @@ type PaymentConfig struct {
 	AlipayForceQRCode bool `json:"alipay_force_qrcode"`
 	// Use Alipay face-to-face precreate and an app deep link on mobile clients.
 	AlipayMobilePrecreateDeepLink bool `json:"alipay_mobile_precreate_deep_link"`
+
+	EpusdtEnabled           bool    `json:"epusdt_enabled"`
+	EpusdtBalanceMultiplier float64 `json:"epusdt_balance_multiplier"`
+	EpusdtFeeRate           float64 `json:"epusdt_fee_rate"`
+	EpusdtMinAmount         float64 `json:"epusdt_min_amount"`
+	EpusdtMaxAmount         float64 `json:"epusdt_max_amount"`
+	EpusdtDailyLimit        float64 `json:"epusdt_daily_limit"`
+	EpusdtGraceMinutes      int     `json:"epusdt_grace_minutes"`
+	EpusdtHelpText          string  `json:"epusdt_help_text"`
 }
 
 // UpdatePaymentConfigRequest contains fields to update payment configuration.
@@ -123,6 +140,15 @@ type UpdatePaymentConfigRequest struct {
 	// Use Alipay face-to-face precreate and an app deep link on mobile clients.
 	AlipayMobilePrecreateDeepLink *bool `json:"alipay_mobile_precreate_deep_link"`
 
+	EpusdtEnabled           *bool    `json:"epusdt_enabled"`
+	EpusdtBalanceMultiplier *float64 `json:"epusdt_balance_multiplier"`
+	EpusdtFeeRate           *float64 `json:"epusdt_fee_rate"`
+	EpusdtMinAmount         *float64 `json:"epusdt_min_amount"`
+	EpusdtMaxAmount         *float64 `json:"epusdt_max_amount"`
+	EpusdtDailyLimit        *float64 `json:"epusdt_daily_limit"`
+	EpusdtGraceMinutes      *int     `json:"epusdt_grace_minutes"`
+	EpusdtHelpText          *string  `json:"epusdt_help_text"`
+
 	VisibleMethodAlipaySource  *string `json:"payment_visible_method_alipay_source"`
 	VisibleMethodWxpaySource   *string `json:"payment_visible_method_wxpay_source"`
 	VisibleMethodAlipayEnabled *bool   `json:"payment_visible_method_alipay_enabled"`
@@ -131,13 +157,14 @@ type UpdatePaymentConfigRequest struct {
 
 // MethodLimits holds per-payment-type limits.
 type MethodLimits struct {
-	PaymentType string  `json:"payment_type"`
-	DisplayName string  `json:"display_name,omitempty"`
-	Currency    string  `json:"currency"`
-	FeeRate     float64 `json:"fee_rate"`
-	DailyLimit  float64 `json:"daily_limit"`
-	SingleMin   float64 `json:"single_min"`
-	SingleMax   float64 `json:"single_max"`
+	PaymentType string   `json:"payment_type"`
+	DisplayName string   `json:"display_name,omitempty"`
+	Currency    string   `json:"currency"`
+	FeeRate     float64  `json:"fee_rate"`
+	DailyLimit  float64  `json:"daily_limit"`
+	SingleMin   float64  `json:"single_min"`
+	SingleMax   float64  `json:"single_max"`
+	Networks    []string `json:"networks,omitempty"`
 }
 
 // MethodLimitsResponse is the full response for the user-facing /limits API.
@@ -224,6 +251,17 @@ func (s *PaymentConfigService) IsPaymentEnabled(ctx context.Context) bool {
 	return val == "true"
 }
 
+func (s *PaymentConfigService) FilterVisibleCheckoutMethods(resp *MethodLimitsResponse, cfg *PaymentConfig) *MethodLimitsResponse {
+	if resp == nil {
+		return resp
+	}
+	if cfg == nil || !cfg.EpusdtEnabled {
+		delete(resp.Methods, payment.TypeEpusdt)
+	}
+	resp.GlobalMin, resp.GlobalMax = pcComputeGlobalRange(resp.Methods)
+	return resp
+}
+
 // GetPaymentConfig returns the full payment configuration.
 func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentConfig, error) {
 	keys := []string{
@@ -236,6 +274,9 @@ func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentCo
 		SettingCancelRateLimitOn, SettingCancelRateLimitMax,
 		SettingCancelWindowSize, SettingCancelWindowUnit, SettingCancelWindowMode,
 		SettingAlipayForceQRCode, SettingAlipayMobilePrecreateDeepLink,
+		SettingEpusdtEnabled, SettingEpusdtBalanceMultiplier, SettingEpusdtFeeRate,
+		SettingEpusdtMinAmount, SettingEpusdtMaxAmount, SettingEpusdtDailyLimit,
+		SettingEpusdtGraceMinutes, SettingEpusdtHelpText,
 		SettingPaymentVisibleMethodAlipayEnabled, SettingPaymentVisibleMethodAlipaySource,
 		SettingPaymentVisibleMethodWxpayEnabled, SettingPaymentVisibleMethodWxpaySource,
 	}
@@ -277,6 +318,14 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 
 		AlipayForceQRCode:             vals[SettingAlipayForceQRCode] == "true",
 		AlipayMobilePrecreateDeepLink: vals[SettingAlipayMobilePrecreateDeepLink] == "true",
+		EpusdtEnabled:                 vals[SettingEpusdtEnabled] == "true",
+		EpusdtBalanceMultiplier:       pcParseFloat(vals[SettingEpusdtBalanceMultiplier], 1),
+		EpusdtFeeRate:                 pcParseFloat(vals[SettingEpusdtFeeRate], 0),
+		EpusdtMinAmount:               pcParseFloat(vals[SettingEpusdtMinAmount], 0),
+		EpusdtMaxAmount:               pcParseFloat(vals[SettingEpusdtMaxAmount], 0),
+		EpusdtDailyLimit:              pcParseFloat(vals[SettingEpusdtDailyLimit], 0),
+		EpusdtGraceMinutes:            pcParseInt(vals[SettingEpusdtGraceMinutes], 30),
+		EpusdtHelpText:                vals[SettingEpusdtHelpText],
 	}
 	cfg.RechargeBonusMode, _ = NormalizeRechargeBonusMode(vals[SettingRechargeBonusMode])
 	cfg.AlipayMobilePrecreateDeepLink = pcEnvBoolOverride(
@@ -336,6 +385,26 @@ func (s *PaymentConfigService) getStripePublishableKey(ctx context.Context) stri
 // nil-check before serialisation — this is inherent to patch-style update patterns
 // and cannot be meaningfully decomposed without introducing unnecessary abstraction.
 func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req UpdatePaymentConfigRequest) error {
+	if req.EpusdtBalanceMultiplier != nil && (math.IsNaN(*req.EpusdtBalanceMultiplier) || math.IsInf(*req.EpusdtBalanceMultiplier, 0) || *req.EpusdtBalanceMultiplier <= 0) {
+		return infraerrors.BadRequest("INVALID_EPUSDT_BALANCE_MULTIPLIER", "EPUSDT balance multiplier must be greater than 0")
+	}
+	for name, value := range map[string]*float64{
+		"fee_rate": req.EpusdtFeeRate, "min_amount": req.EpusdtMinAmount,
+		"max_amount": req.EpusdtMaxAmount, "daily_limit": req.EpusdtDailyLimit,
+	} {
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0) {
+			return infraerrors.BadRequest("INVALID_EPUSDT_SETTING", "EPUSDT "+name+" must be non-negative")
+		}
+	}
+	if req.EpusdtFeeRate != nil && *req.EpusdtFeeRate > 100 {
+		return infraerrors.BadRequest("INVALID_EPUSDT_SETTING", "EPUSDT fee rate must not exceed 100")
+	}
+	if req.EpusdtMinAmount != nil && req.EpusdtMaxAmount != nil && *req.EpusdtMaxAmount > 0 && *req.EpusdtMinAmount > *req.EpusdtMaxAmount {
+		return infraerrors.BadRequest("INVALID_EPUSDT_SETTING", "EPUSDT minimum amount exceeds maximum")
+	}
+	if req.EpusdtGraceMinutes != nil && (*req.EpusdtGraceMinutes < 0 || *req.EpusdtGraceMinutes > 1440) {
+		return infraerrors.BadRequest("INVALID_EPUSDT_GRACE_MINUTES", "EPUSDT grace must be between 0 and 1440 minutes")
+	}
 	if req.BalanceRechargeMultiplier != nil {
 		if math.IsNaN(*req.BalanceRechargeMultiplier) || math.IsInf(*req.BalanceRechargeMultiplier, 0) || *req.BalanceRechargeMultiplier <= 0 {
 			return infraerrors.BadRequest("INVALID_BALANCE_RECHARGE_MULTIPLIER", "balance recharge multiplier must be greater than 0")
@@ -444,6 +513,30 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 	}
 	if req.AlipayMobilePrecreateDeepLink != nil {
 		m[SettingAlipayMobilePrecreateDeepLink] = formatBoolOrEmpty(req.AlipayMobilePrecreateDeepLink)
+	}
+	if req.EpusdtEnabled != nil {
+		m[SettingEpusdtEnabled] = formatBoolOrEmpty(req.EpusdtEnabled)
+	}
+	if req.EpusdtBalanceMultiplier != nil {
+		m[SettingEpusdtBalanceMultiplier] = formatPositiveFloatExact(req.EpusdtBalanceMultiplier)
+	}
+	if req.EpusdtFeeRate != nil {
+		m[SettingEpusdtFeeRate] = formatNonNegativeFloat(req.EpusdtFeeRate)
+	}
+	if req.EpusdtMinAmount != nil {
+		m[SettingEpusdtMinAmount] = formatNonNegativeFloat(req.EpusdtMinAmount)
+	}
+	if req.EpusdtMaxAmount != nil {
+		m[SettingEpusdtMaxAmount] = formatNonNegativeFloat(req.EpusdtMaxAmount)
+	}
+	if req.EpusdtDailyLimit != nil {
+		m[SettingEpusdtDailyLimit] = formatNonNegativeFloat(req.EpusdtDailyLimit)
+	}
+	if req.EpusdtGraceMinutes != nil {
+		m[SettingEpusdtGraceMinutes] = strconv.Itoa(*req.EpusdtGraceMinutes)
+	}
+	if req.EpusdtHelpText != nil {
+		m[SettingEpusdtHelpText] = strings.TrimSpace(*req.EpusdtHelpText)
 	}
 	if req.VisibleMethodAlipaySource != nil {
 		m[SettingPaymentVisibleMethodAlipaySource] = derefStr(req.VisibleMethodAlipaySource)

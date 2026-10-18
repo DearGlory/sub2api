@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -35,6 +36,19 @@ func TestValidateOrderInputKeepsBalanceDisabledSwitch(t *testing.T) {
 	plan, err := svc.validateOrderInput(context.Background(), CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: 10}, &PaymentConfig{})
 	require.NoError(t, err)
 	require.Nil(t, plan)
+}
+
+func TestDailyLimitUsesOrderSeparatesEpusdtBalanceOrders(t *testing.T) {
+	usdtOrder := &dbent.PaymentOrder{OrderType: payment.OrderTypeBalance, PaymentType: payment.TypeEpusdt}
+	alipayOrder := &dbent.PaymentOrder{OrderType: payment.OrderTypeBalance, PaymentType: payment.TypeAlipay}
+	subscriptionOrder := &dbent.PaymentOrder{OrderType: payment.OrderTypeSubscription, PaymentType: payment.TypeAlipay}
+
+	require.True(t, dailyLimitUsesOrder(usdtOrder, payment.TypeEpusdt))
+	require.False(t, dailyLimitUsesOrder(alipayOrder, payment.TypeEpusdt))
+	require.True(t, dailyLimitUsesOrder(alipayOrder, payment.TypeAlipay))
+	require.False(t, dailyLimitUsesOrder(usdtOrder, payment.TypeAlipay))
+	require.True(t, dailyLimitUsesOrder(subscriptionOrder, payment.TypeAlipay))
+	require.False(t, dailyLimitUsesOrder(subscriptionOrder, payment.TypeEpusdt))
 }
 
 func TestFulfillmentRejectsUnknownOrderType(t *testing.T) {

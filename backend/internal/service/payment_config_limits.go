@@ -31,7 +31,10 @@ func (s *PaymentConfigService) GetAvailableMethodLimits(ctx context.Context) (*M
 		if !ok {
 			continue
 		}
-		ml := pcAggregateMethodLimits(pt, insts)
+		ml := s.pcAggregateMethodLimits(pt, insts)
+		if pt == payment.TypeEpusdt {
+			ml.Networks = s.pcAggregateEpusdtNetworks(insts)
+		}
 		ml.DisplayName = s.pcAggregateMethodDisplayName(pt, insts)
 		ml.Currency = currency
 		resp.Methods[ml.PaymentType] = ml
@@ -94,7 +97,10 @@ func (s *PaymentConfigService) GetMethodLimits(ctx context.Context, types []stri
 		if !ok {
 			continue
 		}
-		ml := pcAggregateMethodLimits(pt, matching)
+		ml := s.pcAggregateMethodLimits(pt, matching)
+		if pt == payment.TypeEpusdt {
+			ml.Networks = s.pcAggregateEpusdtNetworks(matching)
+		}
 		ml.DisplayName = s.pcAggregateMethodDisplayName(pt, matching)
 		ml.Currency = currency
 		result = append(result, ml)
@@ -290,13 +296,26 @@ func unionFloat(agg float64, limited bool, val float64, wantMin bool) (float64, 
 //   - SingleMin: lowest floor across instances; 0 if any is unlimited
 //   - SingleMax: highest ceiling across instances; 0 if any is unlimited
 //   - DailyLimit: highest cap across instances; 0 if any is unlimited
+//
+// pcAggregateMethodLimits keeps the original pure helper contract used by unit tests.
+// Runtime callers use the service receiver so encrypted provider configuration can be read.
 func pcAggregateMethodLimits(pt string, instances []*dbent.PaymentProviderInstance) MethodLimits {
+	return (&PaymentConfigService{}).pcAggregateMethodLimits(pt, instances)
+}
+
+func (s *PaymentConfigService) pcAggregateMethodLimits(pt string, instances []*dbent.PaymentProviderInstance) MethodLimits {
 	ml := MethodLimits{PaymentType: pt}
 	minLimited, maxLimited, dailyLimited := true, true, true
+	if pt == payment.TypeEpusdt {
+		ml.Networks = s.pcAggregateEpusdtNetworks(instances)
+	}
 
 	for _, inst := range instances {
 		cl, hasLimits := pcInstanceTypeLimits(inst, pt)
 		if !hasLimits {
+			if pt == payment.TypeEpusdt {
+				return MethodLimits{PaymentType: pt, Networks: s.pcAggregateEpusdtNetworks(instances)}
+			}
 			return MethodLimits{PaymentType: pt} // any unlimited instance → all zeros
 		}
 		ml.SingleMin, minLimited = unionFloat(ml.SingleMin, minLimited, cl.SingleMin, true)
@@ -314,6 +333,34 @@ func pcAggregateMethodLimits(pt string, instances []*dbent.PaymentProviderInstan
 		ml.DailyLimit = 0
 	}
 	return ml
+}
+
+func (s *PaymentConfigService) pcAggregateEpusdtNetworks(instances []*dbent.PaymentProviderInstance) []string {
+	seen := make(map[string]struct{})
+	var networks []string
+	for _, inst := range instances {
+		if inst == nil {
+			continue
+		}
+		cfg := map[string]string{}
+		if decrypted, err := s.decryptConfig(inst.Config); err == nil && decrypted != nil {
+			cfg = decrypted
+		}
+		for _, raw := range []string{cfg["network"], cfg["networks"]} {
+			for _, network := range strings.Split(raw, ",") {
+				network = strings.ToLower(strings.TrimSpace(network))
+				if network == "" {
+					continue
+				}
+				if _, ok := seen[network]; ok {
+					continue
+				}
+				seen[network] = struct{}{}
+				networks = append(networks, network)
+			}
+		}
+	}
+	return networks
 }
 
 // pcComputeGlobalRange computes the widest [min, max] across all methods.

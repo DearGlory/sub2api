@@ -5,6 +5,7 @@ import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
+import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
 import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
@@ -884,6 +885,285 @@ describe('PaymentView subscription feature flag', () => {
     expect(wrapper.text()).not.toContain('payment.billingUnavailable')
     expect(wrapper.text()).not.toContain('payment.rechargeAccount')
     expect(wrapper.findAllComponents(SubscriptionPlanCard).length).toBeGreaterThan(0)
+    wrapper.unmount()
+  })
+})
+
+describe('PaymentView EPUSDT network selection', () => {
+  const mounted: ReturnType<typeof shallowMount>[] = []
+  const originalLocation = window.location
+
+  beforeEach(() => {
+    vi.useRealTimers()
+    routeState.path = '/purchase'
+    routeState.query = {}
+    appStoreState.setPublicSettings({ payment_enabled: true, subscription_enabled: true })
+    routerReplace.mockReset().mockResolvedValue(undefined)
+    routerPush.mockReset().mockResolvedValue(undefined)
+    createOrder.mockReset().mockResolvedValue({
+      order_id: 321,
+      amount: 20,
+      pay_amount: 20,
+      fee_rate: 0,
+      expires_at: '2099-01-01T00:10:00.000Z',
+      payment_type: 'epusdt',
+      payment_mode: 'redirect',
+      pay_url: 'https://gateway.example.test/pay/321',
+      out_trade_no: 'sub2_epusdt_321',
+    })
+    showError.mockReset()
+    fetchActiveSubscriptions.mockReset().mockResolvedValue(undefined)
+    window.localStorage.clear()
+    Object.defineProperty(window, 'location', { configurable: true, value: { origin: 'http://localhost', href: 'http://localhost/purchase' } })
+    vi.spyOn(window, 'open').mockReturnValue({ closed: false } as Window)
+  })
+
+  afterEach(() => {
+    mounted.splice(0).forEach(wrapper => wrapper.unmount())
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation })
+    appStoreState.setPublicSettings(undefined)
+    window.localStorage.clear()
+    vi.mocked(window.open).mockRestore()
+  })
+
+  async function mountEpusdt(networks: string[], includeWxpay = true) {
+    const fixture = checkoutInfoWithPlansFixture()
+    fixture.data.methods = {
+      ...(includeWxpay ? fixture.data.methods : {}),
+      epusdt: { ...fixture.data.methods.wxpay, currency: 'USD', networks },
+    }
+    getCheckoutInfo.mockReset().mockResolvedValue({ data: { ...fixture.data, epusdt_enabled: true } })
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 20)
+    wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'epusdt')
+    await flushPromises()
+    return wrapper
+  }
+
+  function paymentButton(wrapper: ReturnType<typeof shallowMount>) {
+    const button = wrapper.findAll('button').find(item => item.text().includes('payment.createOrder'))
+    expect(button).toBeDefined()
+    return button!
+  }
+
+  it('uses independent USD pricing without global bonuses or discounts', async () => {
+    const fixture = checkoutInfoWithPlansFixture()
+    getCheckoutInfo.mockReset().mockResolvedValue({ data: {
+      ...fixture.data,
+      methods: { epusdt: { ...fixture.data.methods.wxpay, currency: 'USD', networks: ['tron'] } },
+      epusdt_enabled: true, epusdt_balance_multiplier: 1.5, epusdt_fee_rate: 2,
+      epusdt_help_text: 'Contact support for network review.',
+      balance_recharge_multiplier: 0.14, recharge_fee_rate: 9,
+      recharge_bonus_tiers: [{ min_amount: 10, bonus_percent: 50 }], recharge_bonus_mode: 'discount', recharge_bonus_notice: 'CNY campaign only',
+    } })
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 20)
+    await flushPromises()
+    const input = wrapper.getComponent(AmountInput)
+    expect(input.props('multiplier')).toBe(1.5)
+    expect(input.props('bonusTiers')).toEqual([])
+    expect(wrapper.find('[data-testid="recharge-discount-row"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="recharge-bonus-notice"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="recharge-credited-row"]').text()).toContain('$30.00')
+    expect(paymentButton(wrapper).text()).toContain(formatPaymentAmount(20.4, 'USD'))
+    expect(wrapper.text()).toContain('Contact support for network review.')
+  })
+
+  it.each([false, undefined])('hides USDT unless the independent switch is enabled (%s)', async (enabled) => {
+    const fixture = checkoutInfoFixture()
+    getCheckoutInfo.mockReset().mockResolvedValue({ data: {
+      ...fixture.data,
+      epusdt_enabled: enabled,
+      methods: { epusdt: { ...fixture.data.methods.wxpay, currency: 'USD', networks: ['tron'] } },
+    } })
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="epusdt-network-select"]').exists()).toBe(false)
+    expect(wrapper.findComponent(AmountInput).exists()).toBe(false)
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('requires an explicit network selection instead of silently choosing the first one', async () => {
+    const wrapper = await mountEpusdt(['tron', 'bsc'])
+    const select = wrapper.get<HTMLSelectElement>('[data-testid="epusdt-network-select"]')
+    expect(select.element.value).toBe('')
+    expect(paymentButton(wrapper).element.disabled).toBe(true)
+    await paymentButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('sends the chosen network through the mounted checkout page', async () => {
+    const wrapper = await mountEpusdt(['tron', 'bsc'])
+    await wrapper.get('[data-testid="epusdt-network-select"]').setValue('bsc')
+    expect(paymentButton(wrapper).element.disabled).toBe(false)
+    await paymentButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 20,
+      payment_type: 'epusdt',
+      order_type: 'balance',
+      requested_network: 'bsc',
+    }))
+  })
+
+  it('blocks checkout when no network is enabled', async () => {
+    const wrapper = await mountEpusdt([])
+    expect(paymentButton(wrapper).element.disabled).toBe(true)
+    await paymentButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('switches away from USDT when opening a subscription', async () => {
+    const wrapper = await mountEpusdt(['tron', 'bsc'])
+    const tab = wrapper.findAll('button').find(item => item.text() === 'payment.tabSubscribe')!
+    await tab.trigger('click')
+    wrapper.getComponent(SubscriptionPlanCard).vm.$emit('select', checkoutInfoWithPlansFixture().data.plans[0])
+    await flushPromises()
+    const selector = wrapper.getComponent(PaymentMethodSelector)
+    expect(selector.props('methods').some((method: { type: string }) => method.type === 'epusdt')).toBe(false)
+    expect(selector.props('selected')).toBe('wxpay')
+    await paymentButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ payment_type: 'wxpay', order_type: 'subscription' }))
+    expect(createOrder.mock.calls[0][0]).not.toHaveProperty('requested_network')
+  })
+
+  it('cannot submit a subscription when USDT is the only payment method', async () => {
+    const wrapper = await mountEpusdt(['tron'], false)
+    const tab = wrapper.findAll('button').find(item => item.text() === 'payment.tabSubscribe')!
+    await tab.trigger('click')
+    wrapper.getComponent(SubscriptionPlanCard).vm.$emit('select', checkoutInfoWithPlansFixture().data.plans[0])
+    await flushPromises()
+    expect(paymentButton(wrapper).element.disabled).toBe(true)
+    await paymentButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+})
+
+describe('PaymentView external card purchase', () => {
+  beforeEach(() => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    createOrder.mockReset()
+    routerPush.mockReset().mockResolvedValue(undefined)
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    appStoreState.setPublicSettings(undefined)
+  })
+
+  it('shows only the external shop when internal payments are disabled', async () => {
+    appStoreState.setPublicSettings({
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_url: 'https://catfk.com/shop/GloryCode',
+    })
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture())
+
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(getCheckoutInfo).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="external-card-shop-frame"]').attributes('src')).toBe('https://catfk.com/shop/GloryCode')
+    expect(wrapper.get('[data-testid="external-card-shop-new-window"]').attributes('target')).toBe('_blank')
+    expect(wrapper.get('[data-testid="external-card-shop-frame"]').attributes('referrerpolicy')).toBe('no-referrer')
+    expect(wrapper.get('[data-testid="external-card-shop-new-window"]').attributes('referrerpolicy')).toBe('no-referrer')
+    await wrapper.get('[data-testid="external-card-shop-redeem"]').trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/redeem')
+    expect(wrapper.text()).toContain('payment.externalCardPurchase.redeemHint')
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('uses the configured external shop name, description, and new-window display mode', async () => {
+    appStoreState.setPublicSettings({
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_url: 'https://catfk.com/shop/GloryCode',
+      external_card_purchase_name: '余额码商城',
+      external_card_purchase_description: '购买余额码后回本站兑换。',
+      external_card_purchase_display_mode: 'new_window',
+    })
+
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="external-card-shop-frame"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="external-card-shop-new-window"]').attributes('href')).toBe('https://catfk.com/shop/GloryCode')
+    expect(wrapper.text()).toContain('余额码商城')
+    expect(wrapper.text()).toContain('购买余额码后回本站兑换。')
+    wrapper.unmount()
+  })
+
+  it('does not let a stale internal recovery snapshot hide the external shop', async () => {
+    appStoreState.setPublicSettings({ payment_enabled: false, external_card_purchase_enabled: true, external_card_purchase_url: 'https://shop.example.test/cards' })
+    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
+      orderId: 997, amount: 20, qrCode: '', expiresAt: '2099-01-01T00:10:00.000Z',
+      paymentType: 'epusdt', payUrl: 'https://gateway.example.test/pay/997', outTradeNo: 'sub2_epusdt_997',
+      clientSecret: '', intentId: '', currency: 'USD', countryCode: '', paymentEnv: '',
+      payAmount: 20, orderType: 'balance', paymentMode: 'redirect', resumeToken: '', createdAt: Date.now(),
+    }))
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="external-card-shop"]').exists()).toBe(true)
+    expect(wrapper.find('payment-status-panel-stub').exists()).toBe(false)
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+    window.localStorage.clear()
+  })
+
+  it('keeps a new-window fallback even when the configured mode is embed', async () => {
+    appStoreState.setPublicSettings({
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_url: 'https://shop.example.test/cards',
+      external_card_purchase_display_mode: 'embed',
+    })
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="external-card-shop-frame"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="external-card-shop-new-window"]').attributes('href')).toBe('https://shop.example.test/cards')
+    await wrapper.get('[data-testid="external-card-shop-frame"]').trigger('error')
+    expect(wrapper.get('[data-testid="external-card-shop-new-window"]').exists()).toBe(true)
     wrapper.unmount()
   })
 })

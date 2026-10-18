@@ -194,6 +194,9 @@ func (s *PaymentService) validateRefundRequest(ctx context.Context, oid, uid int
 	if o.Status != OrderStatusCompleted {
 		return nil, infraerrors.BadRequest("INVALID_STATUS", "only completed orders can request refund")
 	}
+	if payment.GetBasePaymentType(o.PaymentType) == payment.TypeEpusdt {
+		return nil, infraerrors.BadRequest("REFUND_UNSUPPORTED", "USDT refunds require offline support")
+	}
 	// Check provider instance allows user refund
 	inst, err := s.getRefundOrderProviderInstance(ctx, o)
 	if err != nil || inst == nil {
@@ -214,6 +217,9 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	ok := []string{OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundFailed}
 	if !psSliceContains(ok, o.Status) {
 		return nil, nil, infraerrors.BadRequest("INVALID_STATUS", "order status does not allow refund")
+	}
+	if payment.GetBasePaymentType(o.PaymentType) == payment.TypeEpusdt {
+		return nil, nil, infraerrors.BadRequest("REFUND_UNSUPPORTED", "USDT refunds require offline support")
 	}
 	// Check provider instance allows admin refund
 	inst, instErr := s.getRefundOrderProviderInstance(ctx, o)

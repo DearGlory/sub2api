@@ -140,6 +140,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		})
 	}
 
+	h.configService.FilterVisibleCheckoutMethods(limitsResp, cfg)
 	response.Success(c, checkoutInfoResponse{
 		Methods:                       limitsResp.Methods,
 		GlobalMin:                     limitsResp.GlobalMin,
@@ -157,6 +158,14 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		StripePublishableKey:          cfg.StripePublishableKey,
 		AlipayForceQRCode:             cfg.AlipayForceQRCode,
 		AlipayMobilePrecreateDeepLink: alipayMobilePrecreateDeepLink,
+		EpusdtEnabled:                 cfg.EpusdtEnabled,
+		EpusdtBalanceMultiplier:       cfg.EpusdtBalanceMultiplier,
+		EpusdtFeeRate:                 cfg.EpusdtFeeRate,
+		EpusdtMinAmount:               cfg.EpusdtMinAmount,
+		EpusdtMaxAmount:               cfg.EpusdtMaxAmount,
+		EpusdtDailyLimit:              cfg.EpusdtDailyLimit,
+		EpusdtGraceMinutes:            cfg.EpusdtGraceMinutes,
+		EpusdtHelpText:                cfg.EpusdtHelpText,
 	})
 }
 
@@ -177,6 +186,14 @@ type checkoutInfoResponse struct {
 	StripePublishableKey          string                          `json:"stripe_publishable_key"`
 	AlipayForceQRCode             bool                            `json:"alipay_force_qrcode"`
 	AlipayMobilePrecreateDeepLink bool                            `json:"alipay_mobile_precreate_deep_link"`
+	EpusdtEnabled                 bool                            `json:"epusdt_enabled"`
+	EpusdtBalanceMultiplier       float64                         `json:"epusdt_balance_multiplier"`
+	EpusdtFeeRate                 float64                         `json:"epusdt_fee_rate"`
+	EpusdtMinAmount               float64                         `json:"epusdt_min_amount"`
+	EpusdtMaxAmount               float64                         `json:"epusdt_max_amount"`
+	EpusdtDailyLimit              float64                         `json:"epusdt_daily_limit"`
+	EpusdtGraceMinutes            int                             `json:"epusdt_grace_minutes"`
+	EpusdtHelpText                string                          `json:"epusdt_help_text"`
 }
 
 type checkoutPlan struct {
@@ -229,6 +246,12 @@ func (h *PaymentHandler) GetLimits(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	cfg, cfgErr := h.configService.GetPaymentConfig(c.Request.Context())
+	if cfgErr != nil {
+		response.ErrorFrom(c, cfgErr)
+		return
+	}
+	h.configService.FilterVisibleCheckoutMethods(resp, cfg)
 	response.Success(c, resp)
 }
 
@@ -241,6 +264,7 @@ type CreateOrderRequest struct {
 	ReturnURL         string  `json:"return_url"`
 	PaymentSource     string  `json:"payment_source"`
 	OrderType         string  `json:"order_type"`
+	RequestedNetwork  string  `json:"requested_network,omitempty"`
 	PlanID            int64   `json:"plan_id"`
 	// IsMobile lets the frontend declare its mobile status directly. When
 	// nil we fall back to User-Agent heuristics (which miss iPadOS / some
@@ -278,20 +302,21 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		mobile = *req.IsMobile
 	}
 	result, err := h.paymentService.CreateOrder(c.Request.Context(), service.CreateOrderRequest{
-		UserID:          subject.UserID,
-		Amount:          req.Amount,
-		PaymentType:     req.PaymentType,
-		OpenID:          req.OpenID,
-		ClientIP:        c.ClientIP(),
-		IsMobile:        mobile,
-		IsWeChatBrowser: isWeChatBrowser(c),
-		SrcHost:         c.Request.Host,
-		SrcURL:          c.Request.Referer(),
-		ReturnURL:       req.ReturnURL,
-		PaymentSource:   req.PaymentSource,
-		OrderType:       req.OrderType,
-		PlanID:          req.PlanID,
-		Locale:          c.GetHeader("Accept-Language"),
+		UserID:           subject.UserID,
+		Amount:           req.Amount,
+		PaymentType:      req.PaymentType,
+		OpenID:           req.OpenID,
+		ClientIP:         c.ClientIP(),
+		IsMobile:         mobile,
+		IsWeChatBrowser:  isWeChatBrowser(c),
+		SrcHost:          c.Request.Host,
+		SrcURL:           c.Request.Referer(),
+		ReturnURL:        req.ReturnURL,
+		PaymentSource:    req.PaymentSource,
+		OrderType:        req.OrderType,
+		RequestedNetwork: req.RequestedNetwork,
+		PlanID:           req.PlanID,
+		Locale:           c.GetHeader("Accept-Language"),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

@@ -2,6 +2,7 @@ package admin
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -69,6 +70,64 @@ func (h *PaymentHandler) ListOrders(c *gin.Context) {
 		return
 	}
 	response.Paginated(c, sanitizeAdminPaymentOrdersForResponse(orders), int64(total), page, pageSize)
+}
+
+// ListManualReviews returns pending USDT manual review items.
+// GET /api/v1/admin/payment/manual-reviews
+func (h *PaymentHandler) ListManualReviews(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	items, err := h.paymentService.ListPaymentManualReviews(c.Request.Context(), page, pageSize)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items.Items, int64(items.Total), items.Page, items.PageSize)
+}
+
+type manualReviewDecisionRequest struct {
+	Note string `json:"note"`
+}
+
+func (h *PaymentHandler) ApproveManualReview(c *gin.Context) {
+	orderID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req manualReviewDecisionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	op := strings.TrimSpace(c.GetString("auth_email"))
+	if op == "" {
+		op = "admin"
+	}
+	if err := h.paymentService.ApprovePaymentManualReview(c.Request.Context(), orderID, op, req.Note); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "manual review approved"})
+}
+
+func (h *PaymentHandler) RejectManualReview(c *gin.Context) {
+	orderID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req manualReviewDecisionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	op := strings.TrimSpace(c.GetString("auth_email"))
+	if op == "" {
+		op = "admin"
+	}
+	if err := h.paymentService.RejectPaymentManualReview(c.Request.Context(), orderID, op, req.Note); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "manual review rejected"})
 }
 
 // GetOrderDetail returns detailed information about a single order.

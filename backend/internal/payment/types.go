@@ -21,6 +21,7 @@ const (
 	TypeLink         PaymentType = "link"
 	TypeEasyPay      PaymentType = "easypay"
 	TypeAirwallex    PaymentType = "airwallex"
+	TypeEpusdt       PaymentType = "epusdt"
 )
 
 // Order status constants shared across payment and service layers.
@@ -89,6 +90,8 @@ func GetBasePaymentType(t string) string {
 		return TypeEasyPay
 	case t == TypeAirwallex:
 		return TypeAirwallex
+	case t == TypeEpusdt:
+		return TypeEpusdt
 	case t == TypeStripe || t == TypeCard || t == TypeLink:
 		return TypeStripe
 	case len(t) >= len(TypeAlipay) && t[:len(TypeAlipay)] == TypeAlipay:
@@ -115,6 +118,7 @@ type CreatePaymentRequest struct {
 	// alipay.trade.precreate instead of alipay.trade.wap.pay.
 	AlipayMobilePrecreate bool
 	InstanceSubMethods    string // Comma-separated sub-methods from instance supported_types (for Stripe)
+	RequestedNetwork      string // Optional USDT network selected by the payer (e.g. "trc20")
 }
 
 // CreatePaymentResultType describes the shape of the create-payment result.

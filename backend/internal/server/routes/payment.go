@@ -78,6 +78,7 @@ func RegisterPaymentRoutes(
 
 	// --- Webhook endpoints (no auth) ---
 	webhook := v1.Group("/payment/webhook")
+	webhook.Use(panelRateLimiter.PublicIP())
 	{
 		// EasyPay sends GET callbacks with query params
 		webhook.GET("/easypay", webhookHandler.EasyPayNotify)
@@ -86,6 +87,9 @@ func RegisterPaymentRoutes(
 		webhook.POST("/wxpay", webhookHandler.WxpayNotify)
 		webhook.POST("/stripe", webhookHandler.StripeWebhook)
 		webhook.POST("/airwallex", webhookHandler.AirwallexWebhook)
+		webhook.POST("/epusdt", webhookHandler.EPUSDTWebhook)
+		// Compatibility alias for existing EPUSDT deployments.
+		v1.POST("/payments/callback", panelRateLimiter.PublicIP(), webhookHandler.EPUSDTWebhook)
 	}
 
 	// --- Admin payment endpoints (admin auth) ---
@@ -105,7 +109,10 @@ func RegisterPaymentRoutes(
 		adminOrders := adminGroup.Group("/orders")
 		{
 			adminOrders.GET("", adminPaymentHandler.ListOrders)
+			adminOrders.GET("/manual-reviews", adminPaymentHandler.ListManualReviews)
 			adminOrders.GET("/:id", adminPaymentHandler.GetOrderDetail)
+			adminOrders.POST("/:id/manual-review/approve", adminPaymentHandler.ApproveManualReview)
+			adminOrders.POST("/:id/manual-review/reject", adminPaymentHandler.RejectManualReview)
 			adminOrders.POST("/:id/cancel", adminPaymentHandler.CancelOrder)
 			adminOrders.POST("/:id/retry", adminPaymentHandler.RetryFulfillment)
 			adminOrders.POST("/:id/refund", adminPaymentHandler.ProcessRefund)

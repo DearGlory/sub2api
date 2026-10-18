@@ -38,6 +38,39 @@
             <p class="text-gray-500 dark:text-gray-400">{{ t('payment.billingUnavailable') }}</p>
           </div>
           <!-- Top-up Tab -->
+          <template v-else-if="activeTab === 'external'">
+            <div class="card overflow-hidden p-0" data-testid="external-card-shop">
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-dark-700">
+                <div>
+                  <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ externalCardPurchaseName }}</h2>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ externalCardPurchaseDescription }}</p>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                  <button type="button" @click="router.push('/redeem')" data-testid="external-card-shop-redeem" class="btn btn-primary">{{ t('payment.externalCardPurchase.openRedeem') }}</button>
+                  <a
+                    :href="externalCardPurchaseUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    referrerpolicy="no-referrer"
+                    data-testid="external-card-shop-new-window"
+                    class="btn btn-secondary shrink-0"
+                  >{{ t('payment.externalCardPurchase.openNewWindow') }}</a>
+                </div>
+              </div>
+              <div v-if="externalCardFrameFailed" class="p-6 text-sm text-gray-600 dark:text-gray-300">
+                {{ t('payment.externalCardPurchase.embedFailed') }}
+              </div>
+              <iframe
+                v-else-if="externalCardPurchaseShowsEmbed"
+                :src="externalCardPurchaseUrl"
+                :title="externalCardPurchaseName"
+                referrerpolicy="no-referrer"
+                data-testid="external-card-shop-frame"
+                class="h-[min(72vh,720px)] w-full border-0"
+                @error="externalCardFrameFailed = true"
+              ></iframe>
+            </div>
+          </template>
           <template v-else-if="activeTab === 'recharge'">
             <!-- Recharge Account Card -->
             <div class="card p-5">
@@ -75,6 +108,16 @@
                 :selected="selectedMethod"
                 @select="selectedMethod = $event"
               />
+            </div>
+            <div v-if="selectedMethod === 'epusdt' && selectedNetworks.length > 0" class="card p-6">
+              <label for="epusdt-network" class="input-label">{{ t('payment.epusdtNetwork') }}</label>
+              <select id="epusdt-network" v-model="selectedNetwork" class="input" data-testid="epusdt-network-select">
+                <option disabled value="">{{ t('payment.epusdtSelectNetwork') }}</option>
+                <option v-for="network in selectedNetworks" :key="network" :value="network">{{ network.toUpperCase() }}</option>
+              </select>
+              <p class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ t('payment.epusdtNetworkHint') }}</p>
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.epusdtSettlementHint') }}</p>
+              <p v-if="checkout.epusdt_help_text" class="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300" data-testid="epusdt-help">{{ checkout.epusdt_help_text }}</p>
             </div>
             <div v-if="validAmount > 0" class="card p-6">
               <div class="space-y-2 text-sm">
@@ -294,6 +337,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
+import { buildExternalCardPurchaseUrl, externalCardPurchaseDisplayName, normalizeExternalCardPurchaseDisplayMode } from '@/utils/externalCardPurchase'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
 import { formatRechargeBonusNumber, normalizeRechargeBonusMode, normalizeRechargeBonusTiers, quoteRechargeBonus } from '@/utils/rechargeBonus'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -350,11 +394,13 @@ const loading = ref(true)
 const submitting = ref(false)
 const errorMessage = ref('')
 const errorHintMessage = ref('')
-const activeTab = ref<'recharge' | 'subscription'>('recharge')
+const activeTab = ref<'recharge' | 'subscription' | 'external'>('recharge')
 const amount = ref<number | null>(null)
 const selectedMethod = ref('')
+const isEpusdt = computed(() => selectedMethod.value === 'epusdt')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
+const externalCardFrameFailed = ref(false)
 
 const paymentPhase = ref<'select' | 'paying'>('select')
 
@@ -540,6 +586,7 @@ const renderedHelpText = computed(() => DOMPurify.sanitize(
 
 // 充值赠送活动文案：后台 Markdown 配置，空字符串时金额卡顶部不渲染
 const renderedBonusNotice = computed(() => {
+  if (isEpusdt.value) return ''
   const raw = (checkout.value.recharge_bonus_notice || '').trim()
   if (!raw) return ''
   return DOMPurify.sanitize(marked.parse(raw, { async: false, gfm: true, breaks: true }))
@@ -548,11 +595,19 @@ const renderedBonusNotice = computed(() => {
 // 订阅功能开关（public settings 的 subscription_enabled，opt-out）。关闭后购买页只保留充值：
 // 不再渲染「订阅」tab，只剩单个 tab 时顶部切换器也随之隐藏。
 const subscriptionEnabled = computed(() => resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.subscription))
+const externalCardPurchaseEnabled = computed(() => appStore.cachedPublicSettings?.external_card_purchase_enabled === true)
+const externalCardPurchaseUrl = computed(() => buildExternalCardPurchaseUrl(appStore.cachedPublicSettings?.external_card_purchase_url))
+const externalCardPurchaseName = computed(() => externalCardPurchaseDisplayName(appStore.cachedPublicSettings?.external_card_purchase_name, t('payment.externalCardPurchase.title')))
+const externalCardPurchaseDescription = computed(() => externalCardPurchaseDisplayName(appStore.cachedPublicSettings?.external_card_purchase_description, t('payment.externalCardPurchase.redeemHint')))
+const externalCardPurchaseShowsEmbed = computed(() => normalizeExternalCardPurchaseDisplayMode(appStore.cachedPublicSettings?.external_card_purchase_display_mode) !== 'new_window')
+const internalPaymentEnabled = computed(() => appStore.cachedPublicSettings?.payment_enabled !== false)
+const selectedNetwork = ref('')
 
 const tabs = computed(() => {
-  const result: { key: 'recharge' | 'subscription'; label: string }[] = []
-  if (!checkout.value.balance_disabled) result.push({ key: 'recharge', label: t('payment.tabTopUp') })
-  if (subscriptionEnabled.value) result.push({ key: 'subscription', label: t('payment.tabSubscribe') })
+  const result: { key: 'recharge' | 'subscription' | 'external'; label: string }[] = []
+  if (internalPaymentEnabled.value && !checkout.value.balance_disabled) result.push({ key: 'recharge', label: t('payment.tabTopUp') })
+  if (internalPaymentEnabled.value && subscriptionEnabled.value) result.push({ key: 'subscription', label: t('payment.tabSubscribe') })
+  if (externalCardPurchaseEnabled.value && externalCardPurchaseUrl.value) result.push({ key: 'external', label: externalCardPurchaseName.value })
   return result
 })
 
@@ -563,13 +618,24 @@ watch(tabs, (available) => {
   const leavingSubscription = activeTab.value === 'subscription'
   activeTab.value = available[0]?.key ?? 'recharge'
   if (leavingSubscription) selectedPlan.value = null
-})
+}, { immediate: true })
 
-const visibleMethods = computed(() => getVisibleMethods(checkout.value.methods))
+const visibleMethods = computed(() => {
+  const methods = getVisibleMethods(checkout.value.methods)
+  if (checkout.value.epusdt_enabled !== true) delete methods.epusdt
+  return methods
+})
+const selectedNetworks = computed(() => {
+  const raw = visibleMethods.value.epusdt?.networks ?? []
+  return [...new Set(raw.map(network => network.trim().toLowerCase()).filter(Boolean))]
+})
+watch(selectedNetworks, (networks) => {
+  if (!networks.includes(selectedNetwork.value)) selectedNetwork.value = ''
+}, { immediate: true })
 const enabledMethods = computed(() => Object.keys(visibleMethods.value))
 const validAmount = computed(() => amount.value ?? 0)
 const balanceRechargeMultiplier = computed(() => {
-  const multiplier = checkout.value.balance_recharge_multiplier
+  const multiplier = isEpusdt.value ? (checkout.value.epusdt_balance_multiplier ?? 1) : checkout.value.balance_recharge_multiplier
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
 })
 // 订阅 CNY 换算汇率（1 USD = X CNY）。0 = 未配置，订阅保持 price 直付（与后端 opt-in 条件严格镜像）。
@@ -577,7 +643,7 @@ const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
   return Number.isFinite(rate) && rate > 0 ? rate : 0
 })
-const rechargeBonusTiers = computed(() => normalizeRechargeBonusTiers(checkout.value.recharge_bonus_tiers))
+const rechargeBonusTiers = computed(() => isEpusdt.value ? [] : normalizeRechargeBonusTiers(checkout.value.recharge_bonus_tiers))
 const rechargeBonusMode = computed(() => normalizeRechargeBonusMode(checkout.value.recharge_bonus_mode))
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
@@ -599,12 +665,14 @@ function amountFitsMethod(amt: number, methodType: string): boolean {
 
 // Visible methods decide the amount range shown to users.
 const globalMinAmount = computed(() => {
+  if (isEpusdt.value) return checkout.value.epusdt_min_amount ?? 0
   const limits = Object.values(visibleMethods.value)
   if (limits.length === 0) return 0
   if (limits.some(limit => limit.single_min <= 0)) return 0
   return Math.min(...limits.map(limit => limit.single_min))
 })
 const globalMaxAmount = computed(() => {
+  if (isEpusdt.value) return checkout.value.epusdt_max_amount ?? 0
   const limits = Object.values(visibleMethods.value)
   if (limits.length === 0) return 0
   if (limits.some(limit => limit.single_max <= 0)) return 0
@@ -613,7 +681,7 @@ const globalMaxAmount = computed(() => {
 
 // Selected method's limits (for validation and error messages)
 const selectedLimit = computed(() => visibleMethods.value[selectedMethod.value])
-const selectedCurrency = computed(() => normalizePaymentCurrency(selectedLimit.value?.currency))
+const selectedCurrency = computed(() => isEpusdt.value ? 'USD' : normalizePaymentCurrency(selectedLimit.value?.currency))
 const localeCode = computed(() => {
   const raw = i18n.locale as unknown
   if (typeof raw === 'string') return raw
@@ -671,7 +739,7 @@ const payBaseAmount = computed(() => bonusQuote.value.payBase)
 const discountAmount = computed(() => roundPaymentAmount(validAmount.value - payBaseAmount.value, selectedCurrency.value))
 const creditedAmount = computed(() => bonusQuote.value.credited)
 const showBonusRow = computed(() => bonusQuote.value.mode !== 'discount' && bonusQuote.value.bonus > 0)
-const showCreditedBalance = computed(() => balanceRechargeMultiplier.value !== 1 || bonusQuote.value.percent > 0)
+const showCreditedBalance = computed(() => isEpusdt.value || balanceRechargeMultiplier.value !== 1 || bonusQuote.value.percent > 0)
 
 const methodOptions = computed<PaymentMethodOption[]>(() =>
   enabledMethods.value.map((type) => {
@@ -685,7 +753,7 @@ const methodOptions = computed<PaymentMethodOption[]>(() =>
   })
 )
 
-const feeRate = computed(() => checkout.value?.recharge_fee_rate ?? 0)
+const feeRate = computed(() => isEpusdt.value ? (checkout.value.epusdt_fee_rate ?? 0) : (checkout.value.recharge_fee_rate ?? 0))
 const feeAmount = computed(() =>
   feeRate.value > 0 && payBaseAmount.value > 0
     ? Math.ceil(((payBaseAmount.value * feeRate.value) / 100) * 100) / 100
@@ -700,6 +768,12 @@ const showActualPay = computed(() => feeRate.value > 0 || discountAmount.value >
 
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
+  if (isEpusdt.value) {
+    const min = checkout.value.epusdt_min_amount ?? 0
+    const max = checkout.value.epusdt_max_amount ?? 0
+    if (min > 0 && validAmount.value < min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(min) })
+    if (max > 0 && validAmount.value > max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(max) })
+  }
   // No method can handle this amount
   if (!enabledMethods.value.some((m) => amountFitsMethod(payBaseAmount.value, m))) {
     return t('payment.amountNoMethod')
@@ -717,6 +791,7 @@ const canSubmit = computed(() =>
   validAmount.value > 0
     && amountFitsMethod(payBaseAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
+    && (selectedMethod.value !== 'epusdt' || (checkout.value.epusdt_enabled === true && selectedNetworks.value.includes(selectedNetwork.value) && amountError.value === ''))
 )
 
 const subPaymentAmount = computed(() => {
@@ -744,7 +819,7 @@ function subscriptionTotalAmountForCurrency(value: number, currency: string): nu
 // Subscription-specific: method options based on gateway pay amount
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   const price = selectedPlan.value?.price ?? 0
-  return enabledMethods.value.map((type) => {
+  return enabledMethods.value.filter(type => type !== 'epusdt').map((type) => {
     const ml = visibleMethods.value[type]
     const currency = normalizePaymentCurrency(ml?.currency)
     return {
@@ -758,13 +833,18 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
 
 const canSubmitSubscription = computed(() =>
   selectedPlan.value !== null
-    && amountFitsMethod(subTotalAmount.value, selectedMethod.value)
-    && selectedLimit.value?.available !== false
+    && subMethodOptions.value.some(method => method.type === selectedMethod.value && method.available)
 )
+
+watch([activeTab, subMethodOptions, selectedMethod], () => {
+  if (activeTab.value !== 'subscription') return
+  if (subMethodOptions.value.some(method => method.type === selectedMethod.value && method.available)) return
+  selectedMethod.value = subMethodOptions.value.find(method => method.available)?.type ?? ''
+})
 
 // Auto-switch to first available method when current selection can't handle the amount
 watch(() => [payBaseAmount.value, selectedMethod.value] as const, ([amt, method]) => {
-  if (amt <= 0 || amountFitsMethod(amt, method)) return
+  if (activeTab.value !== 'recharge' || amt <= 0 || amountFitsMethod(amt, method)) return
   const available = enabledMethods.value.find((m) => amountFitsMethod(amt, m))
   if (available) selectedMethod.value = available
 })
@@ -828,7 +908,7 @@ async function handleSubmitRecharge() {
 }
 
 async function confirmSubscribe() {
-  if (!selectedPlan.value || submitting.value) return
+  if (!selectedPlan.value || !canSubmitSubscription.value || submitting.value) return
   await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
 }
 
@@ -837,6 +917,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
   errorMessage.value = ''
   errorHintMessage.value = ''
   const requestType = normalizeVisibleMethod(options.paymentType || selectedMethod.value) || options.paymentType || selectedMethod.value
+  const visibleMethod = normalizeVisibleMethod(requestType) || requestType
   try {
     const payload = buildCreateOrderPayload({
       amount: orderAmount,
@@ -848,6 +929,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
       forceQRCode: !!(checkout.value.alipay_force_qrcode && normalizeVisibleMethod(requestType) === 'alipay'),
       mobilePrecreateDeepLink: checkout.value.alipay_mobile_precreate_deep_link === true,
+      requestedNetwork: visibleMethod === 'epusdt' ? selectedNetwork.value : undefined,
     })
     if (options.openid) {
       payload.openid = options.openid
@@ -863,7 +945,6 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         window.location.href = url
       }
     }
-    const visibleMethod = normalizeVisibleMethod(requestType) || requestType
     // When user clicks the dedicated Stripe button, leave method blank so the
     // landing page renders Stripe's full Payment Element (card/link/alipay/wxpay).
     const stripeMethod = visibleMethod === 'stripe'
@@ -1164,8 +1245,10 @@ async function resumeWechatPaymentFromQuery() {
 
 onMounted(async () => {
   try {
-    const res = await paymentAPI.getCheckoutInfo()
-    checkout.value = res.data
+    if (internalPaymentEnabled.value) {
+      const res = await paymentAPI.getCheckoutInfo()
+      checkout.value = res.data
+    }
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER
       const sorted = [...enabledMethods.value].sort((a, b) => {
@@ -1188,7 +1271,7 @@ onMounted(async () => {
         window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY),
         { resumeToken: routeResumeToken },
       )
-      if (restored) {
+      if (restored && internalPaymentEnabled.value) {
         paymentState.value = restored
         paymentPhase.value = 'paying'
         const restoredMethod = normalizeVisibleMethod(restored.paymentType)
@@ -1200,10 +1283,10 @@ onMounted(async () => {
         removeRecoverySnapshot()
       }
     }
-    await resumeWechatPaymentFromQuery()
+    if (internalPaymentEnabled.value) await resumeWechatPaymentFromQuery()
     // balance_disabled → the tabs watcher above moves activeTab to the subscription tab (when enabled).
     // Handle renewal navigation: ?tab=subscription&group=123 (ignored when subscriptions are disabled)
-    if (route.query.tab === 'subscription' && subscriptionEnabled.value) {
+    if (route.query.tab === 'subscription' && internalPaymentEnabled.value && subscriptionEnabled.value) {
       activeTab.value = 'subscription'
       if (route.query.group) {
         const groupId = Number(route.query.group)
@@ -1219,7 +1302,7 @@ onMounted(async () => {
   } catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
   finally { loading.value = false }
   // Fetch active subscriptions (uses cache, non-blocking); skipped when the subscription feature is off
-  if (subscriptionEnabled.value) {
+  if (internalPaymentEnabled.value && subscriptionEnabled.value) {
     subscriptionStore.fetchActiveSubscriptions().catch(() => {})
   }
 })

@@ -12,6 +12,7 @@ import type {
   ProviderInstance
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
+import type { PaymentManualReview } from '@/types/payment'
 
 /** Admin-facing payment config returned by GET /admin/payment/config */
 export interface AdminPaymentConfig {
@@ -26,6 +27,14 @@ export interface AdminPaymentConfig {
   balance_recharge_multiplier: number
   subscription_usd_to_cny_rate: number
   recharge_fee_rate: number
+  epusdt_enabled: boolean
+  epusdt_balance_multiplier: number
+  epusdt_fee_rate: number
+  epusdt_min_amount: number
+  epusdt_max_amount: number
+  epusdt_daily_limit: number
+  epusdt_grace_minutes: number
+  epusdt_help_text: string
   load_balance_strategy: string
   product_name_prefix: string
   product_name_suffix: string
@@ -46,6 +55,14 @@ export interface UpdatePaymentConfigRequest {
   balance_recharge_multiplier?: number
   subscription_usd_to_cny_rate?: number
   recharge_fee_rate?: number
+  epusdt_enabled?: boolean
+  epusdt_balance_multiplier?: number
+  epusdt_fee_rate?: number
+  epusdt_min_amount?: number
+  epusdt_max_amount?: number
+  epusdt_daily_limit?: number
+  epusdt_grace_minutes?: number
+  epusdt_help_text?: string
   load_balance_strategy?: string
   product_name_prefix?: string
   product_name_suffix?: string
@@ -103,6 +120,19 @@ export const adminPaymentAPI = {
   /** Get a specific order by ID */
   getOrder(id: number) {
     return apiClient.get<PaymentOrder>(`/admin/payment/orders/${id}`)
+  },
+
+
+  getManualReviews(params?: { page?: number; page_size?: number }) {
+    return apiClient.get<BasePaginationResponse<PaymentManualReview>>('/admin/payment/orders/manual-reviews', { params })
+  },
+
+  approveManualReview(id: number, note: string) {
+    return apiClient.post(`/admin/payment/orders/${id}/manual-review/approve`, { note })
+  },
+
+  rejectManualReview(id: number, note: string) {
+    return apiClient.post(`/admin/payment/orders/${id}/manual-review/reject`, { note })
   },
 
   /** Cancel an order (admin) */

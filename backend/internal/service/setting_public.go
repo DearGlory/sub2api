@@ -191,6 +191,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyHideCcsImportButton,
 		SettingKeyPurchaseSubscriptionEnabled,
 		SettingKeyPurchaseSubscriptionURL,
+		SettingKeyExternalCardPurchaseEnabled,
+		SettingKeyExternalCardPurchaseURL,
+		SettingKeyExternalCardPurchaseName,
+		SettingKeyExternalCardPurchaseDescription,
+		SettingKeyExternalCardPurchaseDisplayMode,
 		SettingKeyTableDefaultPageSize,
 		SettingKeyTablePageSizeOptions,
 		SettingKeyCustomMenuItems,
@@ -335,6 +340,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		HideCcsImportButton:                 settings[SettingKeyHideCcsImportButton] == "true",
 		PurchaseSubscriptionEnabled:         settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:             strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
+		ExternalCardPurchaseEnabled:         settings[SettingKeyExternalCardPurchaseEnabled] == "true",
+		ExternalCardPurchaseURL:             externalCardPurchaseURL(settings[SettingKeyExternalCardPurchaseURL]),
+		ExternalCardPurchaseName:            externalCardPurchaseName(settings[SettingKeyExternalCardPurchaseName]),
+		ExternalCardPurchaseDescription:     externalCardPurchaseDescription(settings[SettingKeyExternalCardPurchaseDescription]),
+		ExternalCardPurchaseDisplayMode:     NormalizeExternalCardPurchaseDisplayMode(settings[SettingKeyExternalCardPurchaseDisplayMode]),
 		TableDefaultPageSize:                tableDefaultPageSize,
 		TablePageSizeOptions:                tablePageSizeOptions,
 		CustomMenuItems:                     settings[SettingKeyCustomMenuItems],
@@ -594,6 +604,11 @@ type PublicSettingsInjectionPayload struct {
 	HideCcsImportButton                 bool                     `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled         bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL             string                   `json:"purchase_subscription_url"`
+	ExternalCardPurchaseEnabled         bool                     `json:"external_card_purchase_enabled"`
+	ExternalCardPurchaseURL             string                   `json:"external_card_purchase_url"`
+	ExternalCardPurchaseName            string                   `json:"external_card_purchase_name"`
+	ExternalCardPurchaseDescription     string                   `json:"external_card_purchase_description"`
+	ExternalCardPurchaseDisplayMode     string                   `json:"external_card_purchase_display_mode"`
 	TableDefaultPageSize                int                      `json:"table_default_page_size"`
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
 	CustomMenuItems                     json.RawMessage          `json:"custom_menu_items"`
@@ -688,6 +703,11 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		HideCcsImportButton:                 settings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:         settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:             settings.PurchaseSubscriptionURL,
+		ExternalCardPurchaseEnabled:         settings.ExternalCardPurchaseEnabled,
+		ExternalCardPurchaseURL:             settings.ExternalCardPurchaseURL,
+		ExternalCardPurchaseName:            settings.ExternalCardPurchaseName,
+		ExternalCardPurchaseDescription:     settings.ExternalCardPurchaseDescription,
+		ExternalCardPurchaseDisplayMode:     settings.ExternalCardPurchaseDisplayMode,
 		TableDefaultPageSize:                settings.TableDefaultPageSize,
 		TablePageSizeOptions:                settings.TablePageSizeOptions,
 		CustomMenuItems:                     filterUserVisibleMenuItems(settings.CustomMenuItems),
@@ -804,6 +824,11 @@ func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, erro
 	// purchase subscription URL
 	if settings.PurchaseSubscriptionEnabled {
 		addOrigin(settings.PurchaseSubscriptionURL)
+	}
+	if settings.ExternalCardPurchaseEnabled {
+		if ValidateExternalCardPurchaseURL(settings.ExternalCardPurchaseURL) == nil {
+			addOrigin(settings.ExternalCardPurchaseURL)
+		}
 	}
 
 	// all custom menu items (including admin-only, since CSP must allow all iframes)

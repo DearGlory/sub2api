@@ -24,6 +24,8 @@ const appStore = vi.hoisted(() => ({
   publicSettingsLoaded: false,
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
+    external_card_purchase_enabled?: boolean
+    external_card_purchase_url?: string
     risk_control_enabled?: boolean
     subscription_enabled?: boolean
     custom_menu_items?: []
@@ -129,7 +131,7 @@ describe('feature route guard', () => {
       return settings
     })
 
-    const { navigation, next } = runGuard({ requiresPayment: true }, '/purchase')
+    const { navigation, next } = runGuard({ requiresPayment: true, requiresExternalCardPurchase: true }, '/purchase')
 
     await vi.waitFor(() => expect(appStore.fetchPublicSettings).toHaveBeenCalledTimes(1))
     expect(next).not.toHaveBeenCalled()
@@ -176,6 +178,36 @@ describe('feature route guard', () => {
     expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
+  })
+
+  it('allows the purchase route when payments are disabled but external card purchase is enabled', async () => {
+    appStore.cachedPublicSettings = {
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_url: 'https://catfk.com/shop/GloryCode',
+    }
+    appStore.publicSettingsLoaded = true
+
+    const { navigation, next } = runGuard({ requiresPayment: true, requiresExternalCardPurchase: true }, '/purchase')
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith()
+  })
+
+  it('redirects when the external card shop is enabled with an unsafe URL', async () => {
+    appStore.cachedPublicSettings = {
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_url: 'http://catfk.com/shop/GloryCode',
+    }
+    appStore.publicSettingsLoaded = true
+
+    const { navigation, next } = runGuard({ requiresPayment: true, requiresExternalCardPurchase: true }, '/purchase')
+    await navigation
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith('/dashboard')
   })
 })
 

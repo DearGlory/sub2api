@@ -13,6 +13,13 @@ function findField(providerKey: string, key: string) {
   return fields.find(field => field.key === key)
 }
 
+describe('PROVIDER_CONFIG_FIELDS.epusdt', () => {
+  it('limits the checkout configuration to USDT and USD', () => {
+    expect(findField('epusdt', 'token')?.options).toEqual([{ value: 'USDT', label: 'USDT' }])
+    expect(findField('epusdt', 'currency')?.options).toEqual([{ value: 'USD', label: 'USD' }])
+  })
+})
+
 describe('PROVIDER_CONFIG_FIELDS.wxpay', () => {
   it('keeps admin form validation aligned with backend-required credentials', () => {
     expect(findField('wxpay', 'publicKeyId')?.optional).toBeFalsy()

@@ -178,6 +178,12 @@ func TestExtractOutTradeNo(t *testing.T) {
 			rawBody:     `{"name":"payment_intent.succeeded","data":{"object":{"merchant_order_id":"sub2_awx_123"}}}`,
 			want:        "sub2_awx_123",
 		},
+		{
+			name:        "epusdt JSON payload",
+			providerKey: payment.TypeEpusdt,
+			rawBody:     `{"order_id":"sub2_ep_123","trade_id":"trade-123"}`,
+			want:        "sub2_ep_123",
+		},
 	}
 
 	for _, tt := range tests {

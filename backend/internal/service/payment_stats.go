@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"math"
 	"sort"
@@ -177,9 +178,24 @@ func roundAmount(amount float64) float64 {
 
 // --- Audit Logs ---
 
+func writePaymentAuditLogErr(ctx context.Context, client *dbent.Client, oid int64, action, op string, detail map[string]any) error {
+	if client == nil {
+		return fmt.Errorf("audit log client is nil")
+	}
+	dj, err := json.Marshal(detail)
+	if err != nil {
+		return fmt.Errorf("marshal audit detail: %w", err)
+	}
+	_, err = client.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(oid, 10)).SetAction(action).SetDetail(string(dj)).SetOperator(op).Save(ctx)
+	return err
+}
+
+func (s *PaymentService) writeAuditLogErr(ctx context.Context, oid int64, action, op string, detail map[string]any) error {
+	return writePaymentAuditLogErr(ctx, s.entClient, oid, action, op, detail)
+}
+
 func (s *PaymentService) writeAuditLog(ctx context.Context, oid int64, action, op string, detail map[string]any) {
-	dj, _ := json.Marshal(detail)
-	_, err := s.entClient.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(oid, 10)).SetAction(action).SetDetail(string(dj)).SetOperator(op).Save(ctx)
+	err := s.writeAuditLogErr(ctx, oid, action, op, detail)
 	if err != nil {
 		slog.Error("audit log failed", "orderID", oid, "action", action, "error", err)
 	}

@@ -36,6 +36,16 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if !cfg.Enabled {
 		return nil, infraerrors.Forbidden("PAYMENT_DISABLED", "payment system is disabled")
 	}
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+		if !cfg.EpusdtEnabled {
+			return nil, infraerrors.Forbidden("EPUSDT_DISABLED", "USDT recharge is disabled")
+		}
+		req.EpusdtBalanceMultiplier = cfg.EpusdtBalanceMultiplier
+		req.EpusdtGraceMinutes = cfg.EpusdtGraceMinutes
+		if req.EpusdtGraceMinutes < 0 {
+			req.EpusdtGraceMinutes = 0
+		}
+	}
 	plan, err := s.validateOrderInput(ctx, req, cfg)
 	if err != nil {
 		return nil, err
@@ -55,7 +65,11 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	}
 	feeRate := cfg.RechargeFeeRate
 	methodCurrency := payment.DefaultPaymentCurrency
-	if s.configService != nil {
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+		feeRate = cfg.EpusdtFeeRate
+		methodCurrency = "USD"
+	}
+	if s.configService != nil && payment.GetBasePaymentType(req.PaymentType) != payment.TypeEpusdt {
 		methodCurrency, err = s.configService.ValidateMethodCurrencyConsistency(ctx, req.PaymentType)
 		if err != nil {
 			return nil, err
@@ -68,11 +82,16 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		orderAmount = plan.Price
 		limitAmount = plan.Price
 	} else if req.OrderType == payment.OrderTypeBalance {
-		// 阈值按支付金额命中。赠金模式：到账 = 基数 + 赠送；折扣模式：到账 = 基数，实付基数按折扣减少。
-		quote := quoteRechargeBonus(cfg, req.Amount, methodCurrency)
-		limitAmount = quote.PayBase
-		bonusAmount = quote.Bonus
-		orderAmount = quote.Credited
+		if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+			orderAmount = calculateCreditedBalance(req.Amount, cfg.EpusdtBalanceMultiplier)
+			limitAmount = req.Amount
+		} else {
+			// 阈值按支付金额命中。赠金模式：到账 = 基数 + 赠送；折扣模式：到账 = 基数，实付基数按折扣减少。
+			quote := quoteRechargeBonus(cfg, req.Amount, methodCurrency)
+			limitAmount = quote.PayBase
+			bonusAmount = quote.Bonus
+			orderAmount = quote.Credited
+		}
 	}
 	payAmountStr, payAmount, err := calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, methodCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
 	if err != nil {
@@ -88,6 +107,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	selectedCurrency := payment.DefaultPaymentCurrency
 	if sel != nil {
 		selectedCurrency = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
+		if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+			selectedCurrency = "USD"
+		}
 	}
 	if selectedCurrency != methodCurrency {
 		payAmountStr, payAmount, err = calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, selectedCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
@@ -120,6 +142,17 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+		if req.OrderType != payment.OrderTypeBalance {
+			return nil, infraerrors.BadRequest("UNSUPPORTED_PAYMENT_ORDER", "EPUSDT only supports balance recharge")
+		}
+		if strings.TrimSpace(req.RequestedNetwork) == "" {
+			return nil, infraerrors.BadRequest("NETWORK_REQUIRED", "a USDT network must be selected")
+		}
+		if (cfg.EpusdtMinAmount > 0 && req.Amount < cfg.EpusdtMinAmount) || (cfg.EpusdtMaxAmount > 0 && req.Amount > cfg.EpusdtMaxAmount) {
+			return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount is outside USDT limits").WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.EpusdtMinAmount), "max": fmt.Sprintf("%.2f", cfg.EpusdtMaxAmount)})
+		}
+	}
 	// 订单类型必须走白名单：未知类型会跳过充值开关与倍率计算，履约时却仍按余额到账。
 	switch req.OrderType {
 	case payment.OrderTypeBalance:
@@ -134,7 +167,7 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 	if math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
 	}
-	if (cfg.MinAmount > 0 && req.Amount < cfg.MinAmount) || (cfg.MaxAmount > 0 && req.Amount > cfg.MaxAmount) {
+	if payment.GetBasePaymentType(req.PaymentType) != payment.TypeEpusdt && ((cfg.MinAmount > 0 && req.Amount < cfg.MinAmount) || (cfg.MaxAmount > 0 && req.Amount > cfg.MaxAmount)) {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount out of range").
 			WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.MinAmount), "max": fmt.Sprintf("%.2f", cfg.MaxAmount)})
 	}
@@ -168,7 +201,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
-	if err := s.checkDailyLimit(ctx, tx, req.UserID, limitAmount, cfg.DailyLimit); err != nil {
+	dailyLimit := cfg.DailyLimit
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+		dailyLimit = cfg.EpusdtDailyLimit
+	}
+	if err := s.checkDailyLimit(ctx, tx, req.UserID, req.PaymentType, limitAmount, dailyLimit); err != nil {
 		return nil, err
 	}
 	tm := cfg.OrderTimeoutMin
@@ -176,6 +213,9 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		tm = defaultOrderTimeoutMin
 	}
 	exp := time.Now().Add(time.Duration(tm) * time.Minute)
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+		req.EpusdtAutoCreditDeadline = exp.Add(time.Duration(req.EpusdtGraceMinutes) * time.Minute)
+	}
 	outTradeNo, err := s.allocateOutTradeNo(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -316,6 +356,17 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 		}
 		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
 	}
+	if providerKey == payment.TypeEpusdt {
+		snapshot["merchant_id"] = strings.TrimSpace(sel.Config["pid"])
+		snapshot["asset"] = "USDT"
+		snapshot["currency"] = "USD"
+		if requestedNetwork := strings.ToLower(strings.TrimSpace(req.RequestedNetwork)); requestedNetwork != "" {
+			snapshot["requested_network"] = requestedNetwork
+		}
+		snapshot["balance_multiplier"] = req.EpusdtBalanceMultiplier
+		snapshot["grace_minutes"] = req.EpusdtGraceMinutes
+		snapshot["auto_credit_deadline"] = req.EpusdtAutoCreditDeadline.UTC().Format(time.RFC3339Nano)
+	}
 
 	if len(snapshot) == 1 {
 		return nil
@@ -333,7 +384,22 @@ func paymentOrderSnapshotWxpayAppID(sel *payment.InstanceSelection, req CreateOr
 	return strings.TrimSpace(sel.Config["appId"])
 }
 
-func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, userID int64, amount, limit float64) error {
+func dailyLimitUsesOrder(o *dbent.PaymentOrder, paymentType string) bool {
+	if o == nil {
+		return false
+	}
+	requestedBase := payment.GetBasePaymentType(paymentType)
+	if o.OrderType == payment.OrderTypeBalance {
+		orderBase := payment.GetBasePaymentType(o.PaymentType)
+		if requestedBase == payment.TypeEpusdt {
+			return orderBase == payment.TypeEpusdt
+		}
+		return orderBase != payment.TypeEpusdt
+	}
+	return requestedBase != payment.TypeEpusdt
+}
+
+func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, userID int64, paymentType string, amount, limit float64) error {
 	if limit <= 0 {
 		return nil
 	}
@@ -344,11 +410,13 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 	}
 	var used float64
 	for _, o := range orders {
-		if o.OrderType == payment.OrderTypeBalance {
-			used += o.PayAmount
-			continue
+		if dailyLimitUsesOrder(o, paymentType) {
+			if o.OrderType == payment.OrderTypeBalance {
+				used += o.PayAmount
+			} else {
+				used += o.Amount
+			}
 		}
-		used += o.Amount
 	}
 	if used+amount > limit {
 		return infraerrors.TooManyRequests("DAILY_LIMIT_EXCEEDED", "daily_limit_exceeded").
@@ -451,11 +519,12 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, err
 	}
 	providerReq := buildProviderCreatePaymentRequest(CreateOrderRequest{
-		PaymentType: req.PaymentType,
-		OpenID:      req.OpenID,
-		ClientIP:    req.ClientIP,
-		IsMobile:    req.IsMobile,
-		ReturnURL:   providerReturnURL,
+		PaymentType:      req.PaymentType,
+		OpenID:           req.OpenID,
+		ClientIP:         req.ClientIP,
+		IsMobile:         req.IsMobile,
+		RequestedNetwork: req.RequestedNetwork,
+		ReturnURL:        providerReturnURL,
 	}, sel, outTradeNo, payAmountStr, subject)
 	providerReq.AlipayMobilePrecreate = shouldUseAlipayMobilePrecreate(req, cfg, sel)
 	finishProviderCall := servertiming.ObserveDependency(ctx, "payment")
@@ -533,6 +602,7 @@ func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.Inst
 		ClientIP:           req.ClientIP,
 		IsMobile:           req.IsMobile,
 		InstanceSubMethods: selectedInstanceSupportedTypes(sel),
+		RequestedNetwork:   strings.TrimSpace(req.RequestedNetwork),
 	}
 }
 

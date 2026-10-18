@@ -277,6 +277,24 @@ func TestGetAvailableMethodLimitsIncludesEasyPayCustomMethodDisplayName(t *testi
 	require.Equal(t, "LDC Pay", limits.DisplayName)
 }
 
+func TestFilterVisibleCheckoutMethodsRecomputesGlobalRange(t *testing.T) {
+	svc := &PaymentConfigService{}
+	resp := &MethodLimitsResponse{
+		Methods: map[string]MethodLimits{
+			payment.TypeAlipay: {PaymentType: payment.TypeAlipay, SingleMin: 10, SingleMax: 100},
+			payment.TypeEpusdt: {PaymentType: payment.TypeEpusdt, SingleMin: 1, SingleMax: 1000},
+		},
+		GlobalMin: 1,
+		GlobalMax: 1000,
+	}
+
+	svc.FilterVisibleCheckoutMethods(resp, &PaymentConfig{EpusdtEnabled: false})
+
+	require.NotContains(t, resp.Methods, payment.TypeEpusdt)
+	require.Equal(t, 10.0, resp.GlobalMin)
+	require.Equal(t, 100.0, resp.GlobalMax)
+}
+
 func TestPcComputeGlobalRange(t *testing.T) {
 	t.Parallel()
 

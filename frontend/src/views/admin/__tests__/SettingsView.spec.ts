@@ -724,6 +724,101 @@ describe("admin SettingsView payment visible method controls", () => {
     adminSettingsFetch.mockResolvedValue(undefined);
   });
 
+  it("loads and saves external purchase configuration from the payment tab while internal payments are off", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_url: "https://shop.example.test/cards",
+      external_card_purchase_name: "余额码商城",
+      external_card_purchase_description: "购买后回本站兑换",
+      external_card_purchase_display_mode: "both",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const card = wrapper.get('[data-testid="external-card-settings"]');
+    expect(card.isVisible()).toBe(true);
+    expect(card.get<HTMLInputElement>('[data-testid="external-card-name"]').element.value).toBe("余额码商城");
+    expect(card.get<HTMLTextAreaElement>('[data-testid="external-card-description"]').element.value).toBe("购买后回本站兑换");
+    await card.get('[data-testid="external-card-name"]').setValue("新的购卡入口");
+    await card.get('[data-testid="external-card-description"]').setValue("先购卡，再兑换");
+    await card.get('[data-testid="external-card-display-mode"]').setValue("new_window");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_url: "https://shop.example.test/cards",
+      external_card_purchase_name: "新的购卡入口",
+      external_card_purchase_description: "先购卡，再兑换",
+      external_card_purchase_display_mode: "new_window",
+    }));
+    wrapper.unmount();
+  });
+
+  it("loads and saves independent USDT pricing in payment settings", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      payment_epusdt_enabled: true,
+      payment_epusdt_balance_multiplier: 1.5,
+      payment_epusdt_fee_rate: 2,
+      payment_epusdt_min_amount: 5,
+      payment_epusdt_max_amount: 200,
+      payment_epusdt_daily_limit: 500,
+      payment_epusdt_grace_minutes: 30,
+      payment_epusdt_help_text: "联系客服核对",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const card = wrapper.find('[data-testid="epusdt-settings"]');
+    expect(card.exists()).toBe(true);
+    expect(card.isVisible()).toBe(true);
+    expect(card.get<HTMLInputElement>('[data-testid="epusdt-multiplier"]').element.value).toBe("1.5");
+    await card.get('[data-testid="epusdt-multiplier"]').setValue("1.25");
+    await card.get('[data-testid="epusdt-fee-rate"]').setValue("1");
+    await card.get('[data-testid="epusdt-grace"]').setValue("45");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      payment_epusdt_enabled: true,
+      payment_epusdt_balance_multiplier: 1.25,
+      payment_epusdt_fee_rate: 1,
+      payment_epusdt_min_amount: 5,
+      payment_epusdt_max_amount: 200,
+      payment_epusdt_daily_limit: 500,
+      payment_epusdt_grace_minutes: 45,
+      payment_epusdt_help_text: "联系客服核对",
+      payment_balance_recharge_multiplier: 1,
+      payment_recharge_fee_rate: 0,
+    }));
+    wrapper.unmount();
+  });
+
+  it("makes EPUSDT provider cards manageable from the independent USDT switch", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, payment_enabled_types: [], payment_epusdt_enabled: true });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const list = wrapper.findComponent({ name: "PaymentProviderList" });
+    expect(list.props("enabledPaymentTypes")).toContain("epusdt");
+    expect(list.props("canCreate")).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("offers EPUSDT in the provider creation dialog when enabled", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, payment_enabled_types: ["epusdt"] });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const dialog = wrapper.findComponent({ name: "PaymentProviderDialog" });
+    expect(dialog.exists()).toBe(true);
+    expect(dialog.props("allKeyOptions")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "epusdt" })]));
+    expect(dialog.props("enabledKeyOptions")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "epusdt" })]));
+    wrapper.unmount();
+  });
+
   it("loads and saves the open button visibility for each custom menu", async () => {
     const menuItems = [
       { id: "docs", label: "Docs", url: "https://example.com/docs", icon_svg: "", visibility: "user", sort_order: 0 },

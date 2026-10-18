@@ -67,6 +67,11 @@ func (h *PaymentWebhookHandler) AirwallexWebhook(c *gin.Context) {
 	h.handleNotify(c, payment.TypeAirwallex)
 }
 
+// EPUSDTWebhook handles GMPay/EPUSDT JSON callbacks.
+func (h *PaymentWebhookHandler) EPUSDTWebhook(c *gin.Context) {
+	h.handleNotify(c, payment.TypeEpusdt)
+}
+
 // handleNotify is the shared logic for all provider webhook handlers.
 func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string) {
 	var rawBody string
@@ -122,6 +127,23 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 		writeSuccessResponse(c, resolvedProviderKey)
 		return
 	}
+	if resolvedProviderKey == payment.TypeEpusdt && notification.Status == payment.ProviderStatusPending {
+		// GMPay's callback has no network proof. Keep the order pending and
+		// record an auditable manual-review event; never treat the callback as
+		// a balance credit.
+		slog.Warn("[Payment Webhook] EPUSDT payment requires manual network review", "outTradeNo", notification.OrderID, "tradeNo", notification.TradeNo)
+		if err := h.paymentService.RecordPaymentManualReview(c.Request.Context(), notification); err != nil {
+			if errors.Is(err, service.ErrOrderNotFound) {
+				writeSuccessResponse(c, resolvedProviderKey)
+				return
+			}
+			slog.Error("[Payment Webhook] failed to record EPUSDT manual review", "outTradeNo", notification.OrderID, "error", err)
+			c.String(http.StatusInternalServerError, "review record failed")
+			return
+		}
+		writeSuccessResponse(c, resolvedProviderKey)
+		return
+	}
 
 	if err := h.paymentService.ConfirmNotificationUpstream(c.Request.Context(), verifiedProvider, notification); err != nil {
 		slog.Error("[Payment Webhook] upstream confirmation failed", "provider", resolvedProviderKey, "outTradeNo", notification.OrderID, "tradeNo", notification.TradeNo, "error", err)
@@ -171,6 +193,13 @@ func extractOutTradeNo(rawBody, providerKey string) string {
 		}
 		if err := json.Unmarshal([]byte(rawBody), &payload); err == nil {
 			return strings.TrimSpace(payload.Data.Object.MerchantOrderID)
+		}
+	case payment.TypeEpusdt:
+		var payload struct {
+			OrderID string `json:"order_id"`
+		}
+		if err := json.Unmarshal([]byte(rawBody), &payload); err == nil {
+			return strings.TrimSpace(payload.OrderID)
 		}
 	}
 	// For other providers (Stripe, Alipay direct, WxPay direct), the registry

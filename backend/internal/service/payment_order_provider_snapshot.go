@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
@@ -18,6 +20,11 @@ type paymentOrderProviderSnapshot struct {
 	MerchantAppID      string
 	MerchantID         string
 	Currency           string
+	Asset              string
+	RequestedNetwork   string
+	GraceMinutes       int
+	GraceMinutesSet    bool
+	AutoCreditDeadline time.Time
 }
 
 func psOrderProviderSnapshot(order *dbent.PaymentOrder) *paymentOrderProviderSnapshot {
@@ -33,6 +40,11 @@ func psOrderProviderSnapshot(order *dbent.PaymentOrder) *paymentOrderProviderSna
 		MerchantAppID:      psSnapshotStringValue(order.ProviderSnapshot["merchant_app_id"]),
 		MerchantID:         psSnapshotStringValue(order.ProviderSnapshot["merchant_id"]),
 		Currency:           psSnapshotStringValue(order.ProviderSnapshot["currency"]),
+		Asset:              psSnapshotStringValue(order.ProviderSnapshot["asset"]),
+		RequestedNetwork:   psSnapshotStringValue(order.ProviderSnapshot["requested_network"]),
+		GraceMinutes:       psSnapshotIntValue(order.ProviderSnapshot["grace_minutes"]),
+		GraceMinutesSet:    hasPaymentOrderSnapshotKey(order.ProviderSnapshot, "grace_minutes"),
+		AutoCreditDeadline: psSnapshotTimeValue(order.ProviderSnapshot["auto_credit_deadline"]),
 	}
 	if snapshot.SchemaVersion == 0 &&
 		snapshot.ProviderInstanceID == "" &&
@@ -40,10 +52,19 @@ func psOrderProviderSnapshot(order *dbent.PaymentOrder) *paymentOrderProviderSna
 		snapshot.PaymentMode == "" &&
 		snapshot.MerchantAppID == "" &&
 		snapshot.MerchantID == "" &&
-		snapshot.Currency == "" {
+		snapshot.Currency == "" &&
+		snapshot.Asset == "" &&
+		snapshot.RequestedNetwork == "" &&
+		!snapshot.GraceMinutesSet &&
+		snapshot.AutoCreditDeadline.IsZero() {
 		return nil
 	}
 	return snapshot
+}
+
+func hasPaymentOrderSnapshotKey(snapshot map[string]any, key string) bool {
+	_, ok := snapshot[key]
+	return ok
 }
 
 func psSnapshotStringValue(value any) string {
@@ -53,6 +74,18 @@ func psSnapshotStringValue(value any) string {
 	default:
 		return ""
 	}
+}
+
+func psSnapshotTimeValue(value any) time.Time {
+	text := psSnapshotStringValue(value)
+	if text == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, text)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 func psSnapshotIntValue(value any) int {
@@ -74,6 +107,52 @@ func psSnapshotIntValue(value any) int {
 		}
 	}
 	return 0
+}
+
+func effectiveEpusdtAutoCreditDeadline(order *dbent.PaymentOrder, snapshot *paymentOrderProviderSnapshot) (time.Time, bool) {
+	if order == nil || snapshot == nil {
+		return time.Time{}, false
+	}
+	if !snapshot.AutoCreditDeadline.IsZero() {
+		return snapshot.AutoCreditDeadline, true
+	}
+	if snapshot.GraceMinutesSet {
+		graceMinutes := snapshot.GraceMinutes
+		if graceMinutes < 0 {
+			graceMinutes = 0
+		}
+		return order.ExpiresAt.Add(time.Duration(graceMinutes) * time.Minute), true
+	}
+	return order.ExpiresAt.Add(30 * time.Minute), true
+}
+func freezeEpusdtAutoCreditDeadline(order *dbent.PaymentOrder, finalStatus string, now time.Time) map[string]any {
+	if order == nil || payment.GetBasePaymentType(order.PaymentType) != payment.TypeEpusdt || len(order.ProviderSnapshot) == 0 {
+		return nil
+	}
+	snapshot := make(map[string]any, len(order.ProviderSnapshot))
+	for key, value := range order.ProviderSnapshot {
+		snapshot[key] = value
+	}
+	parsed := psOrderProviderSnapshot(order)
+	if parsed == nil {
+		return nil
+	}
+	graceMinutes := parsed.GraceMinutes
+	if !parsed.GraceMinutesSet {
+		graceMinutes = 30
+	}
+	if graceMinutes < 0 {
+		graceMinutes = 0
+	}
+	base := now
+	if finalStatus == OrderStatusExpired {
+		base = order.ExpiresAt
+	}
+	candidate := base.Add(time.Duration(graceMinutes) * time.Minute)
+	if parsed.AutoCreditDeadline.IsZero() || candidate.Before(parsed.AutoCreditDeadline) {
+		snapshot["auto_credit_deadline"] = candidate.UTC().Format(time.RFC3339Nano)
+	}
+	return snapshot
 }
 
 func (s *PaymentService) resolveSnapshotOrderProviderInstance(ctx context.Context, order *dbent.PaymentOrder, snapshot *paymentOrderProviderSnapshot) (*dbent.PaymentProviderInstance, error) {
@@ -197,6 +276,23 @@ func validateProviderSnapshotMetadata(order *dbent.PaymentOrder, providerKey str
 			if !strings.EqualFold(expected, actual) {
 				return fmt.Errorf("stripe currency mismatch: expected %s, got %s", expected, actual)
 			}
+		}
+	case payment.TypeEpusdt:
+		if actual := strings.TrimSpace(metadata["pid"]); actual == "" {
+			return fmt.Errorf("epusdt notification missing pid")
+		} else if expected := strings.TrimSpace(snapshot.MerchantID); expected != "" && !strings.EqualFold(expected, actual) {
+			return fmt.Errorf("epusdt pid mismatch: expected %s, got %s", expected, actual)
+		}
+		if actual := strings.TrimSpace(metadata["token"]); !strings.EqualFold(actual, "USDT") {
+			return fmt.Errorf("epusdt notification token mismatch: expected USDT, got %s", actual)
+		}
+		if actual := strings.TrimSpace(metadata["actual_amount"]); actual == "" {
+			return fmt.Errorf("epusdt notification missing actual amount")
+		} else if amount, err := strconv.ParseFloat(actual, 64); err != nil || amount <= 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
+			return fmt.Errorf("epusdt notification actual amount is invalid")
+		}
+		if actual := strings.TrimSpace(metadata["block_transaction_id"]); actual == "" {
+			return fmt.Errorf("epusdt notification missing blockchain transaction")
 		}
 	case payment.TypeAirwallex:
 		if expected := strings.TrimSpace(snapshot.MerchantID); expected != "" {

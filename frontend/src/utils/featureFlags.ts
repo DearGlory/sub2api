@@ -124,6 +124,11 @@ export const FeatureFlags = {
     mode: 'opt-out',
     label: 'Payment',
   }),
+  externalCardPurchase: defineFlag({
+    key: 'external_card_purchase_enabled',
+    mode: 'opt-in',
+    label: 'External Card Purchase',
+  }),
   riskControl: defineFlag({
     key: 'risk_control_enabled',
     mode: 'opt-in',

@@ -347,6 +347,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
+	updates[SettingKeyExternalCardPurchaseEnabled] = strconv.FormatBool(settings.ExternalCardPurchaseEnabled)
+	updates[SettingKeyExternalCardPurchaseURL] = strings.TrimSpace(settings.ExternalCardPurchaseURL)
+	updates[SettingKeyExternalCardPurchaseName] = strings.TrimSpace(settings.ExternalCardPurchaseName)
+	updates[SettingKeyExternalCardPurchaseDescription] = strings.TrimSpace(settings.ExternalCardPurchaseDescription)
+	updates[SettingKeyExternalCardPurchaseDisplayMode] = NormalizeExternalCardPurchaseDisplayMode(settings.ExternalCardPurchaseDisplayMode)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(
 		settings.TableDefaultPageSize,
 		settings.TablePageSizeOptions,

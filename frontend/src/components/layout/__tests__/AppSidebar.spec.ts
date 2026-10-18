@@ -79,4 +79,9 @@ describe('AppSidebar subscription feature flag', () => {
     expect(componentSource).toMatch(/case 'subscription_only':\s*return t\('nav\.subscribe'\)/)
     expect(componentSource).toMatch(/path: '\/purchase'[^\n]*label: purchaseNavLabel\.value/)
   })
+
+  it('gates the purchase entry independently from the internal payment flag', () => {
+    expect(componentSource).toContain('flagExternalCardPurchase')
+    expect(componentSource).toContain('flagPayment() || flagExternalCardPurchase()')
+  })
 })

@@ -19,7 +19,7 @@ export type OrderStatus =
   | 'REFUNDED'
   | 'REFUND_FAILED'
 
-export type PaymentType = 'alipay' | 'wxpay' | 'alipay_direct' | 'wxpay_direct' | 'stripe' | 'easypay' | 'airwallex'
+export type PaymentType = 'alipay' | 'wxpay' | 'alipay_direct' | 'wxpay_direct' | 'stripe' | 'easypay' | 'airwallex' | 'epusdt'
 
 export type OrderType = 'balance' | 'subscription'
 
@@ -57,6 +57,7 @@ export interface MethodLimit {
   single_max: number
   fee_rate: number
   available: boolean
+  networks?: string[]
 }
 
 /** Response from /payment/limits API */
@@ -77,6 +78,14 @@ export interface CheckoutInfoResponse {
   /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
   subscription_usd_to_cny_rate: number
   recharge_fee_rate: number
+  epusdt_enabled?: boolean
+  epusdt_balance_multiplier?: number
+  epusdt_fee_rate?: number
+  epusdt_min_amount?: number
+  epusdt_max_amount?: number
+  epusdt_daily_limit?: number
+  epusdt_grace_minutes?: number
+  epusdt_help_text?: string
   /** 充值赠送阶梯（按 min_amount 升序）；缺失/空数组 = 不赠送 */
   recharge_bonus_tiers?: RechargeBonusTier[]
   /** 阶梯模式：bonus 赠金 / discount 折扣；缺失按 bonus */
@@ -94,6 +103,20 @@ export interface CheckoutInfoResponse {
 
 // ==================== Orders ====================
 
+export interface PaymentManualReview {
+  order_id: number
+  out_trade_no: string
+  user_id: number
+  amount: number
+  pay_amount: number
+  currency: string
+  requested_network: string
+  trade_no: string
+  status: string
+  detail: string
+  created_at: string
+  operator: string
+}
 export interface PaymentOrder {
   id: number
   user_id: number
@@ -189,6 +212,7 @@ export interface CreateOrderRequest {
   payment_source?: string
   openid?: string
   wechat_resume_token?: string
+  requested_network?: string
   is_mobile?: boolean
 }
 

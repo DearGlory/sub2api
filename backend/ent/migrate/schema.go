@@ -1187,6 +1187,14 @@ var (
 				},
 			},
 			{
+				Name:    "paymentorder_payment_trade_no",
+				Unique:  true,
+				Columns: []*schema.Column{PaymentOrdersColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "payment_type = 'epusdt' AND payment_trade_no <> ''",
+				},
+			},
+			{
 				Name:    "paymentorder_user_id",
 				Unique:  false,
 				Columns: []*schema.Column{PaymentOrdersColumns[40]},

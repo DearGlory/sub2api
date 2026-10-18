@@ -121,6 +121,56 @@ func TestPrepareRefundRejectsLegacyGuessedProviderInstance(t *testing.T) {
 	require.Equal(t, "REFUND_DISABLED", infraerrors.Reason(err))
 }
 
+func TestPrepareRefundRejectsEpusdtOrders(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("refund-epusdt@example.com").
+		SetPasswordHash("hash").
+		SetUsername("refund-epusdt-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	inst, err := client.PaymentProviderInstance.Create().
+		SetProviderKey(payment.TypeEpusdt).
+		SetName("epusdt-refund-provider").
+		SetConfig("{}").
+		SetSupportedTypes("epusdt").
+		SetEnabled(true).
+		SetRefundEnabled(true).
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(100).
+		SetPayAmount(100).
+		SetFeeRate(0).
+		SetRechargeCode("REFUND-EPUSDT-ORDER").
+		SetOutTradeNo("sub2_refund_epusdt_order").
+		SetPaymentType(payment.TypeEpusdt).
+		SetPaymentTradeNo("trade-epusdt-refund").
+		SetProviderInstanceID(strconv.FormatInt(inst.ID, 10)).
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusCompleted).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetPaidAt(time.Now()).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{entClient: client}
+	plan, result, err := svc.PrepareRefund(ctx, order.ID, 0, "", false, false)
+	require.Nil(t, plan)
+	require.Nil(t, result)
+	require.Error(t, err)
+	require.Equal(t, "REFUND_UNSUPPORTED", infraerrors.Reason(err))
+}
+
 func TestPrepDeductBalanceRequiresForceWhenBalanceIsInsufficient(t *testing.T) {
 	for _, tc := range []struct {
 		name        string

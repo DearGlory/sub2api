@@ -49,6 +49,9 @@ declare module 'vue-router' {
      */
     requiresPayment?: boolean
 
+    /** Whether the external card shop may keep the purchase route available. */
+    requiresExternalCardPurchase?: boolean
+
     /**
      * 是否要求风控中心功能开关已启用
      * @default false
