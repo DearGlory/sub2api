@@ -300,6 +300,7 @@ class HttpApiTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as context:
             urllib.request.urlopen(base + "/rates/cny.json")
         self.assertEqual(context.exception.code, 503)
+        context.exception.close()
         with urllib.request.urlopen(base + "/health") as response:
             self.assertEqual(json.load(response)["status"], "not_ready")
 
