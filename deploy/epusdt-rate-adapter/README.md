@@ -52,6 +52,30 @@ python rate_adapter.py --port 18084 --timeout 5 --cache-ttl 60 --max-age 300 --c
 
 端口可配置，但服务端绑定地址固定为 `127.0.0.1`。生产示例使用专用非登录用户和 systemd 的 `StateDirectory`，见 `systemd/epusdt-rate-adapter.service`。nginx 示例只代理三个固定 GET 路径并关闭转发请求头，见 `nginx/epusdt-rate-adapter.conf`。
 
+## systemd 部署前提
+
+以下为 Linux/systemd 目标机的部署步骤，需在获准部署后由管理员执行；本地单元测试不会创建系统账户。先确认目标机提供 Python 3.10 或更高版本，以及 `/usr/sbin/nologin`。
+
+```sh
+set -eu
+command -v python3
+python3 --version
+test -x /usr/sbin/nologin
+getent group epusdt-rate >/dev/null || groupadd --system epusdt-rate
+if ! id -u epusdt-rate >/dev/null 2>&1; then
+    useradd --system --gid epusdt-rate --no-create-home \
+        --home-dir /nonexistent --shell /usr/sbin/nologin epusdt-rate
+fi
+getent passwd epusdt-rate
+id epusdt-rate
+```
+
+已有同名账户时，先核实它是专用非登录账户、主组为 `epusdt-rate`，且无额外特权；不要覆盖或重新分配现有账户。用户/组缺失时不得启动服务，否则 systemd 会以 `217/USER` 失败。
+
+安装经校验的 `rate_adapter.py` 至 unit 指定的目录（目录 `0755`、文件 `0644`、root 所有，服务用户可读但不可改），并安装 unit 后，执行 `systemd-analyze verify` 检查该 unit。确认监听端口未被其他服务占用，再执行 `systemctl daemon-reload` 和 `systemctl enable --now epusdt-rate-adapter.service`。`StateDirectory` 由 systemd 管理，不需给应用目录写权限。
+
+启动后分别验证 systemd 状态、loopback 的 `/health` 与 `/rates/cny.json`；必须核对实际报价及时间，不能仅以进程运行作为报价就绪证据。Nginx 片段先测试配置再 reload，最后回读 HTTPS 报价。此侧服务启动不代表允许恢复本站新建支付订单。
+
 ## 测试与联网 smoke
 
 离线单元/并发测试不访问币安：
