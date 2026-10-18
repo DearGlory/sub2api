@@ -19,8 +19,8 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/accountpassword"
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -1409,6 +1409,9 @@ func isReservedEmail(email string) bool {
 // 使用新的access_token_expire_minutes配置项（如果配置了），否则回退到expire_hour。
 // 会话指纹（IP/UA）从 ctx 中提取（由 HTTP 入口中间件注入），缺失时生成不带绑定的 token。
 func (s *AuthService) GenerateToken(ctx context.Context, user *User) (string, error) {
+	if s == nil || s.cfg == nil || user == nil {
+		return "", errors.New("token service not configured")
+	}
 	sessionID, err := randomHexString(8)
 	if err != nil {
 		return "", fmt.Errorf("generate session id: %w", err)
@@ -1459,19 +1462,14 @@ func (s *AuthService) GetAccessTokenExpiresIn() int {
 	return s.cfg.JWT.ExpireHour * 3600
 }
 
-// HashPassword 使用bcrypt加密密码
+// HashPassword uses the account password codec for all newly written passwords.
 func (s *AuthService) HashPassword(password string) (string, error) {
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedBytes), nil
+	return accountpassword.Hash(password)
 }
 
-// CheckPassword 验证密码是否匹配
+// CheckPassword verifies current Argon2id and legacy bcrypt account hashes.
 func (s *AuthService) CheckPassword(password, hashedPassword string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-	return err == nil
+	return accountpassword.Verify(password, hashedPassword)
 }
 
 // RefreshToken 刷新token
@@ -1687,6 +1685,9 @@ type TokenPairWithUser struct {
 // GenerateTokenPair 生成Access Token和Refresh Token对
 // familyID: 可选的Token家族ID，用于Token轮转时保持家族关系
 func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, familyID string) (*TokenPair, error) {
+	if s == nil || s.cfg == nil || user == nil {
+		return nil, errors.New("token service not configured")
+	}
 	// 检查 refreshTokenCache 是否可用
 	if s.refreshTokenCache == nil {
 		return nil, errors.New("refresh token cache not configured")

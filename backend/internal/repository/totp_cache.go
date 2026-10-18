@@ -109,6 +109,24 @@ func (c *TotpCache) DeleteLoginSession(ctx context.Context, tempToken string) er
 	return c.rdb.Del(ctx, key).Err()
 }
 
+// ConsumeLoginSession atomically reads and deletes a pending login session.
+// GETDEL prevents concurrent MFA requests from replaying the same session.
+func (c *TotpCache) ConsumeLoginSession(ctx context.Context, tempToken string) (*service.TotpLoginSession, error) {
+	key := totpLoginKeyPrefix + tempToken
+	data, err := c.rdb.GetDel(ctx, key).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("consume login session: %w", err)
+	}
+	var session service.TotpLoginSession
+	if err := json.Unmarshal(data, &session); err != nil {
+		return nil, fmt.Errorf("unmarshal login session: %w", err)
+	}
+	return &session, nil
+}
+
 // IncrementVerifyAttempts increments the verify attempt counter
 func (c *TotpCache) IncrementVerifyAttempts(ctx context.Context, userID int64) (int, error) {
 	key := fmt.Sprintf("%s%d", totpAttemptsKeyPrefix, userID)

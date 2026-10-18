@@ -3,7 +3,7 @@ package service
 import (
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/accountpassword"
 )
 
 type User struct {
@@ -97,7 +97,7 @@ func (u *User) CanBindGroup(groupID int64, isExclusive bool) bool {
 }
 
 func (u *User) SetPassword(password string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := accountpassword.Hash(password)
 	if err != nil {
 		return err
 	}
@@ -106,5 +106,5 @@ func (u *User) SetPassword(password string) error {
 }
 
 func (u *User) CheckPassword(password string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) == nil
+	return accountpassword.Verify(password, u.PasswordHash)
 }

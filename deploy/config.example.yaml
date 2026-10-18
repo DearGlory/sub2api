@@ -963,6 +963,24 @@ totp:
   encryption_key: ""
 
 # =============================================================================
+# Password Copy (administrator-requested local password copy)
+# 密码副本（管理员要求的本地密码副本）
+# =============================================================================
+# Copies are written only after a password login has passed MFA (when enabled)
+# and token issuance has succeeded. The file is the latest successful-login
+# copy; password changes do not rewrite it until the next successful login.
+# OAuth-only, refresh-token, failed-password, failed/incomplete MFA and
+# disabled-user flows do not write a copy.
+# 副本仅在密码登录完成 MFA（如启用）且 token 签发成功后写入；OAuth-only、刷新令牌、
+# 密码错误、MFA 失败/未完成和禁用用户流程均不会写入。副本按最后一次成功登录
+# 保存，改密不会实时重写，直到下一次成功登录。环境变量可用 PASSWORD_COPY_ENABLED=false。
+password_copy:
+  enabled: true
+  # The directory is normalized to an absolute path at load time.
+  # 该目录在配置加载时归一化为绝对路径。
+  directory: "./data/password-copies"
+
+# =============================================================================
 # LinuxDo Connect OAuth Login (SSO)
 # LinuxDo Connect OAuth 登录（用于 Sub2API 用户登录）
 # =============================================================================

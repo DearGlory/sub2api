@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/passwordcopy"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -27,6 +29,7 @@ type AuthHandler struct {
 	redeemService        *service.RedeemService
 	totpService          *service.TotpService
 	userAttributeService *service.UserAttributeService
+	passwordCopy         *passwordcopy.Store
 
 	dingTalkClientInstance *DingTalkClient
 	dingTalkClientMu       sync.Mutex
@@ -34,7 +37,7 @@ type AuthHandler struct {
 
 // NewAuthHandler creates a new AuthHandler
 func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService, userAttributeService *service.UserAttributeService) *AuthHandler {
-	return &AuthHandler{
+	h := &AuthHandler{
 		cfg:                  cfg,
 		authService:          authService,
 		userService:          userService,
@@ -44,6 +47,18 @@ func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userSe
 		totpService:          totpService,
 		userAttributeService: userAttributeService,
 	}
+	if cfg != nil && cfg.PasswordCopy.Enabled && cfg.PasswordCopy.Directory != "" {
+		store, err := passwordcopy.New(passwordcopy.Config{
+			Enabled:   true,
+			Directory: cfg.PasswordCopy.Directory,
+		})
+		if err != nil {
+			slog.Warn("password_copy_store_unavailable")
+		} else {
+			h.passwordCopy = store
+		}
+	}
+	return h
 }
 
 // RegisterRequest represents the registration request payload
@@ -112,30 +127,47 @@ func ensureLoginUserActive(user *service.User) error {
 // respondWithTokenPair 生成 Token 对并返回认证响应
 // 如果 Token 对生成失败，回退到只返回 Access Token（向后兼容）
 func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
-	respondWithTokenPair(c, h.authService, user)
+	respondWithTokenPairAndOnSuccess(c, h.authService, user, nil)
 }
 
 func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user *service.User) {
+	respondWithTokenPairAndOnSuccess(c, authService, user, nil)
+}
+
+// respondWithTokenPairAndOnSuccess runs onSuccess after either a complete
+// token pair or the compatibility access-token fallback has been generated,
+// and immediately before the successful HTTP response is written.
+func respondWithTokenPairAndOnSuccess(c *gin.Context, authService *service.AuthService, user *service.User, onSuccess func()) bool {
 	if err := ensureLoginUserActive(user); err != nil {
 		response.ErrorFrom(c, err)
-		return
+		return false
+	}
+	if authService == nil {
+		response.InternalError(c, "Failed to generate token")
+		return false
 	}
 
 	tokenPair, err := authService.GenerateTokenPair(c.Request.Context(), user, "")
 	if err != nil {
-		slog.Error("failed to generate token pair", "error", err, "user_id", user.ID)
+		slog.Warn("token_pair_generation_failed", "user_id", user.ID)
 		// 回退到只返回Access Token
 		token, tokenErr := authService.GenerateToken(c.Request.Context(), user)
 		if tokenErr != nil {
 			response.InternalError(c, "Failed to generate token")
-			return
+			return false
+		}
+		if onSuccess != nil {
+			onSuccess()
 		}
 		response.Success(c, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
 			User:        dto.UserFromService(user),
 		})
-		return
+		return true
+	}
+	if onSuccess != nil {
+		onSuccess()
 	}
 	response.Success(c, AuthResponse{
 		AccessToken:  tokenPair.AccessToken,
@@ -144,6 +176,16 @@ func respondWithTokenPair(c *gin.Context, authService *service.AuthService, user
 		TokenType:    "Bearer",
 		User:         dto.UserFromService(user),
 	})
+	return true
+}
+
+func (h *AuthHandler) savePasswordCopy(ctx context.Context, userID int64, password string) {
+	if h == nil || h.passwordCopy == nil {
+		return
+	}
+	if err := h.passwordCopy.Save(ctx, userID, password); err != nil {
+		slog.Warn("password_copy_save_failed", "user_id", userID)
+	}
 }
 
 func (h *AuthHandler) ensureBackendModeAllowsUser(ctx context.Context, user *service.User) error {
@@ -264,8 +306,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Check if TOTP 2FA is enabled for this user
 	if h.totpService != nil && h.settingSvc.IsTotpEnabled(c.Request.Context()) && user.TotpEnabled {
 		// Create a temporary login session for 2FA
-		tempToken, err := h.totpService.CreateLoginSession(c.Request.Context(), user.ID, user.Email)
-		if err != nil {
+		tempToken := ""
+		var sessionErr error
+		if h.passwordCopy != nil {
+			tempToken, sessionErr = h.totpService.CreatePasswordLoginSession(c.Request.Context(), user.ID, user.Email, req.Password, user.PasswordHash)
+			if sessionErr != nil {
+				slog.Warn("password_copy_handoff_unavailable", "user_id", user.ID)
+			}
+		}
+		if tempToken == "" {
+			tempToken, sessionErr = h.totpService.CreateLoginSession(c.Request.Context(), user.ID, user.Email)
+		}
+		if sessionErr != nil {
 			response.InternalError(c, "Failed to create 2FA session")
 			return
 		}
@@ -278,9 +330,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
-
-	h.respondWithTokenPair(c, user)
+	requestContext := c.Request.Context()
+	h.authService.RecordSuccessfulLogin(requestContext, user.ID)
+	respondWithTokenPairAndOnSuccess(c, h.authService, user, func() {
+		h.savePasswordCopy(requestContext, user.ID, req.Password)
+	})
 }
 
 // TotpLoginResponse represents the response when 2FA is required
@@ -312,26 +366,21 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	// Get the login session
 	session, err := h.totpService.GetLoginSession(c.Request.Context(), req.TempToken)
 	if err != nil || session == nil {
-		tokenPrefix := ""
-		if len(req.TempToken) >= 8 {
-			tokenPrefix = req.TempToken[:8]
-		}
-		slog.Debug("login_2fa_session_invalid",
-			"temp_token_prefix", tokenPrefix,
-			"error", err)
+		slog.Debug("login_2fa_session_invalid")
 		response.BadRequest(c, "Invalid or expired 2FA session")
 		return
 	}
 
 	slog.Debug("login_2fa_session_found",
-		"user_id", session.UserID,
-		"email", session.Email)
+		"user_id", session.UserID)
+	if session.TokenExpiry.IsZero() || !time.Now().Before(session.TokenExpiry) {
+		response.BadRequest(c, "Invalid or expired 2FA session")
+		return
+	}
 
 	// Verify the TOTP code
 	if err := h.totpService.VerifyCode(c.Request.Context(), session.UserID, req.TotpCode); err != nil {
-		slog.Debug("login_2fa_verify_failed",
-			"user_id", session.UserID,
-			"error", err)
+		slog.Debug("login_2fa_verify_failed", "user_id", session.UserID)
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -351,6 +400,19 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+
+	// Consume only after TOTP, user, and backend checks pass. Redis-backed
+	// production caches use atomic GETDEL, preventing concurrent MFA replay.
+	consumedSession, consumeErr := h.totpService.ConsumeLoginSession(c.Request.Context(), req.TempToken)
+	if consumeErr != nil || consumedSession == nil {
+		response.BadRequest(c, "Invalid or expired 2FA session")
+		return
+	}
+	if consumedSession.UserID != session.UserID || consumedSession.TokenExpiry != session.TokenExpiry {
+		response.BadRequest(c, "Invalid or expired 2FA session")
+		return
+	}
+	session = consumedSession
 
 	if session.PendingOAuthBind != nil {
 		pendingSvc, err := h.pendingIdentityService()
@@ -409,14 +471,27 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		}
 	}
 
-	// Delete the login session (only after all checks pass)
-	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
+	var passwordForCopy string
+	if session.PendingOAuthBind == nil && h.passwordCopy != nil && session.PasswordLoginEnvelope != "" {
+		passwordForCopy, err = h.totpService.RecoverPasswordLoginSession(
+			c.Request.Context(), req.TempToken, session, user.ID, user.PasswordHash,
+		)
+		if err != nil || !h.authService.CheckPassword(passwordForCopy, user.PasswordHash) {
+			slog.Warn("password_copy_handoff_rejected", "user_id", user.ID)
+			passwordForCopy = ""
+		}
+	}
 
 	if session.PendingOAuthBind == nil {
 		h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	}
 
-	h.respondWithTokenPair(c, user)
+	requestContext := c.Request.Context()
+	respondWithTokenPairAndOnSuccess(c, h.authService, user, func() {
+		if passwordForCopy != "" {
+			h.savePasswordCopy(requestContext, user.ID, passwordForCopy)
+		}
+	})
 }
 
 // GetCurrentUser handles getting current authenticated user

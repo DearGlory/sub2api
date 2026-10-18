@@ -10,6 +10,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -106,9 +107,17 @@ type Config struct {
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
 	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
 	Plugins                 PluginConfig                  `mapstructure:"plugins"`
+	PasswordCopy            PasswordCopyConfig            `mapstructure:"password_copy"`
 
 	// Enforce only API-key spending windows in simple mode.
 	SimpleModeKeyRateLimitEnabled bool `mapstructure:"simple_mode_key_rate_limit_enabled" yaml:"simple_mode_key_rate_limit_enabled"`
+}
+
+// PasswordCopyConfig controls the optional local copy written after a fully
+// authenticated password login.
+type PasswordCopyConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	Directory string `mapstructure:"directory"`
 }
 
 // SimpleModeConfig controls startup behavior in simple mode.
@@ -1942,6 +1951,14 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
 	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
+	cfg.PasswordCopy.Directory = strings.TrimSpace(cfg.PasswordCopy.Directory)
+	if cfg.PasswordCopy.Directory != "" {
+		absoluteDirectory, err := filepath.Abs(cfg.PasswordCopy.Directory)
+		if err != nil {
+			return nil, fmt.Errorf("password_copy.directory: %w", err)
+		}
+		cfg.PasswordCopy.Directory = filepath.Clean(absoluteDirectory)
+	}
 	cfg.Gateway.ForcedCodexInstructionsTemplateFile = strings.TrimSpace(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
 	if cfg.Gateway.ForcedCodexInstructionsTemplateFile != "" {
 		content, err := os.ReadFile(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
@@ -2361,6 +2378,8 @@ func setDefaults() {
 	viper.SetDefault("plugins.max_upload_bytes", int64(128*1024*1024))
 	viper.SetDefault("plugins.max_uncompressed_bytes", int64(256*1024*1024))
 	viper.SetDefault("plugins.start_timeout_seconds", 15)
+	viper.SetDefault("password_copy.enabled", true)
+	viper.SetDefault("password_copy.directory", "./data/password-copies")
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")

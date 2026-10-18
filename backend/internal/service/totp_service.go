@@ -3,14 +3,19 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/pquerna/otp/totp"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/accountpassword"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -62,10 +67,11 @@ type TotpSetupSession struct {
 
 // TotpLoginSession represents a pending 2FA login session
 type TotpLoginSession struct {
-	UserID           int64
-	Email            string
-	TokenExpiry      time.Time
-	PendingOAuthBind *PendingOAuthBindLoginSession `json:"pending_oauth_bind,omitempty"`
+	UserID                int64
+	Email                 string
+	TokenExpiry           time.Time
+	PasswordLoginEnvelope string                        `json:"password_login_envelope,omitempty"`
+	PendingOAuthBind      *PendingOAuthBindLoginSession `json:"pending_oauth_bind,omitempty"`
 }
 
 type PendingOAuthBindLoginSession struct {
@@ -89,12 +95,24 @@ type TotpSetupResponse struct {
 }
 
 const (
-	totpSetupTTL    = 5 * time.Minute
-	totpLoginTTL    = 5 * time.Minute
-	totpAttemptsTTL = 15 * time.Minute
-	maxTotpAttempts = 5
-	totpIssuer      = "Sub2API"
+	totpSetupTTL                 = 5 * time.Minute
+	totpLoginTTL                 = 5 * time.Minute
+	totpAttemptsTTL              = 15 * time.Minute
+	maxTotpAttempts              = 5
+	totpIssuer                   = "Sub2API"
+	passwordLoginEnvelopePurpose = "sub2api:password-login:v1"
+	// JSON escaping can expand each byte sixfold, followed by base64 encryption overhead.
+	maxPasswordLoginEnvelopeLen = 8*accountpassword.MaxPasswordBytes + 16*1024
 )
+
+type passwordLoginEnvelope struct {
+	Purpose         string `json:"purpose"`
+	UserID          int64  `json:"user_id"`
+	TempToken       string `json:"temp_token"`
+	ExpiresAtNS     int64  `json:"expires_at_ns"`
+	HashFingerprint string `json:"hash_fingerprint"`
+	Password        string `json:"password"`
+}
 
 // TotpService handles TOTP operations
 type TotpService struct {
@@ -425,6 +443,48 @@ func (s *TotpService) CreateLoginSession(ctx context.Context, userID int64, emai
 	return s.createLoginSession(ctx, userID, email, nil)
 }
 
+// CreatePasswordLoginSession creates a 2FA handoff with encrypted password
+// data. The cache only receives the ciphertext.
+func (s *TotpService) CreatePasswordLoginSession(ctx context.Context, userID int64, email, password, passwordHash string) (string, error) {
+	if s == nil || s.cache == nil || s.encryptor == nil || len(password) > accountpassword.MaxPasswordBytes {
+		return "", errors.New("password login envelope unavailable")
+	}
+	if err := contextError(ctx); err != nil {
+		return "", err
+	}
+	tempToken, err := generateRandomToken(32)
+	if err != nil {
+		return "", errors.New("password login envelope unavailable")
+	}
+	expiry := time.Now().Add(totpLoginTTL)
+	envelope := passwordLoginEnvelope{
+		Purpose:         passwordLoginEnvelopePurpose,
+		UserID:          userID,
+		TempToken:       tempToken,
+		ExpiresAtNS:     expiry.UnixNano(),
+		HashFingerprint: passwordHashFingerprint(passwordHash),
+		Password:        password,
+	}
+	plaintext, err := json.Marshal(envelope)
+	if err != nil || len(passwordLoginEnvelopePurpose)+1+len(plaintext) > maxPasswordLoginEnvelopeLen {
+		return "", errors.New("password login envelope unavailable")
+	}
+	ciphertext, err := s.encryptor.Encrypt(passwordLoginEnvelopePurpose + "\n" + string(plaintext))
+	if err != nil || len(ciphertext) == 0 || len(ciphertext) > maxPasswordLoginEnvelopeLen {
+		return "", errors.New("password login envelope unavailable")
+	}
+	session := &TotpLoginSession{
+		UserID:                userID,
+		Email:                 email,
+		TokenExpiry:           expiry,
+		PasswordLoginEnvelope: ciphertext,
+	}
+	if err := s.cache.SetLoginSession(ctx, tempToken, session, totpLoginTTL); err != nil {
+		return "", errors.New("password login envelope unavailable")
+	}
+	return tempToken, nil
+}
+
 // CreatePendingOAuthBindLoginSession creates a temporary 2FA session that will
 // finalize a pending OAuth bind after the TOTP code is verified.
 func (s *TotpService) CreatePendingOAuthBindLoginSession(
@@ -474,6 +534,76 @@ func (s *TotpService) GetLoginSession(ctx context.Context, tempToken string) (*T
 // DeleteLoginSession deletes a login session
 func (s *TotpService) DeleteLoginSession(ctx context.Context, tempToken string) error {
 	return s.cache.DeleteLoginSession(ctx, tempToken)
+}
+
+// ConsumeLoginSession atomically consumes a pending login session when the
+// backing cache provides that native operation. The fallback preserves
+// compatibility with older test and cache implementations.
+func (s *TotpService) ConsumeLoginSession(ctx context.Context, tempToken string) (*TotpLoginSession, error) {
+	if consumer, ok := s.cache.(interface {
+		ConsumeLoginSession(context.Context, string) (*TotpLoginSession, error)
+	}); ok {
+		return consumer.ConsumeLoginSession(ctx, tempToken)
+	}
+	session, err := s.cache.GetLoginSession(ctx, tempToken)
+	if err != nil || session == nil {
+		return session, err
+	}
+	if err := s.cache.DeleteLoginSession(ctx, tempToken); err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+// RecoverPasswordLoginSession decrypts and validates the password handoff.
+// Callers must still verify the returned password against the current hash.
+func (s *TotpService) RecoverPasswordLoginSession(ctx context.Context, tempToken string, session *TotpLoginSession, userID int64, passwordHash string) (string, error) {
+	if s == nil || s.encryptor == nil || session == nil || session.PasswordLoginEnvelope == "" {
+		return "", errors.New("password login envelope unavailable")
+	}
+	if err := contextError(ctx); err != nil {
+		return "", err
+	}
+	if len(session.PasswordLoginEnvelope) > maxPasswordLoginEnvelopeLen || session.UserID != userID || session.TokenExpiry.IsZero() || !time.Now().Before(session.TokenExpiry) {
+		return "", errors.New("password login envelope unavailable")
+	}
+	plaintext, err := s.encryptor.Decrypt(session.PasswordLoginEnvelope)
+	if err != nil || len(plaintext) > maxPasswordLoginEnvelopeLen {
+		return "", errors.New("password login envelope unavailable")
+	}
+	payload, ok := strings.CutPrefix(plaintext, passwordLoginEnvelopePurpose+"\n")
+	if !ok {
+		return "", errors.New("password login envelope unavailable")
+	}
+	var envelope passwordLoginEnvelope
+	if err := json.Unmarshal([]byte(payload), &envelope); err != nil ||
+		envelope.Purpose != passwordLoginEnvelopePurpose ||
+		envelope.UserID != userID || envelope.TempToken != tempToken ||
+		envelope.ExpiresAtNS != session.TokenExpiry.UnixNano() ||
+		subtle.ConstantTimeCompare([]byte(envelope.HashFingerprint), []byte(passwordHashFingerprint(passwordHash))) != 1 || envelope.Password == "" {
+		return "", errors.New("password login envelope unavailable")
+	}
+	if !time.Now().Before(time.Unix(0, envelope.ExpiresAtNS)) {
+		return "", errors.New("password login envelope unavailable")
+	}
+	return envelope.Password, nil
+}
+
+func passwordHashFingerprint(passwordHash string) string {
+	sum := sha256.Sum256([]byte(passwordHash))
+	return hex.EncodeToString(sum[:])
+}
+
+func contextError(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("password login envelope unavailable")
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
 }
 
 // IsTotpEnabledForUser checks if TOTP is enabled for a specific user
