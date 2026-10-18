@@ -321,7 +321,7 @@ export default {
     epusdtEstimatedHint: 'Estimated USDT; the final checkout amount controls.',
     epusdtRateSource: 'Rate source: {source}',
     epusdtRateSourceBinanceP2P: 'Binance P2P',
-    epusdtNetworkHint: 'Choose the network you will use. The gateway may still switch networks; payments whose settled network cannot be verified are sent for manual review.',
+    epusdtNetworkHint: 'Choose the transfer network and check the final network, USDT amount, and receiving address shown at checkout. If you switch networks there, use the updated payment details.',
     fee: 'Fee',
     actualPay: 'Actual Payment',
     createOrder: 'Confirm Payment',
