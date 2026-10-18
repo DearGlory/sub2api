@@ -757,6 +757,32 @@ describe("admin SettingsView payment visible method controls", () => {
     wrapper.unmount();
   });
 
+  it("loads and saves the supported embed-only external purchase display mode", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_display_mode: "embed",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const select = wrapper.get<HTMLSelectElement>('[data-testid="external-card-display-mode"]');
+    expect(select.findAll("option").map((option) => option.attributes("value")))
+      .toEqual(["both", "embed", "new_window"]);
+    expect(select.element.value).toBe("embed");
+    await select.setValue("new_window");
+    await select.setValue("embed");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      payment_enabled: false,
+      external_card_purchase_enabled: true,
+      external_card_purchase_display_mode: "embed",
+    }));
+    wrapper.unmount();
+  });
+
   it("loads and saves independent USDT pricing in payment settings", async () => {
     getSettings.mockResolvedValue({
       ...baseSettingsResponse,

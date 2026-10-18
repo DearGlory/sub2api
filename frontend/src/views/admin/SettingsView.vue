@@ -8154,7 +8154,8 @@
                 <label class="input-label">{{ t('admin.settings.features.externalCardPurchase.displayMode') }}</label>
                 <select v-model="form.external_card_purchase_display_mode" data-testid="external-card-display-mode" class="input">
                   <option value="both">{{ t('admin.settings.features.externalCardPurchase.displayModes.both') }}</option>
-                    <option value="new_window">{{ t('admin.settings.features.externalCardPurchase.displayModes.newWindow') }}</option>
+                  <option value="embed">{{ t('admin.settings.features.externalCardPurchase.displayModes.embed') }}</option>
+                  <option value="new_window">{{ t('admin.settings.features.externalCardPurchase.displayModes.newWindow') }}</option>
                 </select>
               </div>
               <div>
