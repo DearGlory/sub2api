@@ -635,19 +635,6 @@ func manualReviewDecisionWithClient(ctx context.Context, client *dbent.Client, o
 	return decision.Action, nil
 }
 
-func hasManualReviewDecisionWithClient(ctx context.Context, client *dbent.Client, orderID int64) (bool, error) {
-	decision, err := manualReviewDecisionWithClient(ctx, client, orderID)
-	return decision != "", err
-}
-
-func (s *PaymentService) latestManualReview(ctx context.Context, orderID int64) (*dbent.PaymentAuditLog, error) {
-	return latestManualReviewWithClient(ctx, s.entClient, orderID)
-}
-
-func (s *PaymentService) hasManualReviewDecision(ctx context.Context, orderID int64) (bool, error) {
-	return hasManualReviewDecisionWithClient(ctx, s.entClient, orderID)
-}
-
 func manualReviewRequestedNetwork(order *dbent.PaymentOrder) string {
 	if snap := psOrderProviderSnapshot(order); snap != nil {
 		return snap.RequestedNetwork
