@@ -1,6 +1,16 @@
 # 充值功能集成进度与验收记录
 
-## 当前边界
+## 当前发布候选
+
+- 本次版本候选：`0.2.17-GloryCode-0.0.8`；目标主线 `prod/0.2.15-custom`。
+- 功能提交 `3f29b7434`（`0.0.7`）已经推送，但 GitHub CI 的 API 契约快照与 unused 检查失败；该版本 Release 已改为草稿，未部署到 Sub2API 生产。
+- 已合入：外部购卡 `embed` 选项回归、API 契约补齐与三个 unused wrapper 清理、247 链上交易认领表及 Record/Approve 同事务认领、已存网关交易号的人工确认兼容、历史重复证据失败关闭、非 hex 交易 ID 大小写保留。
+- 父级复跑 `Test(APIContracts|EPUSDT|RecordPaymentManualReview|ApprovePaymentManualReview|RejectedEpusdt|NormalizeEpusdt|ToPaidEpusdt|EpusdtPaymentBlock|ApplyMigrationsFS_Epusdt)`：server、provider、service、repository 均退出 0；该结果为专项，不是全量或真实 PostgreSQL 并发验收。
+- 前端 SettingsView 与 externalCardPurchase：61 项通过，类型检查退出 0；新 embed 回归已先验证缺选项时失败，再验证修复通过。
+- 官方 EPUSDT v2.0.0 已单独部署；钱包为空、商户关闭，HTTPS/健康/管理员口令更换已回读。Sub2API 线上仍为 `0.0.6`，待精确提交 CI、独立审查、数据库迁移和回滚验证后单服务升级。
+- 未执行真实付款或退款，外部店铺兑换码兼容性仍待运营核对。
+
+## 历史集成边界
 
 - 目标工作树：`E:/Global-session/xiao-20261012-submem/integration`。
 - 已复核分支：`prod/0.2.15-custom`，HEAD 为 `50ec1808b70faa1186cfa6831f0bca6d93687064`。
