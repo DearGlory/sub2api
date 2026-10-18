@@ -20,3 +20,6 @@ backend/migrations/*.sql text eol=lf
 
 # Dockerfile
 Dockerfile text eol=lf
+
+# Unified diffs contain mandatory context prefixes before source indentation.
+deploy/epusdt-gateway/*.patch text eol=lf -whitespace

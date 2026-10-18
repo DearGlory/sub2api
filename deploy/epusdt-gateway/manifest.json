@@ -1,0 +1,37 @@
+{
+  "upstream_revision": "619cecb11d6bbd1dcdd1b698ee08b37fc722d3e3",
+  "version": "v2.0.0-glorycode.1",
+  "files": [
+    {
+      "path": "src/mq/worker.go",
+      "before_sha256": "161baa0bc45fbca2e442e06f84cbe083a0ff9076e6f0c4301a354c810eaeb84e",
+      "after_sha256": "a53edbae0bc6cff29d8d3d8ae3b9ce306957078b272d74b2ced95e90dff6e4ed"
+    },
+    {
+      "path": "src/model/service/order_service.go",
+      "before_sha256": "6a357a99610069ce040fadcf63654177b02043a4fbcebbae29646b79923c4c87",
+      "after_sha256": "8a0a8e96bf68ba59e03d13e7ec682f5459dc8658a45b9c1aa00351a56496fcac"
+    },
+    {
+      "path": "src/mq/child_receipt.go",
+      "before_sha256": null,
+      "after_sha256": "7a1eb08986c236b96b5b08aabf1330331a3368e2c43d9eb7afd85c429f2fdb33"
+    },
+    {
+      "path": "src/mq/child_receipt_test.go",
+      "before_sha256": null,
+      "after_sha256": "10ae1cd2021e27dcc0f608607522523dc638837c13d23e63d0e4ab9a01a3e275"
+    },
+    {
+      "path": "src/config/payment_rate.go",
+      "before_sha256": null,
+      "after_sha256": "7cdbd82c3c6aafeb26b572667ece9b9d4ed94f57b968234ade766105b7d114e1"
+    },
+    {
+      "path": "src/config/payment_rate_freshness_test.go",
+      "before_sha256": null,
+      "after_sha256": "0257f41f6ac6138ca2faf6bab21f2410b40b04504f21208d23687529f9063a8e"
+    }
+  ],
+  "patch_sha256": "498d444c5d58989fc5c4f2cb1e3ae0a80f447cdafe86a211ceb09931d4cf73c0"
+}

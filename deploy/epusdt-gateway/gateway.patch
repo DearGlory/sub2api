@@ -1,0 +1,279 @@
+--- a/src/mq/worker.go
++++ b/src/mq/worker.go
+@@ -219,16 +219,20 @@
+ 
+ 	default:
+ 
++		settled, err := settledGmpayReceiptOrder(order)
++		if err != nil {
++			return err
++		}
+ 		client := http_client.GetHttpClient()
+ 		orderResp := response.OrderNotifyResponse{
+ 			Pid:                apiKeyRow.Pid,
+ 			TradeId:            order.TradeId,
+ 			OrderId:            order.OrderId,
+ 			Amount:             order.Amount,
+-			ActualAmount:       order.ActualAmount,
+-			ReceiveAddress:     order.ReceiveAddress,
+-			Token:              order.Token,
+-			BlockTransactionId: order.BlockTransactionId,
++			ActualAmount:       settled.ActualAmount,
++			ReceiveAddress:     settled.ReceiveAddress,
++			Token:              settled.Token,
++			BlockTransactionId: settled.BlockTransactionId,
+ 			Status:             mdb.StatusPaySuccess,
+ 		}
+ 		signature, err := sign.GetHMACSHA256(orderResp, apiKeyRow.SecretKey)
+--- a/src/model/service/order_service.go
++++ b/src/model/service/order_service.go
+@@ -178,7 +178,7 @@
+ 		return nil, err
+ 	}
+ 
+-	rate := config.GetRateForCoin(strings.ToLower(token), strings.ToLower(currency))
++	rate := config.GetPaymentRateForCoin(strings.ToLower(token), strings.ToLower(currency))
+ 	if rate <= 0 {
+ 		return nil, constant.RateAmountErr
+ 	}
+@@ -635,7 +635,7 @@
+ 	}
+ 
+ 	// 6. Calculate amount for the new network
+-	rate := config.GetRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
++	rate := config.GetPaymentRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
+ 	if rate <= 0 {
+ 		return nil, constant.RateAmountErr
+ 	}
+@@ -713,7 +713,7 @@
+ 		return nil, err
+ 	}
+ 
+-	rate := config.GetRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
++	rate := config.GetPaymentRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
+ 	if rate <= 0 {
+ 		return nil, constant.RateAmountErr
+ 	}
+@@ -781,7 +781,7 @@
+ }
+ 
+ func completeWaitSelectOkPayOrder(parent *mdb.Orders, token string) (*response.CheckoutCounterResponse, error) {
+-	rate := config.GetRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
++	rate := config.GetPaymentRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
+ 	if rate <= 0 {
+ 		return nil, constant.RateAmountErr
+ 	}
+@@ -926,7 +926,7 @@
+ 		return nil, constant.SubOrderLimitExceeded
+ 	}
+ 
+-	rate := config.GetRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
++	rate := config.GetPaymentRateForCoin(strings.ToLower(token), strings.ToLower(parent.Currency))
+ 	if rate <= 0 {
+ 		return nil, constant.RateAmountErr
+ 	}
+--- /dev/null
++++ b/src/mq/child_receipt.go
+@@ -0,0 +1,38 @@
++package mq
++
++import (
++	"errors"
++	"math"
++	"strings"
++
++	"github.com/GMWalletApp/epusdt/model/dao"
++	"github.com/GMWalletApp/epusdt/model/mdb"
++)
++
++// Keep the merchant's order/trade identity while signing the actual settled
++// child's on-chain evidence. Parent history remains unchanged in the database.
++func settledGmpayReceiptOrder(parent *mdb.Orders) (*mdb.Orders, error) {
++	if parent == nil {
++		return nil, errors.New("GMPay callback order is missing")
++	}
++	if parent.PayBySubId == 0 {
++		return parent, nil
++	}
++	if parent.Status != mdb.StatusPaySuccess || parent.ParentTradeId != "" || parent.ApiKeyID == 0 {
++		return nil, errors.New("GMPay callback parent is invalid")
++	}
++	var child mdb.Orders
++	if err := dao.Mdb.First(&child, parent.PayBySubId).Error; err != nil {
++		return nil, err
++	}
++	if child.ID == parent.ID || child.ParentTradeId != parent.TradeId || child.ApiKeyID != parent.ApiKeyID || child.Status != mdb.StatusPaySuccess || child.PayBySubId != 0 {
++		return nil, errors.New("GMPay callback child relationship is invalid")
++	}
++	if child.Amount != parent.Amount || child.Amount <= 0 || math.IsNaN(child.Amount) || math.IsInf(child.Amount, 0) || !strings.EqualFold(child.Currency, parent.Currency) || child.PaymentType != parent.PaymentType {
++		return nil, errors.New("GMPay callback child payment identity differs")
++	}
++	if child.PayProvider != mdb.PaymentProviderOnChain || child.ActualAmount <= 0 || math.IsNaN(child.ActualAmount) || math.IsInf(child.ActualAmount, 0) || strings.TrimSpace(child.Token) == "" || strings.TrimSpace(child.Network) == "" || strings.TrimSpace(child.ReceiveAddress) == "" || strings.TrimSpace(child.BlockTransactionId) == "" {
++		return nil, errors.New("GMPay callback child lacks on-chain payment evidence")
++	}
++	return &child, nil
++}
+--- /dev/null
++++ b/src/mq/child_receipt_test.go
+@@ -0,0 +1,113 @@
++package mq
++
++import (
++	"encoding/json"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++
++	"github.com/GMWalletApp/epusdt/internal/testutil"
++	"github.com/GMWalletApp/epusdt/model/dao"
++	"github.com/GMWalletApp/epusdt/model/mdb"
++	"github.com/GMWalletApp/epusdt/util/sign"
++)
++
++func TestGmpayChildReceiptKeepsMerchantIdentityAndUsesSettledEvidence(t *testing.T) {
++	cleanup := testutil.SetupTestDatabases(t)
++	defer cleanup()
++	key := &mdb.ApiKey{Name: "child-receipt-test", Pid: "9199", SecretKey: "fixture-only", Status: mdb.ApiKeyStatusEnable}
++	if err := dao.Mdb.Create(key).Error; err != nil {
++		t.Fatal(err)
++	}
++	var received map[string]interface{}
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		defer r.Body.Close()
++		_ = json.NewDecoder(r.Body).Decode(&received)
++		_, _ = io.WriteString(w, "ok")
++	}))
++	defer server.Close()
++	parent := &mdb.Orders{TradeId: "parent-trade", OrderId: "merchant-order", Amount: 67, Currency: "CNY", Token: "USDT", ActualAmount: 10, ReceiveAddress: "old-wallet", Network: "tron", Status: mdb.StatusPaySuccess, ApiKeyID: key.ID, PaymentType: mdb.PaymentTypeGmpay, PayProvider: mdb.PaymentProviderOnChain, NotifyUrl: server.URL}
++	if err := dao.Mdb.Create(parent).Error; err != nil {
++		t.Fatal(err)
++	}
++	child := &mdb.Orders{TradeId: "child-trade", OrderId: "child-trade", ParentTradeId: parent.TradeId, Amount: 67, Currency: "CNY", Token: "USDT", ActualAmount: 10.03, ReceiveAddress: "settled-wallet", Network: "ethereum", Status: mdb.StatusPaySuccess, BlockTransactionId: "settled-child-block", ApiKeyID: key.ID, PaymentType: mdb.PaymentTypeGmpay, PayProvider: mdb.PaymentProviderOnChain}
++	if err := dao.Mdb.Create(child).Error; err != nil {
++		t.Fatal(err)
++	}
++	parent.PayBySubId = child.ID
++	if err := dao.Mdb.Model(parent).UpdateColumn("pay_by_sub_id", child.ID).Error; err != nil {
++		t.Fatal(err)
++	}
++	if err := sendOrderCallback(parent); err != nil {
++		t.Fatal(err)
++	}
++	if received["trade_id"] != parent.TradeId || received["order_id"] != parent.OrderId {
++		t.Fatalf("merchant association changed: %v", received)
++	}
++	if received["actual_amount"] != child.ActualAmount || received["block_transaction_id"] != child.BlockTransactionId || received["receive_address"] != child.ReceiveAddress {
++		t.Fatalf("callback contains parent placeholders instead of settled child evidence: %v", received)
++	}
++	signature, _ := received["signature"].(string)
++	delete(received, "signature")
++	expected, err := sign.GetHMACSHA256(received, key.SecretKey)
++	if err != nil || signature != expected {
++		t.Fatalf("receipt signature mismatch: %v", err)
++	}
++	var persisted mdb.Orders
++	if err := dao.Mdb.First(&persisted, parent.ID).Error; err != nil {
++		t.Fatal(err)
++	}
++	if persisted.ActualAmount != 10 || persisted.BlockTransactionId != "" {
++		t.Fatal("callback projection mutated parent payment history")
++	}
++}
++
++func TestGmpayChildReceiptRejectsInvalidRelationship(t *testing.T) {
++	for _, bad := range []string{"parent", "merchant", "status", "currency", "amount", "token", "block", "provider"} {
++		t.Run(bad, func(t *testing.T) {
++			cleanup := testutil.SetupTestDatabases(t)
++			defer cleanup()
++			key := &mdb.ApiKey{Name: "key", Pid: "9199", SecretKey: "fixture-only", Status: mdb.ApiKeyStatusEnable}
++			if err := dao.Mdb.Create(key).Error; err != nil {
++				t.Fatal(err)
++			}
++			hits := 0
++			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++; _, _ = io.WriteString(w, "ok") }))
++			defer server.Close()
++			parent := &mdb.Orders{TradeId: "parent", OrderId: "merchant", Amount: 67, Currency: "CNY", Status: mdb.StatusPaySuccess, ApiKeyID: key.ID, PaymentType: mdb.PaymentTypeGmpay, NotifyUrl: server.URL}
++			if err := dao.Mdb.Create(parent).Error; err != nil {
++				t.Fatal(err)
++			}
++			child := &mdb.Orders{TradeId: "child", OrderId: "child", ParentTradeId: "parent", Amount: 67, Currency: "CNY", Token: "USDT", ActualAmount: 10.03, ReceiveAddress: "wallet", Network: "tron", Status: mdb.StatusPaySuccess, BlockTransactionId: "block", ApiKeyID: key.ID, PaymentType: mdb.PaymentTypeGmpay, PayProvider: mdb.PaymentProviderOnChain}
++			switch bad {
++			case "parent":
++				child.ParentTradeId = "other"
++			case "merchant":
++				child.ApiKeyID = key.ID + 1
++			case "status":
++				child.Status = mdb.StatusWaitPay
++			case "currency":
++				child.Currency = "USD"
++			case "amount":
++				child.Amount = 6.7
++			case "token":
++				child.Token = ""
++			case "block":
++				child.BlockTransactionId = ""
++			case "provider":
++				child.PayProvider = mdb.PaymentProviderOkPay
++			}
++			if err := dao.Mdb.Create(child).Error; err != nil {
++				t.Fatal(err)
++			}
++			parent.PayBySubId = child.ID
++			if err := sendOrderCallback(parent); err == nil {
++				t.Fatal("invalid child was acknowledged")
++			}
++			if hits != 0 {
++				t.Fatal("invalid child was sent to merchant")
++			}
++		})
++	}
++}
+--- /dev/null
++++ b/src/config/payment_rate.go
+@@ -0,0 +1,20 @@
++package config
++
++// GetPaymentRateForCoin preserves fixed/USD compatibility but refuses expired
++// automatic quotes at every payment creation and gateway network-selection seam.
++func GetPaymentRateForCoin(coin, base string) float64 {
++	coin, base = normalizeRateKey(coin), normalizeRateKey(base)
++	if GetRateMode() != RateModeAuto || coin == base || (coin == "usdt" && base == "usd") {
++		return GetRateForCoin(coin, base)
++	}
++	snapshot, found := loadRateCacheSnapshot(base)
++	if found && !isRateCacheStale(snapshot, rateNow()) {
++		return rateFromSnapshot(snapshot, coin)
++	}
++	_ = refreshRateBaseForCoin(base, coin, false)
++	snapshot, found = loadRateCacheSnapshot(base)
++	if !found || isRateCacheStale(snapshot, rateNow()) {
++		return 0
++	}
++	return rateFromSnapshot(snapshot, coin)
++}
+--- /dev/null
++++ b/src/config/payment_rate_freshness_test.go
+@@ -0,0 +1,22 @@
++package config
++
++import (
++	"errors"
++	"net/http"
++	"testing"
++	"time"
++)
++
++func TestPaymentRateRejectsExpiredCNYQuoteWhenRefreshFails(t *testing.T) {
++	now := time.Now()
++	oldNow := rateNow
++	rateNow = func() time.Time { return now }
++	t.Cleanup(func() { rateNow = oldNow })
++	installSettingsGetter(t, map[string]string{"rate.mode": RateModeAuto, "rate.api_url": "https://rate.example.test", "rate.cache_ttl_seconds": "10"})
++	past := now.Add(-time.Minute)
++	installRateCacheStore(t, RateCacheSnapshot{Base: "cny", Rates: map[string]float64{"usdt": 0.14}, LastSuccessAt: &past, LastAttemptAt: &past})
++	installMockHTTPClient(t, func(r *http.Request) (*http.Response, error) { return nil, errors.New("offline") })
++	if got := GetPaymentRateForCoin("usdt", "cny"); got != 0 {
++		t.Fatalf("expired rate used for a new payment: %v", got)
++	}
++}
