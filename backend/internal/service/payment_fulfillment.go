@@ -110,10 +110,11 @@ func (s *PaymentService) RecordPaymentManualReview(ctx context.Context, n *payme
 	if snapshot.MerchantID == "" || !strings.EqualFold(snapshot.MerchantID, strings.TrimSpace(n.Metadata["pid"])) {
 		return fmt.Errorf("record payment manual review: merchant mismatch")
 	}
-	if order.OrderType != payment.OrderTypeBalance || !strings.EqualFold(PaymentOrderCurrency(order), "USD") || !strings.EqualFold(snapshot.Asset, "USDT") {
+	orderCurrency := PaymentOrderCurrency(order)
+	if order.OrderType != payment.OrderTypeBalance || (orderCurrency != "USD" && orderCurrency != "CNY") || !strings.EqualFold(snapshot.Asset, "USDT") {
 		return fmt.Errorf("record payment manual review: unsupported order currency, asset, or type")
 	}
-	if !isValidProviderAmount(n.Amount) || math.Abs(n.Amount-order.PayAmount) > paymentAmountToleranceForCurrency("USD") {
+	if !isValidProviderAmount(n.Amount) || math.Abs(n.Amount-order.PayAmount) > paymentAmountToleranceForCurrency(orderCurrency) {
 		return fmt.Errorf("record payment manual review: amount mismatch")
 	}
 	actualAmountText := strings.TrimSpace(n.Metadata["actual_amount"])
@@ -146,7 +147,7 @@ func (s *PaymentService) RecordPaymentManualReview(ctx context.Context, n *payme
 	if current.Status != OrderStatusPending && current.Status != OrderStatusCancelled && current.Status != OrderStatusExpired {
 		return nil
 	}
-	claimed, err := claimEpusdtBlockTransaction(txCtx, tx.Client(), blockTransactionID, current.ID, tradeNo, n.Amount, actualAmount)
+	claimed, err := claimEpusdtBlockTransactionForCurrency(txCtx, tx.Client(), blockTransactionID, current.ID, tradeNo, n.Amount, actualAmount, orderCurrency)
 	if err != nil {
 		return fmt.Errorf("record payment manual review: claim blockchain transaction: %w", err)
 	}
@@ -217,6 +218,10 @@ func manualReviewBlockTransactionID(detail string) string {
 }
 
 func claimEpusdtBlockTransaction(ctx context.Context, client *dbent.Client, blockID string, orderID int64, tradeNo string, amount, actualAmount float64) (int64, error) {
+	return claimEpusdtBlockTransactionForCurrency(ctx, client, blockID, orderID, tradeNo, amount, actualAmount, "USD")
+}
+
+func claimEpusdtBlockTransactionForCurrency(ctx context.Context, client *dbent.Client, blockID string, orderID int64, tradeNo string, amount, actualAmount float64, currency string) (int64, error) {
 	if client == nil {
 		return 0, errors.New("nil payment client")
 	}
@@ -277,7 +282,7 @@ func claimEpusdtBlockTransaction(ctx context.Context, client *dbent.Client, bloc
 	if claimedOrderID != orderID {
 		return claimedOrderID, nil
 	}
-	if math.Abs(claimedAmount-amount) > paymentAmountToleranceForCurrency("USD") || math.Abs(claimedActualAmount-actualAmount) > paymentAmountToleranceForCurrency("USD") {
+	if math.Abs(claimedAmount-amount) > paymentAmountToleranceForCurrency(currency) || math.Abs(claimedActualAmount-actualAmount) > paymentAmountToleranceForCurrency("USD") {
 		return 0, errors.New("blockchain transaction evidence amount changed")
 	}
 	if claimedTradeNo != tradeNo {
@@ -423,16 +428,7 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		return err
 	}
 	if payment.GetBasePaymentType(o.PaymentType) == payment.TypeEpusdt {
-		snapshot := psOrderProviderSnapshot(o)
-		deadline, hasDeadline := effectiveEpusdtAutoCreditDeadline(o, snapshot)
-		if !hasDeadline || time.Now().After(deadline) {
-			reviewErr := s.RecordPaymentManualReview(ctx, &payment.PaymentNotification{OrderID: o.OutTradeNo, TradeNo: tradeNo, Amount: paid, Status: payment.NotificationStatusSuccess, Metadata: metadata})
-			if reviewErr != nil {
-				s.writeAuditLog(ctx, o.ID, "PAYMENT_AFTER_GRACE_MANUAL_REVIEW", pk, map[string]any{"tradeNo": tradeNo, "paidAmount": paid, "deadline": snapshotDeadline(snapshot), "detail": reviewErr.Error()})
-				return fmt.Errorf("record late USDT payment for manual review: %w", reviewErr)
-			}
-			return nil
-		}
+		return s.toPaidEpusdt(ctx, o, tradeNo, paid, pk, metadata)
 	}
 	if !isValidProviderAmount(paid) {
 		s.writeAuditLog(ctx, o.ID, "PAYMENT_INVALID_AMOUNT", pk, map[string]any{
@@ -447,13 +443,6 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		return fmt.Errorf("amount mismatch: expected %s, got %s", strconv.FormatFloat(o.PayAmount, 'f', -1, 64), strconv.FormatFloat(paid, 'f', -1, 64))
 	}
 	return s.toPaid(ctx, o, tradeNo, paid, pk, metadata)
-}
-
-func snapshotDeadline(snapshot *paymentOrderProviderSnapshot) string {
-	if snapshot == nil || snapshot.AutoCreditDeadline.IsZero() {
-		return ""
-	}
-	return snapshot.AutoCreditDeadline.UTC().Format(time.RFC3339Nano)
 }
 
 func paymentAmountToleranceForCurrency(currency string) float64 {
@@ -537,63 +526,166 @@ func (s *PaymentService) toPaidEpusdt(ctx context.Context, o *dbent.PaymentOrder
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	txCtx := dbent.NewTxContext(ctx, tx)
 	var current *dbent.PaymentOrder
 	if tx.Client().Driver().Dialect() == dialect.SQLite {
-		current, err = tx.PaymentOrder.Query().Where(paymentorder.IDEQ(o.ID)).Only(ctx)
+		current, err = tx.PaymentOrder.Query().Where(paymentorder.IDEQ(o.ID)).Only(txCtx)
 	} else {
-		current, err = tx.PaymentOrder.Query().Where(paymentorder.IDEQ(o.ID)).ForUpdate().Only(ctx)
+		current, err = tx.PaymentOrder.Query().Where(paymentorder.IDEQ(o.ID)).ForUpdate().Only(txCtx)
 	}
 	if err != nil {
 		return fmt.Errorf("lock USDT payment order: %w", err)
 	}
-	previousStatus := current.Status
-	now := time.Now()
+
+	if payment.GetBasePaymentType(current.PaymentType) != payment.TypeEpusdt || current.OrderType != payment.OrderTypeBalance {
+		return fmt.Errorf("USDT payment order has unexpected provider or order type")
+	}
+	if columnKey := strings.TrimSpace(psStringValue(current.ProviderKey)); columnKey != "" && !strings.EqualFold(columnKey, payment.TypeEpusdt) {
+		return fmt.Errorf("USDT payment order provider column mismatch: %s", columnKey)
+	}
 	snapshot := psOrderProviderSnapshot(current)
-	deadline, hasDeadline := effectiveEpusdtAutoCreditDeadline(current, snapshot)
-	if !hasDeadline || now.After(deadline) {
-		if err := tx.Rollback(); err != nil {
-			slog.Warn("rollback late USDT payment transaction failed", "orderID", current.ID, "error", err)
-		}
-		reviewErr := s.RecordPaymentManualReview(ctx, &payment.PaymentNotification{
-			OrderID:  current.OutTradeNo,
-			TradeNo:  tradeNo,
-			Amount:   paid,
-			Status:   payment.NotificationStatusSuccess,
-			Metadata: metadata,
-		})
-		if reviewErr != nil {
-			return fmt.Errorf("record late USDT payment for manual review: %w", reviewErr)
+	if snapshot == nil || !strings.EqualFold(snapshot.ProviderKey, payment.TypeEpusdt) || !strings.EqualFold(snapshot.Asset, "USDT") || strings.TrimSpace(snapshot.MerchantID) == "" {
+		return fmt.Errorf("USDT payment order provider snapshot is invalid")
+	}
+	if err := validateProviderSnapshotMetadata(current, pk, metadata); err != nil {
+		return fmt.Errorf("validate USDT payment metadata: %w", err)
+	}
+	currency := PaymentOrderCurrency(current)
+	if currency != "USD" && currency != "CNY" {
+		return fmt.Errorf("unsupported USDT payment currency: %s", currency)
+	}
+	if !isValidProviderAmount(paid) || math.Abs(paid-current.PayAmount) > paymentAmountToleranceForCurrency(currency) {
+		return fmt.Errorf("USDT payment amount mismatch: expected %s, got %s", strconv.FormatFloat(current.PayAmount, 'f', -1, 64), strconv.FormatFloat(paid, 'f', -1, 64))
+	}
+	actualAmountText := strings.TrimSpace(metadata["actual_amount"])
+	actualAmount, actualErr := strconv.ParseFloat(actualAmountText, 64)
+	if actualErr != nil || !isValidProviderAmount(actualAmount) {
+		return fmt.Errorf("invalid USDT actual amount")
+	}
+	blockEvidence := strings.TrimSpace(metadata["block_transaction_id"])
+	blockID, blockErr := normalizeEpusdtBlockTransactionID(blockEvidence)
+	if blockErr != nil {
+		return fmt.Errorf("invalid USDT blockchain transaction")
+	}
+	tradeNo = strings.TrimSpace(tradeNo)
+	if tradeNo == "" || strings.IndexFunc(tradeNo, unicode.IsControl) >= 0 || len(tradeNo) > 128 {
+		return fmt.Errorf("invalid USDT upstream trade")
+	}
+
+	if current.Status == OrderStatusCompleted || current.Status == OrderStatusRefunded {
+		// Terminal replay must not reserve new chain or gateway evidence.
+		return nil
+	}
+
+	rejected, err := tx.Client().PaymentAuditLog.Query().
+		Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(current.ID, 10)), paymentauditlog.ActionEQ(PaymentManualRejectedAction)).
+		Limit(1).
+		Exist(txCtx)
+	if err != nil {
+		return fmt.Errorf("check rejected USDT payment: %w", err)
+	}
+	if rejected {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit rejected USDT payment no-op: %w", err)
 		}
 		return nil
 	}
 
-	updated, err := tx.PaymentOrder.Update().Where(
-		paymentorder.IDEQ(current.ID),
-		paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired),
-	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
-	if err != nil {
-		return fmt.Errorf("update USDT order to PAID: %w", err)
-	}
-	if updated == 0 {
-		if err := tx.Rollback(); err != nil {
-			slog.Warn("rollback already-processed USDT payment transaction failed", "orderID", current.ID, "error", err)
+	previousStatus := current.Status
+	now := time.Now()
+	needsPaymentTransition := current.Status == OrderStatusPending || current.Status == OrderStatusCancelled || current.Status == OrderStatusExpired
+	if !needsPaymentTransition {
+		if current.Status != OrderStatusPaid && current.Status != OrderStatusFailed && current.Status != OrderStatusRecharging {
+			return fmt.Errorf("USDT payment order cannot be fulfilled from %s", current.Status)
 		}
-		return s.alreadyProcessed(ctx, current)
+		accepted, err := tx.Client().PaymentAuditLog.Query().Where(
+			paymentauditlog.OrderIDEQ(strconv.FormatInt(current.ID, 10)),
+			paymentauditlog.ActionIn("ORDER_PAID", PaymentManualApprovedAction),
+		).Exist(txCtx)
+		if err != nil {
+			return fmt.Errorf("read accepted USDT payment audit: %w", err)
+		}
+		if current.PaidAt == nil || !accepted {
+			return fmt.Errorf("USDT payment has no accepted receipt to resume")
+		}
 	}
+	if needsPaymentTransition {
+		deadline, hasDeadline := effectiveEpusdtAutoCreditDeadline(current, snapshot)
+		// Both values are the gateway's serialized amount, not a local FX
+		// calculation. Changed or absent CNY receipt amounts require review.
+		amountMismatch := currency == "CNY" && (!finitePositive(snapshot.GatewayExpectedUSDT) || actualAmount != snapshot.GatewayExpectedUSDT)
+		if !hasDeadline || now.After(deadline) || amountMismatch {
+			if err := tx.Rollback(); err != nil {
+				slog.Warn("rollback late USDT payment transaction failed", "orderID", current.ID, "error", err)
+			}
+			reviewErr := s.RecordPaymentManualReview(ctx, &payment.PaymentNotification{
+				OrderID:  current.OutTradeNo,
+				TradeNo:  tradeNo,
+				Amount:   paid,
+				Status:   payment.NotificationStatusSuccess,
+				Metadata: metadata,
+			})
+			if reviewErr != nil {
+				return fmt.Errorf("record late USDT payment for manual review: %w", reviewErr)
+			}
+			return nil
+		}
+	}
+
+	claimed, err := claimEpusdtBlockTransactionForCurrency(txCtx, tx.Client(), blockID, current.ID, tradeNo, paid, actualAmount, currency)
+	if err != nil {
+		return fmt.Errorf("claim USDT payment evidence: %w", err)
+	}
+	if claimed != current.ID {
+		return fmt.Errorf("USDT payment evidence belongs to another order")
+	}
+
+	updated := 0
+	if needsPaymentTransition {
+		update := tx.PaymentOrder.Update().Where(
+			paymentorder.IDEQ(current.ID),
+			paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired),
+		).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaidAt(now).ClearFailedAt().ClearFailedReason()
+		if strings.TrimSpace(current.PaymentTradeNo) == "" {
+			update.SetPaymentTradeNo(tradeNo)
+		}
+		updated, err = update.Save(txCtx)
+		if err != nil {
+			return fmt.Errorf("update USDT order to PAID: %w", err)
+		}
+		if updated == 0 {
+			return fmt.Errorf("USDT order state changed before payment transition")
+		}
+		detail := map[string]any{
+			"tradeNo":             tradeNo,
+			"paidAmount":          paid,
+			"actualAmount":        actualAmountText,
+			"blockTransactionID":  blockEvidence,
+			"networkVerification": metadata["network_verification"],
+			"requestedNetwork":    snapshot.RequestedNetwork,
+		}
+		if previousStatus == OrderStatusCancelled || previousStatus == OrderStatusExpired {
+			if err := writePaymentAuditLogErr(txCtx, tx.Client(), current.ID, "ORDER_RECOVERED", pk, map[string]any{
+				"previous_status": previousStatus,
+				"tradeNo":         tradeNo,
+				"paidAmount":      paid,
+				"reason":          "webhook payment success received after order " + previousStatus,
+			}); err != nil {
+				return fmt.Errorf("write USDT recovery audit: %w", err)
+			}
+		}
+		if err := writePaymentAuditLogErr(txCtx, tx.Client(), current.ID, "ORDER_PAID", pk, detail); err != nil {
+			return fmt.Errorf("write USDT paid audit: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit USDT payment transaction: %w", err)
 	}
-
-	if previousStatus == OrderStatusCancelled || previousStatus == OrderStatusExpired {
-		s.writeAuditLog(ctx, current.ID, "ORDER_RECOVERED", pk, map[string]any{
-			"previous_status": previousStatus,
-			"tradeNo":         tradeNo,
-			"paidAmount":      paid,
-			"reason":          "webhook payment success received after order " + previousStatus,
-		})
+	if needsPaymentTransition || current.Status == OrderStatusPaid || current.Status == OrderStatusFailed || current.Status == OrderStatusRecharging {
+		return s.executeFulfillment(ctx, current.ID)
 	}
-	s.writeAuditLog(ctx, current.ID, "ORDER_PAID", pk, map[string]any{"tradeNo": tradeNo, "paidAmount": paid})
-	return s.executeFulfillment(ctx, current.ID)
+	return nil
 }
 
 func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentOrder) error {

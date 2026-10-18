@@ -97,6 +97,10 @@ type CreateOrderRequest struct {
 	EpusdtAutoCreditDeadline time.Time
 	PlanID                   int64
 	Locale                   string
+	QuoteSource              string
+	QuoteUSDTPerUnit         float64
+	QuoteFetchedAt           time.Time
+	QuoteExpiresAt           time.Time
 }
 
 type CreateOrderResponse struct {
@@ -527,7 +531,7 @@ func (s *PaymentService) ApprovePaymentManualReview(ctx context.Context, orderID
 		return infraerrors.BadRequest("MANUAL_REVIEW_EVIDENCE_MISSING", "manual review has no upstream trade")
 	}
 	evidenceAmount, evidenceAmountErr := manualReviewAmount(review.Detail)
-	if evidenceAmountErr != nil || !isValidProviderAmount(evidenceAmount) || math.Abs(evidenceAmount-o.PayAmount) > paymentAmountToleranceForCurrency("USD") {
+	if evidenceAmountErr != nil || !isValidProviderAmount(evidenceAmount) || math.Abs(evidenceAmount-o.PayAmount) > paymentAmountToleranceForCurrency(PaymentOrderCurrency(o)) {
 		return infraerrors.BadRequest("MANUAL_REVIEW_AMOUNT_MISMATCH", "manual review evidence amount does not match the order")
 	}
 	evidenceActualAmount, evidenceActualAmountErr := manualReviewActualAmount(review.Detail)

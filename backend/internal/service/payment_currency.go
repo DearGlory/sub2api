@@ -10,6 +10,11 @@ import (
 func paymentProviderConfigCurrency(providerKey string, cfg map[string]string) string {
 	switch strings.TrimSpace(providerKey) {
 	case payment.TypeStripe, payment.TypeAirwallex, payment.TypeEpusdt:
+		if strings.TrimSpace(providerKey) == payment.TypeEpusdt && strings.TrimSpace(providerConfigValue(cfg, "currency")) == "" {
+			// Historical EPUSDT instances predate configurable currency and used
+			// the gateway's USD/USDT peg.
+			return "USD"
+		}
 		currency, err := payment.NormalizePaymentCurrency(cfg["currency"])
 		if err == nil {
 			return currency

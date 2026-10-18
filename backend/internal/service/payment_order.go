@@ -67,7 +67,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	methodCurrency := payment.DefaultPaymentCurrency
 	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
 		feeRate = cfg.EpusdtFeeRate
-		methodCurrency = "USD"
+		methodCurrency = payment.DefaultPaymentCurrency
 	}
 	if s.configService != nil && payment.GetBasePaymentType(req.PaymentType) != payment.TypeEpusdt {
 		methodCurrency, err = s.configService.ValidateMethodCurrencyConsistency(ctx, req.PaymentType)
@@ -107,9 +107,17 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	selectedCurrency := payment.DefaultPaymentCurrency
 	if sel != nil {
 		selectedCurrency = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
-		if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
-			selectedCurrency = "USD"
+	}
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
+		quote, quoteErr := s.configService.fetchEpusdtRateForSelection(ctx, sel)
+		if quoteErr != nil {
+			return nil, quoteErr
 		}
+		req.QuoteSource = quote.Source
+		req.QuoteUSDTPerUnit = quote.USDTPerUnit
+		req.QuoteFetchedAt = quote.FetchedAt
+		req.QuoteExpiresAt = quote.ExpiresAt
+		selectedCurrency = quote.Currency
 	}
 	if selectedCurrency != methodCurrency {
 		payAmountStr, payAmount, err = calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, selectedCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
@@ -205,7 +213,7 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt {
 		dailyLimit = cfg.EpusdtDailyLimit
 	}
-	if err := s.checkDailyLimit(ctx, tx, req.UserID, req.PaymentType, limitAmount, dailyLimit); err != nil {
+	if err := s.checkDailyLimit(ctx, tx, req.UserID, req.PaymentType, paymentOrderCurrencyFromSelection(sel), limitAmount, dailyLimit); err != nil {
 		return nil, err
 	}
 	tm := cfg.OrderTimeoutMin
@@ -359,13 +367,19 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 	if providerKey == payment.TypeEpusdt {
 		snapshot["merchant_id"] = strings.TrimSpace(sel.Config["pid"])
 		snapshot["asset"] = "USDT"
-		snapshot["currency"] = "USD"
+		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
 		if requestedNetwork := strings.ToLower(strings.TrimSpace(req.RequestedNetwork)); requestedNetwork != "" {
 			snapshot["requested_network"] = requestedNetwork
 		}
 		snapshot["balance_multiplier"] = req.EpusdtBalanceMultiplier
 		snapshot["grace_minutes"] = req.EpusdtGraceMinutes
 		snapshot["auto_credit_deadline"] = req.EpusdtAutoCreditDeadline.UTC().Format(time.RFC3339Nano)
+		if strings.TrimSpace(req.QuoteSource) != "" && req.QuoteUSDTPerUnit > 0 && !req.QuoteFetchedAt.IsZero() && !req.QuoteExpiresAt.IsZero() {
+			snapshot["quote_source"] = strings.TrimSpace(req.QuoteSource)
+			snapshot["usdt_per_unit"] = req.QuoteUSDTPerUnit
+			snapshot["fetched_at"] = req.QuoteFetchedAt.UTC().Format(time.RFC3339Nano)
+			snapshot["expires_at"] = req.QuoteExpiresAt.UTC().Format(time.RFC3339Nano)
+		}
 	}
 
 	if len(snapshot) == 1 {
@@ -385,10 +399,17 @@ func paymentOrderSnapshotWxpayAppID(sel *payment.InstanceSelection, req CreateOr
 }
 
 func dailyLimitUsesOrder(o *dbent.PaymentOrder, paymentType string) bool {
+	return dailyLimitUsesOrderInCurrency(o, paymentType, "")
+}
+
+func dailyLimitUsesOrderInCurrency(o *dbent.PaymentOrder, paymentType, currency string) bool {
 	if o == nil {
 		return false
 	}
 	requestedBase := payment.GetBasePaymentType(paymentType)
+	if requestedBase == payment.TypeEpusdt && currency != "" && !strings.EqualFold(PaymentOrderCurrency(o), currency) {
+		return false
+	}
 	if o.OrderType == payment.OrderTypeBalance {
 		orderBase := payment.GetBasePaymentType(o.PaymentType)
 		if requestedBase == payment.TypeEpusdt {
@@ -399,7 +420,14 @@ func dailyLimitUsesOrder(o *dbent.PaymentOrder, paymentType string) bool {
 	return requestedBase != payment.TypeEpusdt
 }
 
-func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, userID int64, paymentType string, amount, limit float64) error {
+func paymentOrderCurrencyFromSelection(sel *payment.InstanceSelection) string {
+	if sel == nil {
+		return payment.DefaultPaymentCurrency
+	}
+	return paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
+}
+
+func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, userID int64, paymentType, currency string, amount, limit float64) error {
 	if limit <= 0 {
 		return nil
 	}
@@ -410,7 +438,7 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 	}
 	var used float64
 	for _, o := range orders {
-		if dailyLimitUsesOrder(o, paymentType) {
+		if dailyLimitUsesOrderInCurrency(o, paymentType, currency) {
 			if o.OrderType == payment.OrderTypeBalance {
 				used += o.PayAmount
 			} else {
@@ -527,6 +555,12 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		ReturnURL:        providerReturnURL,
 	}, sel, outTradeNo, payAmountStr, subject)
 	providerReq.AlipayMobilePrecreate = shouldUseAlipayMobilePrecreate(req, cfg, sel)
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt && PaymentOrderCurrency(order) == "CNY" {
+		snapshot := psOrderProviderSnapshot(order)
+		if snapshot == nil || !finitePositive(snapshot.USDTPerUnit) || !snapshot.QuoteExpiresAt.After(time.Now()) {
+			return nil, infraerrors.ServiceUnavailable("EPUSDT_RATE_UNAVAILABLE", "EPUSDT rate is unavailable")
+		}
+	}
 	finishProviderCall := servertiming.ObserveDependency(ctx, "payment")
 	pr, err := prov.CreatePayment(ctx, providerReq)
 	finishProviderCall()
@@ -538,13 +572,23 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, classifyCreatePaymentError(req, sel.ProviderKey, err)
 	}
 	sanitizeCreatePaymentResponseDetails(pr)
-	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).
+	orderUpdate := s.entClient.PaymentOrder.UpdateOneID(order.ID).
 		SetNillablePaymentTradeNo(psNilIfEmpty(pr.TradeNo)).
 		SetNillablePayURL(psNilIfEmpty(pr.PayURL)).
 		SetNillableQrCode(psNilIfEmpty(pr.QRCode)).
 		SetNillableProviderInstanceID(psNilIfEmpty(sel.InstanceID)).
-		SetNillableProviderKey(psNilIfEmpty(sel.ProviderKey)).
-		Save(ctx)
+		SetNillableProviderKey(psNilIfEmpty(sel.ProviderKey))
+	if payment.GetBasePaymentType(req.PaymentType) == payment.TypeEpusdt &&
+		strings.EqualFold(PaymentOrderCurrency(order), payment.DefaultPaymentCurrency) &&
+		finitePositive(pr.GatewayExpectedUSDT) {
+		snapshot := clonePaymentOrderSnapshot(order.ProviderSnapshot)
+		if snapshot == nil {
+			snapshot = map[string]any{"schema_version": 2}
+		}
+		snapshot["gateway_expected_usdt"] = pr.GatewayExpectedUSDT
+		orderUpdate.SetProviderSnapshot(snapshot)
+	}
+	_, err = orderUpdate.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("update order with payment details: %w", err)
 	}

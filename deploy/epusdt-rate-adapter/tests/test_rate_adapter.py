@@ -216,11 +216,12 @@ class RateServiceTests(unittest.TestCase):
         now = [100.0]
         service = RateService(fetcher, clock=lambda: now[0], cache_ttl=60, max_age=300)
 
-        first = service.get_cny_rate()
+        service.get_cny_rate()
         now[0] = 161.0
-        stale = service.get_cny_rate()
-        self.assertEqual(stale["cny_per_usdt"], 6.7)
+        with self.assertRaises(RateUnavailable):
+            service.get_cny_rate()
         self.assertTrue(service.health()["stale"])
+        self.assertFalse(service.health()["ready"])
         self.assertEqual(fetcher.call_count, 2)
 
         now[0] = 401.0

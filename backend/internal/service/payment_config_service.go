@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -232,9 +233,10 @@ type UpdatePlanRequest struct {
 // PaymentConfigService manages payment configuration and CRUD for
 // provider instances, channels, and subscription plans.
 type PaymentConfigService struct {
-	entClient     *dbent.Client
-	settingRepo   SettingRepository
-	encryptionKey []byte
+	entClient      *dbent.Client
+	settingRepo    SettingRepository
+	encryptionKey  []byte
+	rateHTTPClient *http.Client
 }
 
 // NewPaymentConfigService creates a new PaymentConfigService.

@@ -41,6 +41,17 @@ func (h *PaymentHandler) GetPaymentConfig(c *gin.Context) {
 	response.Success(c, cfg)
 }
 
+// GetEpusdtRate returns the current authenticated EPUSDT quote.
+// GET /api/v1/payment/epusdt/rate
+func (h *PaymentHandler) GetEpusdtRate(c *gin.Context) {
+	quote, err := h.configService.GetEpusdtRate(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, quote)
+}
+
 // GetPlans returns subscription plans available for sale.
 // GET /api/v1/payment/plans
 func (h *PaymentHandler) GetPlans(c *gin.Context) {

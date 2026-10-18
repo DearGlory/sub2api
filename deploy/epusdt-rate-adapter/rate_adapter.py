@@ -306,20 +306,20 @@ class RateService:
         return snapshot
 
     def get_cny_rate(self) -> dict[str, Any]:
-        """Return a fresh quote or a usable stale quote after refresh failure."""
+        """Return only a fresh quote; failed refreshes never extend its validity."""
         waited_generation: int | None = None
         while True:
             with self._condition:
                 now = self._clock()
                 snapshot = self._snapshot
                 age = self._age(snapshot, now)
-                if snapshot is not None and age <= self._cache_ttl:
+                if snapshot is not None and 0 <= now - snapshot.fetched_at < self._cache_ttl:
                     return self._public(snapshot)
                 if self._refreshing:
                     waited_generation = self._refresh_generation
-                    if snapshot is not None and age <= self._max_age:
-                        return self._public(snapshot)
-                    self._condition.wait()
+                    self._condition.wait(timeout=DEFAULT_TIMEOUT_SECONDS + 1)
+                    if self._refreshing:
+                        raise RateUnavailable("CNY rate refresh is still pending")
                     continue
                 if (
                     waited_generation is not None
@@ -329,9 +329,6 @@ class RateService:
                 self._refresh_generation += 1
                 self._refreshing = True
                 refresh_generation = self._refresh_generation
-                stale_snapshot = (
-                    snapshot if snapshot is not None and age <= self._max_age else None
-                )
 
             try:
                 refreshed = self._refresh()
@@ -341,8 +338,6 @@ class RateService:
                     self._last_failure_generation = refresh_generation
                     self._refreshing = False
                     self._condition.notify_all()
-                    if stale_snapshot is not None:
-                        return self._public(stale_snapshot)
                 raise RateUnavailable("CNY rate is not ready") from exc
             else:
                 with self._condition:
@@ -358,8 +353,8 @@ class RateService:
             now = self._clock()
             snapshot = self._snapshot
             age = self._age(snapshot, now)
-            ready = snapshot is not None and age <= self._max_age
-            stale = ready and age > self._cache_ttl
+            ready = snapshot is not None and 0 <= now - snapshot.fetched_at < self._cache_ttl
+            stale = snapshot is not None and not ready
             if not ready:
                 status = "not_ready"
             elif stale:
@@ -383,6 +378,10 @@ class RateService:
 class _RateRequestHandler(BaseHTTPRequestHandler):
     server: "RateHTTPServer"
 
+    def setup(self) -> None:
+        self.request.settimeout(5.0)
+        super().setup()
+
     def _write_json(self, status: int, body: dict[str, Any]) -> None:
         encoded = json.dumps(body, separators=(",", ":"), allow_nan=False).encode("utf-8")
         self.send_response(status)
@@ -390,7 +389,10 @@ class _RateRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(encoded)
+        try:
+            self.wfile.write(encoded)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            self.close_connection = True
 
     def do_GET(self) -> None:  # noqa: N802
         path = urllib.parse.urlsplit(self.path).path
@@ -426,7 +428,24 @@ class RateHTTPServer(ThreadingHTTPServer):
 
     def __init__(self, address: tuple[str, int], rate_service: RateService) -> None:
         self.rate_service = rate_service
+        self._request_slots = threading.BoundedSemaphore(16)
         super().__init__(address, _RateRequestHandler)
+
+    def process_request(self, request, client_address) -> None:
+        if not self._request_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
 
 
 def create_server(

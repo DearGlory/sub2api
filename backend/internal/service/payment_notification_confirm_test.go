@@ -163,6 +163,298 @@ func TestToPaidEpusdtAfterGraceQueuesManualReviewWithCallbackEvidence(t *testing
 	require.Contains(t, review.Detail, "trade-late-epusdt")
 }
 
+func TestToPaidEpusdtValidSuccessClaimsEvidenceBeforePaying(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	order := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_success", "")
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetProviderSnapshot(map[string]any{
+			"schema_version":       2,
+			"provider_key":         payment.TypeEpusdt,
+			"merchant_id":          "1000",
+			"asset":                "USDT",
+			"currency":             "USD",
+			"requested_network":    "trc20",
+			"auto_credit_deadline": time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano),
+		}).Save(ctx)
+	require.NoError(t, err)
+
+	redeemRepo := &paymentFulfillmentRedeemRepo{}
+	credited := 0.0
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 0}}
+	userRepo.updateBalanceFn = func(_ context.Context, id int64, amount float64) error {
+		require.Equal(t, order.UserID, id)
+		credited += amount
+		return nil
+	}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, &paymentFulfillmentRedeemCacheStub{}, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+	err = svc.HandlePaymentNotification(ctx, &payment.PaymentNotification{
+		OrderID: order.OutTradeNo,
+		TradeNo: "trade-auto-credit",
+		Amount:  10,
+		Status:  payment.NotificationStatusSuccess,
+		Metadata: map[string]string{
+			"pid":                  "1000",
+			"token":                "USDT",
+			"actual_amount":        "10.25",
+			"block_transaction_id": "0xauto-credit",
+		},
+	}, payment.TypeEpusdt)
+	require.NoError(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.InDelta(t, order.Amount, credited, 1e-8)
+	claimRows, err := client.QueryContext(ctx, "SELECT order_id, trade_no, actual_amount FROM epusdt_payment_claims WHERE block_transaction_id = ?", "0xauto-credit")
+	require.NoError(t, err)
+	require.True(t, claimRows.Next())
+	var claimedOrderID int64
+	var claimedTradeNo string
+	var claimedActualAmount float64
+	require.NoError(t, claimRows.Scan(&claimedOrderID, &claimedTradeNo, &claimedActualAmount))
+	require.NoError(t, claimRows.Close())
+	require.Equal(t, order.ID, claimedOrderID)
+	require.Equal(t, "trade-auto-credit", claimedTradeNo)
+	require.InDelta(t, 10.25, claimedActualAmount, 1e-9)
+	paidAuditCount, err := client.PaymentAuditLog.Query().
+		Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)), paymentauditlog.ActionEQ("ORDER_PAID")).
+		Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, paidAuditCount)
+}
+
+func TestToPaidEpusdtDuplicateCallbackCreditsOnce(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	order := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_duplicate", "")
+	redeemRepo := &paymentFulfillmentRedeemRepo{}
+	credited := 0.0
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 0}}
+	userRepo.updateBalanceFn = func(_ context.Context, _ int64, amount float64) error {
+		credited += amount
+		return nil
+	}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, &paymentFulfillmentRedeemCacheStub{}, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+	n := map[string]string{"pid": "1000", "token": "USDT", "actual_amount": "10.25", "block_transaction_id": "0xduplicate"}
+	require.NoError(t, svc.toPaidEpusdt(ctx, order, "trade-duplicate", 10, payment.TypeEpusdt, n))
+	require.NoError(t, svc.toPaidEpusdt(ctx, order, "trade-duplicate", 10, payment.TypeEpusdt, n))
+	require.InDelta(t, order.Amount, credited, 1e-8)
+	claimCount, err := client.QueryContext(ctx, "SELECT COUNT(*) FROM epusdt_payment_claims WHERE order_id = ?", order.ID)
+	require.NoError(t, err)
+	require.True(t, claimCount.Next())
+	var count int
+	require.NoError(t, claimCount.Scan(&count))
+	require.NoError(t, claimCount.Close())
+	require.Equal(t, 1, count)
+	paidAuditCount, err := client.PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
+		paymentauditlog.ActionEQ("ORDER_PAID"),
+	).Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, paidAuditCount)
+}
+
+func TestToPaidEpusdtRejectsCrossOrderTradeAndBlockClaims(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	first := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_owner", "")
+	second := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_other", "")
+	redeemRepo := &paymentFulfillmentRedeemRepo{}
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: first.UserID, Balance: 0}}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, &paymentFulfillmentRedeemCacheStub{}, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+	metadata := func(block string) map[string]string {
+		return map[string]string{"pid": "1000", "token": "USDT", "actual_amount": "10.25", "block_transaction_id": block}
+	}
+	require.NoError(t, svc.toPaidEpusdt(ctx, first, "trade-cross-order", 10, payment.TypeEpusdt, metadata("0xcross")))
+	firstReloaded, err := client.PaymentOrder.Get(ctx, first.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, firstReloaded.Status)
+	require.Error(t, svc.toPaidEpusdt(ctx, second, "trade-cross-order", 10, payment.TypeEpusdt, metadata("0xother")))
+	require.Error(t, svc.toPaidEpusdt(ctx, second, "trade-second", 10, payment.TypeEpusdt, metadata("0xcross")))
+	claimCount, err := client.QueryContext(ctx, "SELECT COUNT(*) FROM epusdt_payment_claims")
+	require.NoError(t, err)
+	require.True(t, claimCount.Next())
+	var count int
+	require.NoError(t, claimCount.Scan(&count))
+	require.NoError(t, claimCount.Close())
+	require.Equal(t, 1, count)
+}
+
+func TestToPaidEpusdtRollsBackClaimAndPaidStateWhenAuditFails(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	order := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_audit_rollback", "")
+	_, err := client.ExecContext(ctx, `CREATE TRIGGER epusdt_auto_paid_audit_failure BEFORE INSERT ON payment_audit_logs WHEN NEW.action = 'ORDER_PAID' BEGIN SELECT RAISE(ABORT, 'audit write failed'); END`)
+	require.NoError(t, err)
+	svc := &PaymentService{entClient: client}
+	err = svc.toPaidEpusdt(ctx, order, "trade-audit-rollback", 10, payment.TypeEpusdt, map[string]string{
+		"pid": "1000", "token": "USDT", "actual_amount": "10.25", "block_transaction_id": "0xaudit-rollback",
+	})
+	require.Error(t, err)
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusPending, reloaded.Status)
+	claimCount, err := client.QueryContext(ctx, "SELECT COUNT(*) FROM epusdt_payment_claims")
+	require.NoError(t, err)
+	require.True(t, claimCount.Next())
+	var count int
+	require.NoError(t, claimCount.Scan(&count))
+	require.NoError(t, claimCount.Close())
+	require.Zero(t, count)
+}
+
+func TestToPaidEpusdtRetriesFailedFulfillmentWithoutSecondClaim(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	order := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_retry", "")
+	redeemRepo := &paymentFulfillmentRedeemRepo{}
+	balanceErr := errors.New("balance update unavailable")
+	credited := 0.0
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 0}}
+	userRepo.updateBalanceFn = func(_ context.Context, _ int64, amount float64) error {
+		if balanceErr != nil {
+			return balanceErr
+		}
+		credited += amount
+		return nil
+	}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, &paymentFulfillmentRedeemCacheStub{}, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+	metadata := map[string]string{"pid": "1000", "token": "USDT", "actual_amount": "10.25", "block_transaction_id": "0xretry"}
+	require.Error(t, svc.toPaidEpusdt(ctx, order, "trade-retry", 10, payment.TypeEpusdt, metadata))
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusFailed, reloaded.Status)
+	// The real redeem transaction rolls back the code claim with the balance
+	// update. Restore the in-memory stub to that persisted state before retry.
+	redeemRepo.codesByCode[order.RechargeCode].Status = StatusUnused
+	redeemRepo.codesByCode[order.RechargeCode].UsedBy = nil
+	redeemRepo.codesByCode[order.RechargeCode].UsedAt = nil
+	balanceErr = nil
+	// Receipt was accepted before the fixed deadline. A delayed fulfillment
+	// retry must recover it even after the deadline has passed.
+	snap := clonePaymentOrderSnapshot(reloaded.ProviderSnapshot)
+	snap["auto_credit_deadline"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
+	_, err = client.PaymentOrder.UpdateOneID(order.ID).SetProviderSnapshot(snap).Save(ctx)
+	require.NoError(t, err)
+	require.NoError(t, svc.HandlePaymentNotification(ctx, &payment.PaymentNotification{
+		OrderID: order.OutTradeNo, TradeNo: "trade-retry", Amount: 10,
+		Status: payment.NotificationStatusSuccess, Metadata: metadata,
+	}, payment.TypeEpusdt))
+	reloaded, err = client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.InDelta(t, order.Amount, credited, 1e-8)
+	claimCount, err := client.QueryContext(ctx, "SELECT COUNT(*) FROM epusdt_payment_claims WHERE block_transaction_id = ?", "0xretry")
+	require.NoError(t, err)
+	require.True(t, claimCount.Next())
+	var count int
+	require.NoError(t, claimCount.Scan(&count))
+	require.NoError(t, claimCount.Close())
+	require.Equal(t, 1, count)
+}
+
+func TestToPaidEpusdtCompletedReplayDoesNotClaimNewEvidence(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	order := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_parent_child", "")
+	redeemRepo := &paymentFulfillmentRedeemRepo{}
+	credited := 0.0
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 0}}
+	userRepo.updateBalanceFn = func(_ context.Context, _ int64, amount float64) error { credited += amount; return nil }
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, &paymentFulfillmentRedeemCacheStub{}, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+	require.NoError(t, svc.toPaidEpusdt(ctx, order, "gateway-parent", 10, payment.TypeEpusdt, map[string]string{
+		"pid": "1000", "token": "USDT", "actual_amount": "10.00", "block_transaction_id": "0xparent",
+	}))
+	require.NoError(t, svc.toPaidEpusdt(ctx, order, "gateway-child", 10, payment.TypeEpusdt, map[string]string{
+		"pid": "1000", "token": "USDT", "actual_amount": "10.37", "block_transaction_id": "0xchild",
+	}))
+	require.InDelta(t, order.Amount, credited, 1e-8)
+	tradeCount, err := client.QueryContext(ctx, "SELECT COUNT(*) FROM epusdt_payment_trade_claims WHERE order_id = ?", order.ID)
+	require.NoError(t, err)
+	require.True(t, tradeCount.Next())
+	var count int
+	require.NoError(t, tradeCount.Scan(&count))
+	require.NoError(t, tradeCount.Close())
+	require.Equal(t, 1, count)
+}
+
+func TestToPaidEpusdtDoesNotFulfillRejectedOrder(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	order := createEpusdtManualReviewOrder(t, ctx, client, "sub2_auto_credit_rejected", "")
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).SetStatus(OrderStatusFailed).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(order.ID, 10)).SetAction(PaymentManualRejectedAction).SetDetail(`{"note":"invalid proof"}`).SetOperator("admin").Save(ctx)
+	require.NoError(t, err)
+	svc := &PaymentService{entClient: client}
+	require.NoError(t, svc.toPaidEpusdt(ctx, order, "trade-rejected", 10, payment.TypeEpusdt, map[string]string{
+		"pid": "1000", "token": "USDT", "actual_amount": "10.25", "block_transaction_id": "0xrejected-auto",
+	}))
+	claimCount, err := client.QueryContext(ctx, "SELECT COUNT(*) FROM epusdt_payment_claims")
+	require.NoError(t, err)
+	require.True(t, claimCount.Next())
+	var count int
+	require.NoError(t, claimCount.Scan(&count))
+	require.NoError(t, claimCount.Close())
+	require.Zero(t, count)
+	require.Equal(t, OrderStatusFailed, mustGetPaymentOrder(t, ctx, client, order.ID).Status)
+}
+
+func TestRecordPaymentManualReviewUsesCNYOrderTolerance(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	order := createEpusdtManualReviewOrder(t, ctx, client, "sub2_manual_review_cny", "")
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		SetAmount(67).
+		SetPayAmount(67).
+		SetProviderSnapshot(map[string]any{
+			"schema_version":    2,
+			"provider_key":      payment.TypeEpusdt,
+			"merchant_id":       "1000",
+			"asset":             "USDT",
+			"currency":          "CNY",
+			"requested_network": "trc20",
+		}).Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{entClient: client}
+	require.NoError(t, svc.RecordPaymentManualReview(ctx, &payment.PaymentNotification{
+		OrderID: order.OutTradeNo,
+		TradeNo: "trade-cny-tolerance",
+		Amount:  67.009,
+		Status:  payment.ProviderStatusPending,
+		Metadata: map[string]string{
+			"network_verification": "manual_review",
+			"pid":                  "1000",
+			"token":                "USDT",
+			"actual_amount":        "10.37",
+			"block_transaction_id": "0xcny-tolerance",
+		},
+	}))
+	require.Equal(t, OrderStatusPending, mustGetPaymentOrder(t, ctx, client, order.ID).Status)
+	claimRows, err := client.QueryContext(ctx, "SELECT amount FROM epusdt_payment_claims WHERE block_transaction_id = ?", "0xcny-tolerance")
+	require.NoError(t, err)
+	require.True(t, claimRows.Next())
+	var claimedAmount float64
+	require.NoError(t, claimRows.Scan(&claimedAmount))
+	require.NoError(t, claimRows.Close())
+	require.InDelta(t, 67.009, claimedAmount, 1e-9)
+}
+
 func TestRecordPaymentManualReviewLeavesOrderPending(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
