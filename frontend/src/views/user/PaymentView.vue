@@ -116,7 +116,8 @@
                 <option v-for="network in selectedNetworks" :key="network" :value="network">{{ network.toUpperCase() }}</option>
               </select>
               <p class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ t('payment.epusdtNetworkHint') }}</p>
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.epusdtSettlementHint') }}</p>
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.epusdtSettlementHint', { currency: epusdtCurrency }) }}</p>
+              <p class="mt-2 text-xs text-green-700 dark:text-green-300">{{ t('payment.epusdtAutoSettlementHint') }}</p>
               <p v-if="checkout.epusdt_help_text" class="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300" data-testid="epusdt-help">{{ checkout.epusdt_help_text }}</p>
             </div>
             <div v-if="validAmount > 0" class="card p-6">
@@ -148,6 +149,26 @@
                 <p v-if="balanceRechargeMultiplier !== 1" class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
                   {{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}
                 </p>
+                <div v-if="isEpusdt && epusdtCurrency === 'CNY'" class="border-t border-gray-200 pt-2 dark:border-dark-600" data-testid="epusdt-rate-status">
+                  <div v-if="epusdtRateLoading" class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.epusdtRateLoading') }}</div>
+                  <div v-else-if="epusdtRateError" class="flex items-center justify-between gap-3 text-xs text-red-600 dark:text-red-300">
+                    <span>{{ t('payment.epusdtRateError') }}</span>
+                    <button type="button" class="shrink-0 font-medium underline" @click="retryEpusdtRate">{{ t('payment.epusdtRateRetry') }}</button>
+                  </div>
+                  <template v-else-if="epusdtRateReady && epusdtRate">
+                    <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>{{ t('payment.epusdtEstimatedUsdt') }}</span>
+                      <span class="font-medium text-gray-900 dark:text-white">{{ estimatedEpusdtUsdt.toFixed(2) }} USDT</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('payment.epusdtEstimatedHint') }}
+                    </p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('payment.epusdtRateSource', { source: epusdtRateSourceLabel }) }}
+                    </p>
+                  </template>
+                  <div v-else class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.epusdtRateLoading') }}</div>
+                </div>
               </div>
             </div>
             <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmit || submitting" @click="handleSubmitRecharge">
@@ -322,7 +343,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -338,7 +359,7 @@ import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiErro
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
 import { buildExternalCardPurchaseUrl, externalCardPurchaseDisplayName, normalizeExternalCardPurchaseDisplayMode } from '@/utils/externalCardPurchase'
-import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, EpusdtRateQuote, OrderType } from '@/types/payment'
 import { formatRechargeBonusNumber, normalizeRechargeBonusMode, normalizeRechargeBonusTiers, quoteRechargeBonus } from '@/utils/rechargeBonus'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
@@ -401,6 +422,11 @@ const isEpusdt = computed(() => selectedMethod.value === 'epusdt')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
 const externalCardFrameFailed = ref(false)
+const epusdtRate = ref<EpusdtRateQuote | null>(null)
+const epusdtRateLoading = ref(false)
+const epusdtRateError = ref(false)
+const epusdtRateRequestId = ref(0)
+let epusdtRateExpiryTimer: ReturnType<typeof setTimeout> | undefined
 
 const paymentPhase = ref<'select' | 'paying'>('select')
 
@@ -681,7 +707,14 @@ const globalMaxAmount = computed(() => {
 
 // Selected method's limits (for validation and error messages)
 const selectedLimit = computed(() => visibleMethods.value[selectedMethod.value])
-const selectedCurrency = computed(() => isEpusdt.value ? 'USD' : normalizePaymentCurrency(selectedLimit.value?.currency))
+// EPUSDT keeps legacy USD responses/orders working when the backend omits the
+// provider currency. CNY is opt-in through checkout-info and requires a live quote.
+const epusdtCurrency = computed(() => {
+  if (!isEpusdt.value) return 'USD'
+  const configured = String(selectedLimit.value?.currency || '').trim().toUpperCase()
+  return configured === 'CNY' ? 'CNY' : 'USD'
+})
+const selectedCurrency = computed(() => isEpusdt.value ? epusdtCurrency.value : normalizePaymentCurrency(selectedLimit.value?.currency))
 const localeCode = computed(() => {
   const raw = i18n.locale as unknown
   if (typeof raw === 'string') return raw
@@ -741,6 +774,91 @@ const creditedAmount = computed(() => bonusQuote.value.credited)
 const showBonusRow = computed(() => bonusQuote.value.mode !== 'discount' && bonusQuote.value.bonus > 0)
 const showCreditedBalance = computed(() => isEpusdt.value || balanceRechargeMultiplier.value !== 1 || bonusQuote.value.percent > 0)
 
+const epusdtRateReady = computed(() => {
+  if (epusdtCurrency.value !== 'CNY' || !epusdtRate.value || epusdtRateLoading.value) return false
+  const expiresAt = Date.parse(epusdtRate.value.expires_at)
+  return Number.isFinite(expiresAt) && expiresAt > Date.now()
+})
+const estimatedEpusdtUsdt = computed(() =>
+  epusdtRateReady.value && epusdtRate.value
+    ? totalAmount.value * epusdtRate.value.usdt_per_unit
+    : 0,
+)
+const epusdtRateSourceLabel = computed(() => {
+  if (epusdtRate.value?.source === 'binance-p2p') return t('payment.epusdtRateSourceBinanceP2P')
+  return epusdtRate.value?.source || ''
+})
+
+function clearEpusdtRateTimer() {
+  if (epusdtRateExpiryTimer !== undefined) {
+    clearTimeout(epusdtRateExpiryTimer)
+    epusdtRateExpiryTimer = undefined
+  }
+}
+
+function scheduleEpusdtRateRefresh(quote: EpusdtRateQuote) {
+  clearEpusdtRateTimer()
+  const expiresAt = Date.parse(quote.expires_at)
+  if (!Number.isFinite(expiresAt)) return
+  const delay = Math.min(Math.max(0, expiresAt - Date.now()), 2_147_483_647)
+  epusdtRateExpiryTimer = setTimeout(() => {
+    epusdtRateExpiryTimer = undefined
+    if (isEpusdt.value && epusdtCurrency.value === 'CNY') {
+      void loadEpusdtRate()
+    }
+  }, delay)
+}
+
+async function loadEpusdtRate() {
+  if (!isEpusdt.value || epusdtCurrency.value !== 'CNY' || epusdtRateLoading.value) return
+  const requestId = ++epusdtRateRequestId.value
+  clearEpusdtRateTimer()
+  epusdtRate.value = null
+  epusdtRateLoading.value = true
+  epusdtRateError.value = false
+  try {
+    const response = await paymentAPI.getEpusdtRate()
+    const quote = response.data
+    const expiresAt = Date.parse(quote.expires_at)
+    if (
+      requestId !== epusdtRateRequestId.value
+      || quote.currency !== 'CNY'
+      || quote.asset !== 'USDT'
+      || !Number.isFinite(quote.usdt_per_unit)
+      || quote.usdt_per_unit <= 0
+      || !Number.isFinite(expiresAt)
+      || expiresAt <= Date.now()
+    ) {
+      throw new Error('INVALID_EPUSDT_RATE')
+    }
+    epusdtRate.value = quote
+    scheduleEpusdtRateRefresh(quote)
+  } catch {
+    if (requestId === epusdtRateRequestId.value) {
+      epusdtRate.value = null
+      epusdtRateError.value = true
+    }
+  } finally {
+    if (requestId === epusdtRateRequestId.value) epusdtRateLoading.value = false
+  }
+}
+
+function retryEpusdtRate() {
+  void loadEpusdtRate()
+}
+
+watch([isEpusdt, epusdtCurrency], ([selected, currency]) => {
+  if (selected && currency === 'CNY') {
+    void loadEpusdtRate()
+    return
+  }
+  epusdtRateRequestId.value += 1
+  clearEpusdtRateTimer()
+  epusdtRate.value = null
+  epusdtRateLoading.value = false
+  epusdtRateError.value = false
+}, { immediate: true })
+
 const methodOptions = computed<PaymentMethodOption[]>(() =>
   enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
@@ -791,7 +909,12 @@ const canSubmit = computed(() =>
   validAmount.value > 0
     && amountFitsMethod(payBaseAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
-    && (selectedMethod.value !== 'epusdt' || (checkout.value.epusdt_enabled === true && selectedNetworks.value.includes(selectedNetwork.value) && amountError.value === ''))
+    && (selectedMethod.value !== 'epusdt' || (
+      checkout.value.epusdt_enabled === true
+      && selectedNetworks.value.includes(selectedNetwork.value)
+      && amountError.value === ''
+      && (epusdtCurrency.value !== 'CNY' || epusdtRateReady.value)
+    ))
 )
 
 const subPaymentAmount = computed(() => {
@@ -1305,5 +1428,10 @@ onMounted(async () => {
   if (internalPaymentEnabled.value && subscriptionEnabled.value) {
     subscriptionStore.fetchActiveSubscriptions().catch(() => {})
   }
+})
+
+onBeforeUnmount(() => {
+  clearEpusdtRateTimer()
+  epusdtRateRequestId.value += 1
 })
 </script>

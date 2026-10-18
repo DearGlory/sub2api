@@ -171,7 +171,8 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'token', label: '', sensitive: false, defaultValue: 'USDT', options: [{ value: 'USDT', label: 'USDT' }] },
     { key: 'network', label: '', sensitive: false },
     { key: 'networks', label: '', sensitive: false, optional: true, hintKey: 'admin.settings.payment.field_epusdtNetworksHint' },
-    { key: 'currency', label: '', sensitive: false, defaultValue: 'USD', hintKey: 'admin.settings.payment.field_epusdtCurrencyHint', options: [{ value: 'USD', label: 'USD' }] },
+    { key: 'currency', label: '', sensitive: false, defaultValue: 'CNY', hintKey: 'admin.settings.payment.field_epusdtCurrencyHint', options: [{ value: 'CNY', label: 'CNY' }, { value: 'USD', label: 'USD' }] },
+    { key: 'rateApi', label: '', sensitive: false, optional: true, clearable: true, hintKey: 'admin.settings.payment.field_epusdtRateApiHint' },
   ],
 }
 

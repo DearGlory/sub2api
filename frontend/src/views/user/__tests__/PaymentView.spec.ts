@@ -25,6 +25,7 @@ const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
+const getEpusdtRate = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const translate = vi.hoisted(() => vi.fn((key: string) => key))
 // Public settings live in a reactive holder so tests can flip feature flags after mount
@@ -100,6 +101,7 @@ vi.mock('@/stores', async () => {
 vi.mock('@/api/payment', () => ({
   paymentAPI: {
     getCheckoutInfo,
+    getEpusdtRate,
   },
 }))
 
@@ -912,6 +914,7 @@ describe('PaymentView EPUSDT network selection', () => {
       out_trade_no: 'sub2_epusdt_321',
     })
     showError.mockReset()
+    getEpusdtRate.mockReset()
     fetchActiveSubscriptions.mockReset().mockResolvedValue(undefined)
     window.localStorage.clear()
     Object.defineProperty(window, 'location', { configurable: true, value: { origin: 'http://localhost', href: 'http://localhost/purchase' } })
@@ -955,6 +958,131 @@ describe('PaymentView EPUSDT network selection', () => {
     expect(button).toBeDefined()
     return button!
   }
+
+  it('renders the CNY total and estimates 67 CNY as 10 USDT at the backend rate', async () => {
+    const fixture = checkoutInfoWithPlansFixture()
+    getEpusdtRate.mockReset().mockResolvedValue({ data: {
+      currency: 'CNY',
+      asset: 'USDT',
+      usdt_per_unit: 1 / 6.7,
+      source: 'binance-p2p',
+      fetched_at: '2099-01-01T00:00:00.000Z',
+      expires_at: '2099-01-01T00:05:00.000Z',
+      trade_type: 'BUY',
+    } })
+    getCheckoutInfo.mockReset().mockResolvedValue({ data: {
+      ...fixture.data,
+      methods: { epusdt: { ...fixture.data.methods.wxpay, currency: 'CNY', networks: ['tron'] } },
+      epusdt_enabled: true,
+      epusdt_fee_rate: 0,
+      epusdt_balance_multiplier: 1,
+    } })
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 67)
+    wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'epusdt')
+    await flushPromises()
+
+    expect(getEpusdtRate).toHaveBeenCalledTimes(1)
+    expect(wrapper.getComponent(AmountInput).props('currency')).toBe('CNY')
+    expect(wrapper.text()).toContain('10.00 USDT')
+    expect(wrapper.text()).toContain('payment.epusdtEstimatedHint')
+    expect(translate).toHaveBeenCalledWith('payment.epusdtRateSourceBinanceP2P')
+    expect(translate).toHaveBeenCalledWith('payment.epusdtRateSource', { source: 'payment.epusdtRateSourceBinanceP2P' })
+  })
+
+  it('estimates USDT from the fee-inclusive CNY total', async () => {
+    const fixture = checkoutInfoWithPlansFixture()
+    getEpusdtRate.mockResolvedValue({ data: {
+      currency: 'CNY',
+      asset: 'USDT',
+      usdt_per_unit: 1 / 6.7,
+      source: 'binance-p2p',
+      fetched_at: '2099-01-01T00:00:00.000Z',
+      expires_at: '2099-01-01T00:05:00.000Z',
+      trade_type: 'BUY',
+    } })
+    getCheckoutInfo.mockResolvedValue({ data: {
+      ...fixture.data,
+      methods: { epusdt: { ...fixture.data.methods.wxpay, currency: 'CNY', networks: ['tron'] } },
+      epusdt_enabled: true,
+      epusdt_fee_rate: 2,
+    } })
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 67)
+    wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'epusdt')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(formatPaymentAmount(68.34, 'CNY'))
+    expect(wrapper.text()).toContain('10.20 USDT')
+  })
+
+  it('disables only CNY EPUSDT when its rate request fails', async () => {
+    const fixture = checkoutInfoWithPlansFixture()
+    getEpusdtRate.mockRejectedValue(new Error('rate unavailable'))
+    getCheckoutInfo.mockResolvedValue({ data: {
+      ...fixture.data,
+      methods: {
+        wxpay: fixture.data.methods.wxpay,
+        epusdt: { ...fixture.data.methods.wxpay, currency: 'CNY', networks: ['tron'] },
+      },
+      epusdt_enabled: true,
+    } })
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 67)
+    wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'epusdt')
+    await flushPromises()
+
+    expect(paymentButton(wrapper).element.disabled).toBe(true)
+    expect(wrapper.find('[data-testid="epusdt-rate-status"]').text()).toContain('payment.epusdtRateError')
+    wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'wxpay')
+    await flushPromises()
+    expect(paymentButton(wrapper).element.disabled).toBe(false)
+  })
+
+  it('rejects an already expired CNY quote before checkout', async () => {
+    const fixture = checkoutInfoWithPlansFixture()
+    getEpusdtRate.mockResolvedValue({ data: {
+      currency: 'CNY',
+      asset: 'USDT',
+      usdt_per_unit: 1 / 6.7,
+      source: 'binance-p2p',
+      fetched_at: '2020-01-01T00:00:00.000Z',
+      expires_at: '2020-01-01T00:05:00.000Z',
+      trade_type: 'BUY',
+    } })
+    getCheckoutInfo.mockResolvedValue({ data: {
+      ...fixture.data,
+      methods: { epusdt: { ...fixture.data.methods.wxpay, currency: 'CNY', networks: ['tron'] } },
+      epusdt_enabled: true,
+    } })
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    mounted.push(wrapper)
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 67)
+    wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'epusdt')
+    await flushPromises()
+
+    expect(paymentButton(wrapper).element.disabled).toBe(true)
+    expect(wrapper.find('[data-testid="epusdt-rate-status"]').text()).toContain('payment.epusdtRateError')
+  })
 
   it('uses independent USD pricing without global bonuses or discounts', async () => {
     const fixture = checkoutInfoWithPlansFixture()

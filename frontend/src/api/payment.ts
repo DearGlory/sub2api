@@ -11,6 +11,7 @@ import type {
   CheckoutInfoResponse,
   CreateOrderRequest,
   CreateOrderResult,
+  EpusdtRateQuote,
   PaymentOrder
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
@@ -42,6 +43,11 @@ export const paymentAPI = {
   /** Get payment method limits and fee rates */
   getLimits() {
     return apiClient.get<MethodLimitsResponse>('/payment/limits')
+  },
+
+  /** Get the current EPUSDT fiat-to-USDT quote */
+  getEpusdtRate() {
+    return apiClient.get<EpusdtRateQuote>('/payment/epusdt/rate')
   },
 
   /** Create a new payment order */

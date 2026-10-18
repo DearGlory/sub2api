@@ -21,6 +21,18 @@ export type OrderStatus =
 
 export type PaymentType = 'alipay' | 'wxpay' | 'alipay_direct' | 'wxpay_direct' | 'stripe' | 'easypay' | 'airwallex' | 'epusdt'
 
+export type PaymentCurrency = 'CNY' | 'USD'
+
+export interface EpusdtRateQuote {
+  currency: PaymentCurrency
+  asset: 'USDT'
+  usdt_per_unit: number
+  source: string
+  fetched_at: string
+  expires_at: string
+  trade_type: string
+}
+
 export type OrderType = 'balance' | 'subscription'
 
 // ==================== Configuration ====================

@@ -2515,7 +2515,7 @@ export interface UpdateScheduledTestPlanRequest {
 }
 
 // Payment types
-export type { SubscriptionPlan, PaymentOrder, CheckoutInfoResponse } from './payment'
+export type { SubscriptionPlan, PaymentOrder, CheckoutInfoResponse, EpusdtRateQuote, PaymentCurrency } from './payment'
 
 export type {
   PlatformQuotaItem,

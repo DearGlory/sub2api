@@ -14,9 +14,11 @@ function findField(providerKey: string, key: string) {
 }
 
 describe('PROVIDER_CONFIG_FIELDS.epusdt', () => {
-  it('limits the checkout configuration to USDT and USD', () => {
+  it('limits the checkout configuration to USDT and CNY/USD', () => {
     expect(findField('epusdt', 'token')?.options).toEqual([{ value: 'USDT', label: 'USDT' }])
-    expect(findField('epusdt', 'currency')?.options).toEqual([{ value: 'USD', label: 'USD' }])
+    expect(findField('epusdt', 'currency')?.defaultValue).toBe('CNY')
+    expect(findField('epusdt', 'currency')?.options).toEqual([{ value: 'CNY', label: 'CNY' }, { value: 'USD', label: 'USD' }])
+    expect(findField('epusdt', 'rateApi')?.optional).toBe(true)
   })
 })
 
