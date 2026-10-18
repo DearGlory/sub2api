@@ -40,10 +40,16 @@ type epusdtEnvelope struct {
 }
 
 type epusdtCreateData struct {
-	TradeID    string  `json:"trade_id"`
-	OrderID    string  `json:"order_id"`
-	Amount     float64 `json:"amount"`
-	PaymentURL string  `json:"payment_url"`
+	TradeID        string  `json:"trade_id"`
+	OrderID        string  `json:"order_id"`
+	Amount         float64 `json:"amount"`
+	Currency       string  `json:"currency"`
+	ActualAmount   float64 `json:"actual_amount"`
+	ReceiveAddress string  `json:"receive_address"`
+	Token          string  `json:"token"`
+	Status         int     `json:"status"`
+	ExpirationTime int64   `json:"expiration_time"`
+	PaymentURL     string  `json:"payment_url"`
 }
 
 type epusdtStatusData struct {
@@ -80,8 +86,8 @@ func NewEPUSDT(instanceID string, config map[string]string) (*EPUSDT, error) {
 	if !strings.EqualFold(token, "USDT") {
 		return nil, fmt.Errorf("epusdt token must be USDT")
 	}
-	if !strings.EqualFold(currency, "USD") {
-		return nil, fmt.Errorf("epusdt currency must be USD")
+	if !strings.EqualFold(currency, "USD") && !strings.EqualFold(currency, "CNY") {
+		return nil, fmt.Errorf("epusdt currency must be USD or CNY")
 	}
 
 	pid := strings.TrimSpace(cfg["pid"])
@@ -286,16 +292,36 @@ func (e *EPUSDT) CreatePayment(ctx context.Context, req payment.CreatePaymentReq
 	if data.OrderID != "" && data.OrderID != orderID {
 		return nil, fmt.Errorf("epusdt create payment: order id mismatch")
 	}
+	if strings.EqualFold(e.config["currency"], "CNY") {
+		if data.OrderID != orderID {
+			return nil, fmt.Errorf("epusdt create payment: order id mismatch")
+		}
+		if !isFinitePositive(data.ActualAmount) {
+			return nil, fmt.Errorf("epusdt create payment: missing actual USDT amount")
+		}
+		if !strings.EqualFold(strings.TrimSpace(data.Currency), "CNY") {
+			return nil, fmt.Errorf("epusdt create payment: currency mismatch")
+		}
+		if !strings.EqualFold(strings.TrimSpace(data.Token), "USDT") {
+			return nil, fmt.Errorf("epusdt create payment: token mismatch")
+		}
+		requestedMinor, requestedErr := payment.AmountToMinorUnit(strconv.FormatFloat(amount, 'f', -1, 64), "CNY")
+		responseMinor, responseErr := payment.AmountToMinorUnit(strconv.FormatFloat(data.Amount, 'f', -1, 64), "CNY")
+		if requestedErr != nil || responseErr != nil || requestedMinor != responseMinor {
+			return nil, fmt.Errorf("epusdt create payment: amount mismatch")
+		}
+	}
 	payURL, err := e.normalizePaymentURL(data.PaymentURL)
 	if err != nil {
 		return nil, err
 	}
 
 	return &payment.CreatePaymentResponse{
-		TradeNo:    data.TradeID,
-		PayURL:     payURL,
-		Currency:   e.config["currency"],
-		ResultType: payment.CreatePaymentResultOrderCreated,
+		TradeNo:             data.TradeID,
+		PayURL:              payURL,
+		Currency:            e.config["currency"],
+		GatewayExpectedUSDT: data.ActualAmount,
+		ResultType:          payment.CreatePaymentResultOrderCreated,
 	}, nil
 }
 
@@ -380,13 +406,15 @@ func (e *EPUSDT) VerifyNotification(_ context.Context, rawBody string, _ map[str
 	if err != nil || !isFinitePositive(actualAmount) {
 		return nil, fmt.Errorf("epusdt webhook: invalid actual amount")
 	}
+	if !strings.EqualFold(rawString(raw, "token"), "USDT") {
+		return nil, fmt.Errorf("epusdt webhook: token must be USDT")
+	}
 	upstreamStatus := rawInt(raw, "status")
 	status := payment.ProviderStatusFailed
 	if upstreamStatus == 2 {
-		// GMPay callbacks contain no network proof. A gateway may switch the
-		// underlying chain after order creation, so success is held for manual
-		// reconciliation rather than credited automatically.
-		status = payment.ProviderStatusPending
+		// A valid GMPay signature is the authoritative merchant callback proof.
+		// It is not described as an independent network verification.
+		status = payment.NotificationStatusSuccess
 	}
 
 	// Keep webhook audit data minimal: signatures and wallet addresses are not persisted.
@@ -401,7 +429,7 @@ func (e *EPUSDT) VerifyNotification(_ context.Context, rawBody string, _ map[str
 			"token":                rawString(raw, "token"),
 			"actual_amount":        strconv.FormatFloat(actualAmount, 'f', -1, 64),
 			"block_transaction_id": rawString(raw, "block_transaction_id"),
-			"network_verification": "manual_review",
+			"network_verification": "gateway_signed",
 			"configured_networks":  e.config["networks"],
 		},
 	}, nil

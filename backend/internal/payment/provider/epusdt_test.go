@@ -78,9 +78,15 @@ func TestNewEPUSDTRejectsNonUSDTAssetOrCurrency(t *testing.T) {
 	require.ErrorContains(t, err, "USDT")
 
 	invalidCurrency := cloneStringMap(base)
-	invalidCurrency["currency"] = "CNY"
+	invalidCurrency["currency"] = "EUR"
 	_, err = NewEPUSDT("test", invalidCurrency)
-	require.ErrorContains(t, err, "USD")
+	require.ErrorContains(t, err, "USD or CNY")
+
+	cnyConfig := cloneStringMap(base)
+	cnyConfig["currency"] = "CNY"
+	provider, err := NewEPUSDT("test", cnyConfig)
+	require.NoError(t, err)
+	require.Equal(t, "CNY", provider.MerchantIdentityMetadata()["currency"])
 }
 
 func TestEPUSDTCreatePaymentSignsRequestedNetworkAndReturnsRedirect(t *testing.T) {
@@ -114,6 +120,68 @@ func TestEPUSDTCreatePaymentSignsRequestedNetworkAndReturnsRedirect(t *testing.T
 	require.Equal(t, payment.CreatePaymentResultOrderCreated, resp.ResultType)
 }
 
+func TestEPUSDTCreatePaymentCNYReturnsActualUSDT(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status_code":200,"message":"success","data":{"trade_id":"trade-cny","order_id":"order-cny","amount":67,"currency":"CNY","actual_amount":10,"receive_address":"TTest","token":"USDT","status":1,"expiration_time":1713264600,"payment_url":"/pay/trade-cny"}}`))
+	}))
+	defer server.Close()
+
+	prov := newTestEPUSDT(t, server)
+	prov.config["currency"] = "CNY"
+	resp, err := prov.CreatePayment(context.Background(), payment.CreatePaymentRequest{
+		OrderID: "order-cny", Amount: "67", RequestedNetwork: "trc20",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "trade-cny", resp.TradeNo)
+	require.Equal(t, "CNY", resp.Currency)
+	require.Equal(t, 10.0, resp.GatewayExpectedUSDT)
+}
+
+func TestEPUSDTCreatePaymentCNYRejectsMissingActualUSDT(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status_code":200,"message":"success","data":{"trade_id":"trade-cny","order_id":"order-cny","amount":67,"currency":"CNY","token":"USDT","status":1,"payment_url":"/pay/trade-cny"}}`))
+	}))
+	defer server.Close()
+
+	prov := newTestEPUSDT(t, server)
+	prov.config["currency"] = "CNY"
+	_, err := prov.CreatePayment(context.Background(), payment.CreatePaymentRequest{
+		OrderID: "order-cny", Amount: "67", RequestedNetwork: "trc20",
+	})
+	require.ErrorContains(t, err, "actual USDT")
+}
+
+func TestEPUSDTCreatePaymentCNYRequiresMatchingOrderID(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status_code":200,"message":"success","data":{"trade_id":"trade-cny","order_id":"","amount":67,"currency":"CNY","actual_amount":10,"token":"USDT","status":1,"payment_url":"/pay/trade-cny"}}`))
+	}))
+	defer server.Close()
+
+	prov := newTestEPUSDT(t, server)
+	prov.config["currency"] = "CNY"
+	_, err := prov.CreatePayment(context.Background(), payment.CreatePaymentRequest{
+		OrderID: "order-cny", Amount: "67", RequestedNetwork: "trc20",
+	})
+	require.ErrorContains(t, err, "order id mismatch")
+}
+
+func TestEPUSDTVerifyNotificationRejectsNonUSDTToken(t *testing.T) {
+	server := httptest.NewTLSServer(http.NotFoundHandler())
+	defer server.Close()
+	prov := newTestEPUSDT(t, server)
+
+	payload := map[string]interface{}{
+		"pid": "1000", "trade_id": "trade-123", "order_id": "order-123",
+		"amount": 12.34, "actual_amount": 12.34, "token": "USDC", "status": 2,
+		"block_transaction_id": "0xabc",
+	}
+	payload["signature"] = expectedEPUSDTSignature(payload, epusdtTestSecret)
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+	_, err = prov.VerifyNotification(context.Background(), string(body), nil)
+	require.ErrorContains(t, err, "token must be USDT")
+}
+
 func TestEPUSDTRejectsUnsupportedRequestedNetwork(t *testing.T) {
 	server := httptest.NewTLSServer(http.NotFoundHandler())
 	defer server.Close()
@@ -137,8 +205,8 @@ func TestEPUSDTQueryOrderDoesNotInventAmount(t *testing.T) {
 	require.Zero(t, resp.Amount, "GMPay status response has no trusted payment amount")
 }
 
-func TestEPUSDTVerifyNotificationRequiresManualNetworkReview(t *testing.T) {
-	server := httptest.NewTLSServer(http.NotFoundHandler())
+func TestEPUSDTVerifyNotificationReturnsSignedSuccess(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 	prov := newTestEPUSDT(t, server)
 
@@ -153,8 +221,8 @@ func TestEPUSDTVerifyNotificationRequiresManualNetworkReview(t *testing.T) {
 
 	notification, err := prov.VerifyNotification(context.Background(), string(body), nil)
 	require.NoError(t, err)
-	require.Equal(t, payment.ProviderStatusPending, notification.Status)
-	require.Equal(t, "manual_review", notification.Metadata["network_verification"])
+	require.Equal(t, payment.NotificationStatusSuccess, notification.Status)
+	require.Equal(t, "gateway_signed", notification.Metadata["network_verification"])
 	require.Equal(t, "bsc,trc20", notification.Metadata["configured_networks"])
 	require.NotContains(t, notification.RawData, epusdtTestSecret)
 	require.NotContains(t, notification.RawData, "0xabc")
