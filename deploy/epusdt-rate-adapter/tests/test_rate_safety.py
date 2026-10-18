@@ -15,6 +15,34 @@ def payload():
 
 
 class RateSafetyTests(unittest.TestCase):
+    def test_published_expiry_boundary_refreshes_before_returning_cached_quote(self):
+        now = [100.875]
+        calls = [0]
+        def fetch():
+            calls[0] += 1
+            return payload()
+        service = RateService(fetch, clock=lambda: now[0], cache_ttl=60, max_age=300)
+        first = service.get_cny_rate()
+        now[0] = 159.5
+        second = service.get_cny_rate()
+        self.assertEqual(calls[0], 2)
+        self.assertNotEqual(first['expires_at'], second['expires_at'])
+
+    def test_published_expiry_boundary_failure_does_not_serve_cached_quote(self):
+        now = [100.875]
+        calls = [0]
+        def fetch():
+            calls[0] += 1
+            if calls[0] == 1:
+                return payload()
+            raise OSError('offline')
+        service = RateService(fetch, clock=lambda: now[0], cache_ttl=60, max_age=300)
+        service.get_cny_rate()
+        now[0] = 160.1
+        self.assertFalse(service.health()['ready'])
+        with self.assertRaises(RateUnavailable):
+            service.get_cny_rate()
+
     def test_expired_quote_is_not_returned_as_success_on_refresh_failure(self):
         now = [100.0]
         calls = [0]

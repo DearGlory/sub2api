@@ -23,6 +23,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 18084
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_CACHE_TTL_SECONDS = 60.0
+DEFAULT_REFRESH_MARGIN_SECONDS = 1.0
 DEFAULT_MAX_AGE_SECONDS = 300.0
 DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024
 BINANCE_QUOTE_URL = (
@@ -288,6 +289,15 @@ class RateService:
             return math.inf
         return max(0.0, now - snapshot.fetched_at)
 
+    def _fresh(self, snapshot: _Snapshot | None, now: float) -> bool:
+        if snapshot is None or now < snapshot.fetched_at:
+            return False
+        # The wire timestamp is whole seconds; refresh before that deadline,
+        # leaving one second for consumer transit without extending quote life.
+        published_expiry = math.floor(snapshot.fetched_at + self._cache_ttl)
+        margin = min(DEFAULT_REFRESH_MARGIN_SECONDS, self._cache_ttl / 2)
+        return now < published_expiry - margin
+
     def _public(self, snapshot: _Snapshot) -> dict[str, Any]:
         expires_at = snapshot.fetched_at + self._cache_ttl
         return {
@@ -313,7 +323,7 @@ class RateService:
                 now = self._clock()
                 snapshot = self._snapshot
                 age = self._age(snapshot, now)
-                if snapshot is not None and 0 <= now - snapshot.fetched_at < self._cache_ttl:
+                if self._fresh(snapshot, now):
                     return self._public(snapshot)
                 if self._refreshing:
                     waited_generation = self._refresh_generation
@@ -353,7 +363,7 @@ class RateService:
             now = self._clock()
             snapshot = self._snapshot
             age = self._age(snapshot, now)
-            ready = snapshot is not None and 0 <= now - snapshot.fetched_at < self._cache_ttl
+            ready = self._fresh(snapshot, now)
             stale = snapshot is not None and not ready
             if not ready:
                 status = "not_ready"
