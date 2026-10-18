@@ -387,7 +387,9 @@ func validateExistingRecord(directory *os.File, name string, missingAllowed bool
 	if err != nil {
 		return ErrUnsafeRecord
 	}
-	defer syscall.Close(fd)
+	defer func() {
+		_ = syscall.Close(fd)
+	}()
 
 	var stat syscall.Stat_t
 	if err := syscall.Fstat(fd, &stat); err != nil {
