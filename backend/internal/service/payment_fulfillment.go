@@ -194,12 +194,14 @@ func normalizeEpusdtBlockTransactionID(value string) (string, error) {
 	if original == "" || len(original) > 255 || strings.IndexFunc(original, unicode.IsSpace) >= 0 || strings.IndexFunc(original, unicode.IsControl) >= 0 {
 		return "", errors.New("invalid blockchain transaction")
 	}
-	if strings.HasPrefix(strings.ToLower(original), "0x") {
-		hexValue := original[2:]
-		if len(hexValue) > 0 && len(hexValue)%2 == 0 {
-			if _, err := hex.DecodeString(hexValue); err == nil {
-				return strings.ToLower(original), nil
-			}
+	hexValue := original
+	prefixed := strings.HasPrefix(strings.ToLower(original), "0x")
+	if prefixed {
+		hexValue = original[2:]
+	}
+	if (prefixed || len(hexValue) == 64) && len(hexValue) > 0 && len(hexValue)%2 == 0 {
+		if _, err := hex.DecodeString(hexValue); err == nil {
+			return "0x" + strings.ToLower(hexValue), nil
 		}
 	}
 	return original, nil
@@ -224,6 +226,9 @@ func claimEpusdtBlockTransaction(ctx context.Context, client *dbent.Client, bloc
 	}
 	if historicalOrderID != 0 && historicalOrderID != orderID {
 		return historicalOrderID, nil
+	}
+	if err := claimEpusdtTradeNumber(ctx, client, blockID, orderID, tradeNo); err != nil {
+		return 0, err
 	}
 	var query string
 	var args []any
@@ -286,6 +291,63 @@ func claimEpusdtBlockTransaction(ctx context.Context, client *dbent.Client, bloc
 		}
 	}
 	return claimedOrderID, nil
+}
+
+// claimEpusdtTradeNumber runs inside the caller's transaction and never releases
+// an earlier callback trade when a gateway parent order gains another trade.
+func claimEpusdtTradeNumber(ctx context.Context, client *dbent.Client, blockID string, orderID int64, tradeNo string) error {
+	tradeNo = strings.TrimSpace(tradeNo)
+	if tradeNo == "" || len(tradeNo) > 128 || strings.IndexFunc(tradeNo, unicode.IsControl) >= 0 {
+		return errors.New("invalid upstream trade number")
+	}
+	exists, err := client.PaymentOrder.Query().Where(paymentorder.PaymentTypeEQ(payment.TypeEpusdt), paymentorder.PaymentTradeNoEQ(tradeNo), paymentorder.IDNEQ(orderID)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("upstream trade number already belongs to another order")
+	}
+	logs, err := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionIn(PaymentManualReviewAction, PaymentManualApprovedAction)).All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, log := range logs {
+		if strings.TrimSpace(manualReviewTradeNo(log.Detail)) == tradeNo && log.OrderID != strconv.FormatInt(orderID, 10) {
+			return errors.New("upstream trade number belongs to another historical order")
+		}
+	}
+	insert := `INSERT INTO epusdt_payment_trade_claims (trade_no, order_id, block_transaction_id) VALUES (?, ?, ?) ON CONFLICT (trade_no) DO NOTHING`
+	query := `SELECT order_id, block_transaction_id FROM epusdt_payment_trade_claims WHERE trade_no = ?`
+	if paymentAuditDialect(client) == dialect.Postgres {
+		insert = `INSERT INTO epusdt_payment_trade_claims (trade_no, order_id, block_transaction_id) VALUES ($1, $2, $3) ON CONFLICT (trade_no) DO NOTHING`
+		query = `SELECT order_id, block_transaction_id FROM epusdt_payment_trade_claims WHERE trade_no = $1`
+	}
+	if _, err := client.ExecContext(ctx, insert, tradeNo, orderID, blockID); err != nil {
+		return err
+	}
+	rows, err := client.QueryContext(ctx, query, tradeNo)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		return errors.New("upstream trade claim disappeared")
+	}
+	var owner int64
+	var claimedBlock string
+	if err := rows.Scan(&owner, &claimedBlock); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if owner != orderID || claimedBlock != blockID {
+		return errors.New("upstream trade number already has different payment evidence")
+	}
+	return nil
 }
 
 // historicalEpusdtBlockClaim protects the first post-247 callback from

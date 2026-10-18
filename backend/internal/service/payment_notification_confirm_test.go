@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -240,6 +241,13 @@ CREATE TABLE IF NOT EXISTS epusdt_payment_claims (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 )`)
 	require.NoError(t, err)
+	_, err = client.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS epusdt_payment_trade_claims (
+    trade_no TEXT PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    block_transaction_id TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`)
+	require.NoError(t, err)
 }
 
 func createEpusdtManualReviewOrder(t *testing.T, ctx context.Context, client *dbent.Client, outTradeNo, paymentTradeNo string) *dbent.PaymentOrder {
@@ -335,6 +343,32 @@ func TestRecordPaymentManualReviewClaimsBlockTransactionAcrossOrdersAtomically(t
 	require.Equal(t, 1, reviewCount)
 }
 
+func TestRecordPaymentManualReviewRejectsChildTradeAcrossOrders(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	first := createEpusdtManualReviewOrder(t, ctx, client, "trade_owner_first", "parent-first")
+	second := createEpusdtManualReviewOrder(t, ctx, client, "trade_owner_second", "parent-second")
+	svc := &PaymentService{entClient: client}
+	require.NoError(t, svc.RecordPaymentManualReview(ctx, epusdtManualReviewNotification(first, "shared-child", "0x1234")))
+	require.Error(t, svc.RecordPaymentManualReview(ctx, epusdtManualReviewNotification(second, "shared-child", "0x5678")))
+	count, err := client.PaymentAuditLog.Query().Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(second.ID, 10)), paymentauditlog.ActionEQ(PaymentManualReviewAction)).Count(ctx)
+	require.NoError(t, err)
+	require.Zero(t, count)
+}
+
+func TestRecordPaymentManualReviewRetainsPriorTradeOwnership(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensureEpusdtPaymentClaimsTable(t, ctx, client)
+	first := createEpusdtManualReviewOrder(t, ctx, client, "trade_alias_first", "parent-first")
+	second := createEpusdtManualReviewOrder(t, ctx, client, "trade_alias_second", "parent-second")
+	svc := &PaymentService{entClient: client}
+	require.NoError(t, svc.RecordPaymentManualReview(ctx, epusdtManualReviewNotification(first, "original-child", "0xabcd")))
+	require.NoError(t, svc.RecordPaymentManualReview(ctx, epusdtManualReviewNotification(first, "replacement-child", "0xabcd")))
+	require.Error(t, svc.RecordPaymentManualReview(ctx, epusdtManualReviewNotification(second, "original-child", "0xef12")))
+}
+
 func TestRecordPaymentManualReviewSameOrderRetryIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
@@ -358,6 +392,15 @@ func TestRecordPaymentManualReviewSameOrderRetryIsIdempotent(t *testing.T) {
 	require.NoError(t, claimRows.Scan(&tradeNo))
 	require.NoError(t, claimRows.Close())
 	require.Equal(t, "trade-child", tradeNo)
+}
+
+func TestNormalizeEpusdtBlockTransactionIDCanonicalizesHexHash(t *testing.T) {
+	plain := strings.Repeat("Ab", 32)
+	unprefixed, err := normalizeEpusdtBlockTransactionID(plain)
+	require.NoError(t, err)
+	prefixed, err := normalizeEpusdtBlockTransactionID("0x" + strings.ToLower(plain))
+	require.NoError(t, err)
+	require.Equal(t, prefixed, unprefixed)
 }
 
 func TestNormalizeEpusdtBlockTransactionIDPreservesBase58Case(t *testing.T) {
