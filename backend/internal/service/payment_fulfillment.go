@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"entgo.io/ent/dialect"
-	"entgo.io/ent/dialect/sql"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
@@ -123,38 +124,192 @@ func (s *PaymentService) RecordPaymentManualReview(ctx context.Context, n *payme
 	if !strings.EqualFold(strings.TrimSpace(n.Metadata["token"]), "USDT") || strings.TrimSpace(n.TradeNo) == "" {
 		return fmt.Errorf("record payment manual review: missing USDT asset or upstream trade")
 	}
-	if strings.TrimSpace(n.Metadata["block_transaction_id"]) == "" {
+	blockTransactionEvidence := strings.TrimSpace(n.Metadata["block_transaction_id"])
+	blockTransactionID, blockErr := normalizeEpusdtBlockTransactionID(blockTransactionEvidence)
+	if blockErr != nil {
 		return fmt.Errorf("record payment manual review: missing blockchain transaction")
 	}
-	blockTransactionID := strings.TrimSpace(n.Metadata["block_transaction_id"])
-	if existing, queryErr := s.entClient.PaymentAuditLog.Query().
-		Where(paymentauditlog.ActionEQ(PaymentManualReviewAction), paymentauditlog.DetailContains(`"blockTransactionID":"`+blockTransactionID+`"`)).
-		All(ctx); queryErr != nil {
-		return queryErr
-	} else {
-		for _, log := range existing {
-			if log.OrderID != strconv.FormatInt(order.ID, 10) {
-				return fmt.Errorf("record payment manual review: blockchain transaction already belongs to another order")
-			}
-		}
+	tradeNo := strings.TrimSpace(n.TradeNo)
+	if tradeNo == "" || strings.IndexFunc(tradeNo, unicode.IsControl) >= 0 || len(tradeNo) > 128 {
+		return fmt.Errorf("record payment manual review: invalid upstream trade")
 	}
-	if existing, queryErr := s.entClient.PaymentAuditLog.Query().Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)), paymentauditlog.ActionEQ(PaymentManualReviewAction)).Order(paymentauditlog.ByCreatedAt(sql.OrderDesc())).All(ctx); queryErr != nil {
-		return queryErr
-	} else if len(existing) > 0 && manualReviewTradeNo(existing[0].Detail) == strings.TrimSpace(n.TradeNo) {
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("record payment manual review: begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	current, err := paymentOrderForManualReviewUpdate(txCtx, tx, order.ID)
+	if err != nil {
+		return fmt.Errorf("record payment manual review: lock order: %w", err)
+	}
+	if current.Status != OrderStatusPending && current.Status != OrderStatusCancelled && current.Status != OrderStatusExpired {
 		return nil
 	}
-	if err := s.writeAuditLogErr(ctx, order.ID, PaymentManualReviewAction, payment.TypeEpusdt, map[string]any{
+	claimed, err := claimEpusdtBlockTransaction(txCtx, tx.Client(), blockTransactionID, current.ID, tradeNo, n.Amount, actualAmount)
+	if err != nil {
+		return fmt.Errorf("record payment manual review: claim blockchain transaction: %w", err)
+	}
+	if claimed != current.ID {
+		return fmt.Errorf("record payment manual review: blockchain transaction already belongs to another order")
+	}
+	detail := map[string]any{
 		"tradeNo":             n.TradeNo,
 		"amount":              n.Amount,
-		"blockTransactionID":  n.Metadata["block_transaction_id"],
+		"blockTransactionID":  blockTransactionEvidence,
 		"networkVerification": n.Metadata["network_verification"],
 		"configuredNetworks":  n.Metadata["configured_networks"],
 		"requestedNetwork":    snapshot.RequestedNetwork,
 		"actualAmount":        actualAmountText,
-	}); err != nil {
-		return fmt.Errorf("record payment manual review: write audit: %w", err)
+	}
+	review, reviewErr := latestManualReviewWithClient(txCtx, tx.Client(), current.ID)
+	if reviewErr != nil && !infraerrors.IsNotFound(reviewErr) {
+		return fmt.Errorf("record payment manual review: lookup audit: %w", reviewErr)
+	}
+	if review == nil {
+		if err := writePaymentAuditLogErr(txCtx, tx.Client(), current.ID, PaymentManualReviewAction, payment.TypeEpusdt, detail); err != nil {
+			return fmt.Errorf("record payment manual review: write audit: %w", err)
+		}
+	} else {
+		existingBlock, existingBlockErr := normalizeEpusdtBlockTransactionID(manualReviewBlockTransactionID(review.Detail))
+		if existingBlockErr != nil || existingBlock != blockTransactionID {
+			return fmt.Errorf("record payment manual review: order already has different blockchain evidence")
+		}
+		encoded, marshalErr := json.Marshal(detail)
+		if marshalErr != nil {
+			return fmt.Errorf("record payment manual review: marshal audit: %w", marshalErr)
+		}
+		if _, err := tx.Client().PaymentAuditLog.UpdateOneID(review.ID).SetDetail(string(encoded)).SetOperator(payment.TypeEpusdt).Save(txCtx); err != nil {
+			return fmt.Errorf("record payment manual review: update audit: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("record payment manual review: commit transaction: %w", err)
 	}
 	return nil
+}
+
+func normalizeEpusdtBlockTransactionID(value string) (string, error) {
+	original := strings.TrimSpace(value)
+	if original == "" || len(original) > 255 || strings.IndexFunc(original, unicode.IsSpace) >= 0 || strings.IndexFunc(original, unicode.IsControl) >= 0 {
+		return "", errors.New("invalid blockchain transaction")
+	}
+	if strings.HasPrefix(strings.ToLower(original), "0x") {
+		hexValue := original[2:]
+		if len(hexValue) > 0 && len(hexValue)%2 == 0 {
+			if _, err := hex.DecodeString(hexValue); err == nil {
+				return strings.ToLower(original), nil
+			}
+		}
+	}
+	return original, nil
+}
+
+func manualReviewBlockTransactionID(detail string) string {
+	var value map[string]any
+	if json.Unmarshal([]byte(detail), &value) != nil {
+		return ""
+	}
+	block, _ := value["blockTransactionID"].(string)
+	return block
+}
+
+func claimEpusdtBlockTransaction(ctx context.Context, client *dbent.Client, blockID string, orderID int64, tradeNo string, amount, actualAmount float64) (int64, error) {
+	if client == nil {
+		return 0, errors.New("nil payment client")
+	}
+	historicalOrderID, err := historicalEpusdtBlockClaim(ctx, client, blockID)
+	if err != nil {
+		return 0, err
+	}
+	if historicalOrderID != 0 && historicalOrderID != orderID {
+		return historicalOrderID, nil
+	}
+	var query string
+	var args []any
+	if paymentAuditDialect(client) == dialect.Postgres {
+		query = `INSERT INTO epusdt_payment_claims (block_transaction_id, order_id, trade_no, amount, actual_amount, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) ON CONFLICT (block_transaction_id) DO NOTHING`
+		args = []any{blockID, orderID, tradeNo, amount, actualAmount}
+	} else {
+		query = `INSERT INTO epusdt_payment_claims (block_transaction_id, order_id, trade_no, amount, actual_amount, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (block_transaction_id) DO NOTHING`
+		args = []any{blockID, orderID, tradeNo, amount, actualAmount}
+	}
+	result, err := client.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	if inserted, rowsErr := result.RowsAffected(); rowsErr != nil {
+		return 0, rowsErr
+	} else if inserted > 0 {
+		return orderID, nil
+	}
+
+	selectQuery := `SELECT order_id, trade_no, amount, actual_amount FROM epusdt_payment_claims WHERE block_transaction_id = ?`
+	selectArgs := []any{blockID}
+	if paymentAuditDialect(client) == dialect.Postgres {
+		selectQuery = `SELECT order_id, trade_no, amount, actual_amount FROM epusdt_payment_claims WHERE block_transaction_id = $1`
+	}
+	rows, err := client.QueryContext(ctx, selectQuery, selectArgs...)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		return 0, errors.New("blockchain transaction claim disappeared")
+	}
+	var claimedOrderID int64
+	var claimedTradeNo string
+	var claimedAmount, claimedActualAmount float64
+	if err := rows.Scan(&claimedOrderID, &claimedTradeNo, &claimedAmount, &claimedActualAmount); err != nil {
+		return 0, err
+	}
+	if claimedOrderID != orderID {
+		return claimedOrderID, nil
+	}
+	if math.Abs(claimedAmount-amount) > paymentAmountToleranceForCurrency("USD") || math.Abs(claimedActualAmount-actualAmount) > paymentAmountToleranceForCurrency("USD") {
+		return 0, errors.New("blockchain transaction evidence amount changed")
+	}
+	if claimedTradeNo != tradeNo {
+		updateQuery := `UPDATE epusdt_payment_claims SET trade_no = ?, updated_at = CURRENT_TIMESTAMP WHERE block_transaction_id = ? AND order_id = ?`
+		updateArgs := []any{tradeNo, blockID, orderID}
+		if paymentAuditDialect(client) == dialect.Postgres {
+			updateQuery = `UPDATE epusdt_payment_claims SET trade_no = $1, updated_at = NOW() WHERE block_transaction_id = $2 AND order_id = $3`
+		}
+		if _, err := client.ExecContext(ctx, updateQuery, updateArgs...); err != nil {
+			return 0, err
+		}
+	}
+	return claimedOrderID, nil
+}
+
+// historicalEpusdtBlockClaim protects the first post-247 callback from
+// reusing evidence that was recorded before the durable claim table existed.
+// The table remains the concurrent admission gate; this lookup only bridges
+// pre-migration audit rows.
+func historicalEpusdtBlockClaim(ctx context.Context, client *dbent.Client, blockID string) (int64, error) {
+	logs, err := client.PaymentAuditLog.Query().Where(paymentauditlog.ActionEQ(PaymentManualReviewAction)).All(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var matchedOrderID int64
+	for _, log := range logs {
+		historicalBlock, normalizeErr := normalizeEpusdtBlockTransactionID(manualReviewBlockTransactionID(log.Detail))
+		if normalizeErr != nil || historicalBlock != blockID {
+			continue
+		}
+		orderID, parseErr := strconv.ParseInt(strings.TrimSpace(log.OrderID), 10, 64)
+		if parseErr != nil || orderID <= 0 {
+			continue
+		}
+		if matchedOrderID != 0 && matchedOrderID != orderID {
+			return 0, fmt.Errorf("blockchain transaction evidence belongs to multiple historical orders")
+		}
+		matchedOrderID = orderID
+	}
+	return matchedOrderID, nil
 }
 
 func parseLegacyPaymentOrderID(orderID string, lookupErr error) (int64, bool) {

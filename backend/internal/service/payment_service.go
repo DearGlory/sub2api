@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -525,19 +526,39 @@ func (s *PaymentService) ApprovePaymentManualReview(ctx context.Context, orderID
 	if tradeNo == "" {
 		return infraerrors.BadRequest("MANUAL_REVIEW_EVIDENCE_MISSING", "manual review has no upstream trade")
 	}
+	evidenceAmount, evidenceAmountErr := manualReviewAmount(review.Detail)
+	if evidenceAmountErr != nil || !isValidProviderAmount(evidenceAmount) || math.Abs(evidenceAmount-o.PayAmount) > paymentAmountToleranceForCurrency("USD") {
+		return infraerrors.BadRequest("MANUAL_REVIEW_AMOUNT_MISMATCH", "manual review evidence amount does not match the order")
+	}
+	evidenceActualAmount, evidenceActualAmountErr := manualReviewActualAmount(review.Detail)
+	if evidenceActualAmountErr != nil || !isValidProviderAmount(evidenceActualAmount) {
+		return infraerrors.BadRequest("MANUAL_REVIEW_EVIDENCE_MISSING", "manual review has no valid actual amount evidence")
+	}
+	evidenceBlock := manualReviewBlockTransactionID(review.Detail)
+	blockID, blockErr := normalizeEpusdtBlockTransactionID(evidenceBlock)
+	if blockErr != nil {
+		return infraerrors.BadRequest("MANUAL_REVIEW_EVIDENCE_MISSING", "manual review has no valid blockchain transaction")
+	}
+	claimedOrderID, claimErr := claimEpusdtBlockTransaction(txCtx, client, blockID, orderID, tradeNo, evidenceAmount, evidenceActualAmount)
+	if claimErr != nil {
+		return fmt.Errorf("approve manual payment review: claim blockchain transaction: %w", claimErr)
+	}
+	if claimedOrderID != orderID {
+		return infraerrors.Conflict("MANUAL_REVIEW_TRADE_REUSED", "blockchain transaction is already bound to another order")
+	}
 	if existing, queryErr := client.PaymentOrder.Query().Where(paymentorder.PaymentTypeEQ(payment.TypeEpusdt), paymentorder.PaymentTradeNoEQ(tradeNo), paymentorder.IDNEQ(orderID)).Exist(txCtx); queryErr != nil {
 		return queryErr
 	} else if existing {
 		return infraerrors.Conflict("MANUAL_REVIEW_TRADE_REUSED", "upstream trade is already bound to another order")
 	}
-	if o.PaymentTradeNo != "" {
-		return infraerrors.BadRequest("MANUAL_REVIEW_ALREADY_SETTLED", "manual review already has an upstream trade")
-	}
-	updated, err := client.PaymentOrder.Update().Where(
+	update := client.PaymentOrder.Update().Where(
 		paymentorder.IDEQ(orderID),
 		paymentorder.StatusIn(OrderStatusPending, OrderStatusCancelled, OrderStatusExpired),
-		paymentorder.PaymentTradeNoEQ(""),
-	).SetStatus(OrderStatusPaid).SetPayAmount(o.PayAmount).SetPaymentTradeNo(tradeNo).SetPaidAt(time.Now()).Save(txCtx)
+	).SetStatus(OrderStatusPaid).SetPayAmount(o.PayAmount).SetPaidAt(time.Now())
+	if strings.TrimSpace(o.PaymentTradeNo) == "" {
+		update.SetPaymentTradeNo(tradeNo)
+	}
+	updated, err := update.Save(txCtx)
 	if err != nil {
 		return fmt.Errorf("approve manual payment review: %w", err)
 	}
@@ -650,4 +671,38 @@ func manualReviewTradeNo(detail string) string {
 		}
 	}
 	return ""
+}
+
+func manualReviewAmount(detail string) (float64, error) {
+	var value map[string]any
+	if err := json.Unmarshal([]byte(detail), &value); err != nil {
+		return 0, err
+	}
+	switch amount := value["amount"].(type) {
+	case float64:
+		return amount, nil
+	case string:
+		return strconv.ParseFloat(strings.TrimSpace(amount), 64)
+	case json.Number:
+		return amount.Float64()
+	default:
+		return 0, fmt.Errorf("manual review amount is missing")
+	}
+}
+
+func manualReviewActualAmount(detail string) (float64, error) {
+	var value map[string]any
+	if err := json.Unmarshal([]byte(detail), &value); err != nil {
+		return 0, err
+	}
+	switch amount := value["actualAmount"].(type) {
+	case float64:
+		return amount, nil
+	case string:
+		return strconv.ParseFloat(strings.TrimSpace(amount), 64)
+	case json.Number:
+		return amount.Float64()
+	default:
+		return 0, fmt.Errorf("manual review actual amount is missing")
+	}
 }
