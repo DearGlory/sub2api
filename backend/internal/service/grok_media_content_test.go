@@ -280,7 +280,7 @@ func TestGrokMediaSignedVideoContentURLRejectsDeceptiveOrigins(t *testing.T) {
 		"http://vidgen.x.ai/video.mp4",
 	} {
 		t.Run(rawURL, func(t *testing.T) {
-			_, err := grokMediaSignedVideoContentURL([]byte(`{"video":{"url":"`+rawURL+`"}}`), "task-1")
+			_, err := grokMediaSignedVideoContentURL(nil, []byte(`{"video":{"url":"`+rawURL+`"}}`), "task-1")
 			require.ErrorContains(t, err, "unsupported video content URL")
 		})
 	}
@@ -288,6 +288,7 @@ func TestGrokMediaSignedVideoContentURLRejectsDeceptiveOrigins(t *testing.T) {
 
 func TestGrokMediaSignedVideoContentURLRejectsDifferentRelayTask(t *testing.T) {
 	_, err := grokMediaSignedVideoContentURL(
+		nil,
 		[]byte(`{"video":{"url":"/v1/videos/task-2/content"}}`),
 		"task-1",
 	)
@@ -341,4 +342,108 @@ func TestRewriteGrokMediaVideoContentURLsRewritesSignedVideoURL(t *testing.T) {
 	require.Equal(t, "/v1/videos/request-1/content", gjson.GetBytes(rewritten, "video.url").String())
 	require.Equal(t, "8", gjson.GetBytes(rewritten, "video.duration").String())
 	require.Equal(t, "done", gjson.GetBytes(rewritten, "status").String())
+}
+
+func TestGrokMediaSignedVideoContentURLHonoursAccountContentHosts(t *testing.T) {
+	t.Parallel()
+
+	account := func(hosts any) *Account {
+		creds := map[string]any{
+			"api_key":  "upstream-key",
+			"base_url": "https://router.91topgo.com/v1",
+		}
+		if hosts != nil {
+			creds["video_content_hosts"] = hosts
+		}
+		return &Account{ID: 283, Platform: PlatformGrok, Type: AccountTypeAPIKey, Credentials: creds}
+	}
+	body := func(raw string) []byte {
+		return []byte(`{"status":"done","video":{"url":"` + raw + `"}}`)
+	}
+
+	t.Run("exact host allowed when configured", func(t *testing.T) {
+		got, err := grokMediaSignedVideoContentURL(
+			account([]any{"cdn.91topgo.com"}), body("https://cdn.91topgo.com/m/abc123"), "task-1")
+		require.NoError(t, err)
+		require.Equal(t, "https://cdn.91topgo.com/m/abc123", got)
+	})
+
+	t.Run("comma separated string form allowed", func(t *testing.T) {
+		got, err := grokMediaSignedVideoContentURL(
+			account("cdn.example.net, cdn.91topgo.com"), body("https://cdn.91topgo.com/m/abc123"), "task-1")
+		require.NoError(t, err)
+		require.NotEmpty(t, got)
+	})
+
+	t.Run("wildcard suffix allowed", func(t *testing.T) {
+		got, err := grokMediaSignedVideoContentURL(
+			account([]string{"*.91topgo.com"}), body("https://cdn.91topgo.com/m/abc123"), "task-1")
+		require.NoError(t, err)
+		require.NotEmpty(t, got)
+	})
+
+	t.Run("unlisted host rejected", func(t *testing.T) {
+		_, err := grokMediaSignedVideoContentURL(
+			account([]any{"cdn.allowed.example"}), body("https://cdn.91topgo.com/m/abc123"), "task-1")
+		require.ErrorContains(t, err, "unsupported video content URL")
+	})
+
+	t.Run("no list keeps official-only rule", func(t *testing.T) {
+		_, err := grokMediaSignedVideoContentURL(
+			account(nil), body("https://cdn.91topgo.com/m/abc123"), "task-1")
+		require.ErrorContains(t, err, "unsupported video content URL")
+	})
+
+	t.Run("wildcard does not match bare parent or lookalike", func(t *testing.T) {
+		for _, host := range []string{"https://91topgo.com/m/abc123", "https://not91topgo.com/m/abc123", "https://cdn.91topgo.com.evil.example/m/abc123"} {
+			_, err := grokMediaSignedVideoContentURL(
+				account([]any{"*.91topgo.com"}), body(host), "task-1")
+			require.ErrorContains(t, err, "unsupported video content URL", host)
+		}
+	})
+
+	t.Run("internal address still rejected even when wildcarded", func(t *testing.T) {
+		// Wildcards only relax the hostname, never scheme/port/user parts.
+		for _, raw := range []string{
+			"http://cdn.91topgo.com/m/abc123",
+			"https://cdn.91topgo.com:8080/m/abc123",
+			"https://user:pass@cdn.91topgo.com/m/abc123",
+		} {
+			_, err := grokMediaSignedVideoContentURL(
+				account([]any{"*.91topgo.com"}), body(raw), "task-1")
+			require.ErrorContains(t, err, "unsupported video content URL", raw)
+		}
+	})
+
+	t.Run("official vidgen host always allowed", func(t *testing.T) {
+		got, err := grokMediaSignedVideoContentURL(account(nil), body("https://vidgen.x.ai/x.mp4"), "task-1")
+		require.NoError(t, err)
+		require.Equal(t, "https://vidgen.x.ai/x.mp4", got)
+	})
+
+	// router.91topgo.com reports terminal success with the artifact at the top
+	// level and no video.url at all, so the top-level fields must feed the same
+	// whitelist instead of falling through to the (302) /content relay path.
+	t.Run("top-level video_url honoured with whitelist", func(t *testing.T) {
+		relay := []byte(`{"id":"task-1","status":"completed","seconds":"4","progress":100,"video_url":"https://cdn.91topgo.com/m/abc123","url":"https://cdn.91topgo.com/m/abc123"}`)
+		got, err := grokMediaSignedVideoContentURL(account([]any{"cdn.91topgo.com"}), relay, "task-1")
+		require.NoError(t, err)
+		require.Equal(t, "https://cdn.91topgo.com/m/abc123", got)
+	})
+
+	t.Run("top-level video_url still rejected without whitelist", func(t *testing.T) {
+		relay := []byte(`{"status":"completed","video_url":"https://cdn.91topgo.com/m/abc123"}`)
+		_, err := grokMediaSignedVideoContentURL(account(nil), relay, "task-1")
+		require.ErrorContains(t, err, "unsupported video content URL")
+	})
+
+	// 可达鸭 (51.161.119.83:17777) reports completed with a RELATIVE proxy path.
+	// That is an authenticated relay path, not a signed URL: it must resolve to
+	// "" so the caller rebuilds it against the account base URL with the key.
+	t.Run("relative proxy path defers to account base URL", func(t *testing.T) {
+		relay := []byte(`{"id":"task-1","status":"completed","video":{"url":"/v1/videos/task-1/content"}}`)
+		got, err := grokMediaSignedVideoContentURL(account(nil), relay, "task-1")
+		require.NoError(t, err)
+		require.Empty(t, got)
+	})
 }

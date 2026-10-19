@@ -563,12 +563,39 @@ func IsGrokVideoStatusBillable(statusBody []byte) bool {
 	if !isOfficialGrokVideoStatusDone(statusBody) {
 		return false
 	}
-	return strings.TrimSpace(gjson.GetBytes(statusBody, "video.url").String()) != ""
+	return grokVideoStatusURL(statusBody) != ""
+}
+
+// grokVideoStatusURL returns the finished-video URL from a status body.
+// Official xAI nests it under video.url. Relay upstreams are not consistent:
+// some report a completed job with the artifact at the top level (video_url or
+// url), so those are accepted only as fallbacks after the official field. The
+// value still passes the content-URL policy in grokMediaSignedVideoContentURL
+// before anything is fetched.
+func grokVideoStatusURL(statusBody []byte) string {
+	if !gjson.ValidBytes(statusBody) {
+		return ""
+	}
+	for _, path := range []string{"video.url", "video_url", "url"} {
+		if v := strings.TrimSpace(gjson.GetBytes(statusBody, path).String()); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func isOfficialGrokVideoStatusDone(statusBody []byte) bool {
 	// Official enum: pending | done | expired | failed.
-	return strings.EqualFold(strings.TrimSpace(gjson.GetBytes(statusBody, "status").String()), "done")
+	status := strings.TrimSpace(gjson.GetBytes(statusBody, "status").String())
+	if strings.EqualFold(status, "done") {
+		return true
+	}
+	// Relay upstreams (observed on 可达鸭 / 51.161.119.83:17777) report the same
+	// terminal success as "completed". Only the status is widened here: the
+	// caller (IsGrokVideoStatusBillable) still requires a non-empty video.url,
+	// so a bare "completed" without a fetchable artifact cannot be billed.
+	// Failure enums never overlap these values.
+	return strings.EqualFold(status, "completed")
 }
 
 // ExtractGrokVideoBillingFromStatusBody builds usage units from an official done status.
@@ -852,7 +879,7 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 		return nil, err
 	}
 
-	contentURL, err := grokMediaSignedVideoContentURL(statusBody, requestID)
+	contentURL, err := grokMediaSignedVideoContentURL(account, statusBody, requestID)
 	if err != nil {
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		return nil, err
@@ -929,8 +956,8 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 	return result, nil
 }
 
-func grokMediaSignedVideoContentURL(body []byte, requestID string) (string, error) {
-	rawURL := strings.TrimSpace(gjson.GetBytes(body, "video.url").String())
+func grokMediaSignedVideoContentURL(account *Account, body []byte, requestID string) (string, error) {
+	rawURL := grokVideoStatusURL(body)
 	if rawURL == "" {
 		return "", nil
 	}
@@ -943,11 +970,95 @@ func grokMediaSignedVideoContentURL(body []byte, requestID string) (string, erro
 	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil || !strings.EqualFold(parsed.Scheme, "https") ||
-		!strings.EqualFold(parsed.Hostname(), "vidgen.x.ai") ||
 		(parsed.Port() != "" && parsed.Port() != "443") || parsed.User != nil {
 		return "", fmt.Errorf("grok media status returned an unsupported video content URL")
 	}
-	return parsed.String(), nil
+	if strings.EqualFold(parsed.Hostname(), "vidgen.x.ai") {
+		return parsed.String(), nil
+	}
+	// Relay upstreams host the finished MP4 on their own CDN (observed:
+	// cdn.91topgo.com). Those hosts are only trusted when the account explicitly
+	// opts in via credentials.video_content_hosts, so an arbitrary upstream
+	// cannot point the gateway at an internal address (SSRF). Official xAI
+	// accounts leave the list empty and keep the single-host rule above.
+	if account != nil && grokVideoContentHostAllowed(account, parsed.Hostname()) {
+		return parsed.String(), nil
+	}
+	return "", fmt.Errorf("grok media status returned an unsupported video content URL")
+}
+
+// grokVideoContentHostAllowed reports whether the account whitelists host for
+// finished-video downloads. Entries are exact hostnames (case-insensitive) or
+// a single leading "*." wildcard covering one or more subdomain labels.
+func grokVideoContentHostAllowed(account *Account, host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	for _, entry := range grokVideoContentHosts(account) {
+		entry = strings.ToLower(strings.TrimSpace(entry))
+		if entry == "" {
+			continue
+		}
+		if strings.HasPrefix(entry, "*.") {
+			suffix := entry[1:] // ".example.com"
+			if strings.HasSuffix(host, suffix) && len(host) > len(suffix) {
+				return true
+			}
+			continue
+		}
+		if host == entry {
+			return true
+		}
+	}
+	return false
+}
+
+// grokVideoContentHosts reads credentials.video_content_hosts, accepting either
+// a JSON array of strings or a comma-separated string, so operators can set it
+// from the admin UI without a schema change.
+func grokVideoContentHosts(account *Account) []string {
+	if account == nil || account.Credentials == nil {
+		return nil
+	}
+	raw, ok := account.Credentials["video_content_hosts"]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []any:
+		hosts := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				hosts = append(hosts, s)
+			}
+		}
+		return hosts
+	case []string:
+		return v
+	case string:
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			return nil
+		}
+		if strings.HasPrefix(trimmed, "[") {
+			var hosts []string
+			if err := json.Unmarshal([]byte(trimmed), &hosts); err == nil {
+				return hosts
+			}
+			return nil
+		}
+		parts := strings.Split(trimmed, ",")
+		hosts := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if p := strings.TrimSpace(part); p != "" {
+				hosts = append(hosts, p)
+			}
+		}
+		return hosts
+	default:
+		return nil
+	}
 }
 
 func isGrokCLIProxyTarget(rawURL string) bool {

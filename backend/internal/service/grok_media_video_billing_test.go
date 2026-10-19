@@ -46,11 +46,24 @@ func TestIsGrokVideoStatusBillable(t *testing.T) {
 	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"failed"}`)))
 	// done without video.url is not billable
 	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"done"}`)))
-	// URL alone (legacy/non-official shapes) is not enough
+	// A URL alone, with no success status, never bills.
 	require.False(t, IsGrokVideoStatusBillable([]byte(`{"url":"https://example.com/v.mp4"}`)))
+	require.False(t, IsGrokVideoStatusBillable([]byte(`{"video_url":"https://example.com/v.mp4"}`)))
 	require.False(t, IsGrokVideoStatusBillable([]byte(`{"download_url":"/v1/videos/task/content"}`)))
-	// "completed" is not the official enum value
-	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","video":{"url":"https://vidgen.x.ai/x.mp4"}}`)))
+	// completed without any artifact is not billable.
+	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed"}`)))
+	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","video":{}}`)))
+	// Relay upstreams put the finished artifact at the top level instead of
+	// video.url (observed: router.91topgo.com → video_url/url). With a terminal
+	// success status those are billable, same as the official nested field.
+	require.True(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","video_url":"https://cdn.example/m/abc"}`)))
+	require.True(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","url":"https://cdn.example/m/abc"}`)))
+	require.True(t, IsGrokVideoStatusBillable([]byte(`{"status":"done","video_url":"https://cdn.example/m/abc"}`)))
+	// Official nested shape keeps working.
+	require.True(t, IsGrokVideoStatusBillable([]byte(`{"status":"completed","video":{"url":"https://vidgen.x.ai/x.mp4"}}`)))
+	// Failure enums stay unbillable regardless of any url field.
+	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"failed","video":{"url":"https://vidgen.x.ai/x.mp4"}}`)))
+	require.False(t, IsGrokVideoStatusBillable([]byte(`{"status":"expired","video_url":"https://cdn.example/m/abc"}`)))
 }
 
 func TestExtractGrokVideoBillingFromStatusBodyPrefersUpstreamParams(t *testing.T) {
@@ -104,8 +117,18 @@ func TestExtractGrokVideoBillingRejectsNonDoneStatus(t *testing.T) {
 		[]byte(`{"status":"pending","video":{"url":"https://vidgen.x.ai/x.mp4","duration":8}}`),
 		pending, "req",
 	))
-	require.Nil(t, ExtractGrokVideoBillingFromStatusBody(
+	// Relay upstreams report terminal success as "completed"; with a video URL it
+	// is billable exactly like the official "done".
+	billed := ExtractGrokVideoBillingFromStatusBody(
 		[]byte(`{"status":"completed","video":{"url":"https://vidgen.x.ai/x.mp4","duration":8}}`),
+		pending, "req",
+	)
+	require.NotNil(t, billed)
+	require.Equal(t, 1, billed.VideoCount)
+	require.Equal(t, 8, billed.VideoDurationSeconds)
+	// completed without an artifact stays unbillable.
+	require.Nil(t, ExtractGrokVideoBillingFromStatusBody(
+		[]byte(`{"status":"completed"}`),
 		pending, "req",
 	))
 }
@@ -139,11 +162,32 @@ func TestGrokMediaUsageFromResponseVideoStatusBillsOnOfficialDone(t *testing.T) 
 	)
 	require.Equal(t, 0, pendingOnly.VideoCount)
 
-	// completed is not official done.
+	// completed + video.url is terminal success from relay upstreams and bills
+	// like the official done.
 	completed := grokMediaUsageFromResponse(
 		GrokMediaEndpointVideoStatus,
 		GrokMediaRequestInfo{},
 		[]byte(`{"status":"completed","video":{"url":"https://vidgen.x.ai/a.mp4","duration":9}}`),
 	)
-	require.Equal(t, 0, completed.VideoCount)
+	require.Equal(t, 1, completed.VideoCount)
+	require.Equal(t, 9, completed.VideoDurationSeconds)
+
+	// completed without a URL still bills nothing.
+	completedBare := grokMediaUsageFromResponse(
+		GrokMediaEndpointVideoStatus,
+		GrokMediaRequestInfo{},
+		[]byte(`{"status":"completed"}`),
+	)
+	require.Equal(t, 0, completedBare.VideoCount)
+
+	// Relay shape: terminal success with the artifact at the top level. Duration
+	// and resolution are absent, so pricing must come from the create-time
+	// pending snapshot (asserted in ExtractGrokVideoBillingFromStatusBody tests).
+	relayTopLevel := grokMediaUsageFromResponse(
+		GrokMediaEndpointVideoStatus,
+		GrokMediaRequestInfo{},
+		[]byte(`{"id":"task-1","status":"completed","seconds":"4","progress":100,"video_url":"https://cdn.example/m/abc","url":"https://cdn.example/m/abc"}`),
+	)
+	require.Equal(t, 1, relayTopLevel.VideoCount)
+	require.Equal(t, "task-1", relayTopLevel.ResponseID)
 }
