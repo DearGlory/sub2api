@@ -154,6 +154,16 @@ func parseGrokMediaJSONRequest(body []byte, info *GrokMediaRequestInfo) {
 	if duration := gjson.GetBytes(body, "duration"); duration.Exists() && duration.Type == gjson.Number {
 		info.DurationSeconds = int(duration.Int())
 	}
+	// xAI documents "duration"; OpenAI-compatible SDKs and the relay upstreams
+	// also use a string "seconds" field. Accept it so a job submitted with
+	// seconds:"4" is not silently billed at the default 8s.
+	if info.DurationSeconds <= 0 {
+		if seconds := gjson.GetBytes(body, "seconds"); seconds.Exists() {
+			if n, err := strconv.Atoi(strings.TrimSpace(seconds.String())); err == nil {
+				info.DurationSeconds = n
+			}
+		}
+	}
 	if n := gjson.GetBytes(body, "n"); n.Exists() && n.Type == gjson.Number {
 		info.N = int(n.Int())
 	}
@@ -177,6 +187,12 @@ func parseGrokMediaJSONRequest(body []byte, info *GrokMediaRequestInfo) {
 	appendJSONImageURLs(gjson.GetBytes(body, "image"))
 	appendJSONImageURLs(gjson.GetBytes(body, "images"))
 	appendJSONImageURLs(gjson.GetBytes(body, "reference_images"))
+	// Top-level image_url is what xAI's OpenAI-compatible relays accept for the
+	// first frame. Do not add aliases such as first_frame_image or
+	// input_reference: measured against 91topgo, those are silently dropped and
+	// the job degrades to text-to-video with a "successful" result, which is
+	// worse than failing loudly.
+	appendJSONImageURLs(gjson.GetBytes(body, "image_url"))
 	info.MaskImageURL = extractGrokMediaImageURL(gjson.GetBytes(body, "mask"))
 }
 
@@ -703,7 +719,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if err != nil {
 		return nil, err
 	}
-	body, contentType, err = normalizeGrokMediaForwardBody(endpoint, body, contentType)
+	body, contentType, err = normalizeGrokMediaForwardBody(endpoint, body, contentType, account)
 	if err != nil {
 		return nil, err
 	}
@@ -1189,7 +1205,7 @@ func rewriteGrokMediaJSONImageField(body []byte, path string) ([]byte, error) {
 	return out, nil
 }
 
-func normalizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, contentType string) ([]byte, string, error) {
+func normalizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, contentType string, account *Account) ([]byte, string, error) {
 	if !endpoint.RequiresRequestBody() || !gjson.ValidBytes(body) {
 		return body, contentType, nil
 	}
@@ -1205,6 +1221,28 @@ func normalizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, cont
 	if err != nil {
 		return nil, "", err
 	}
+	// Official xAI takes image references as {"url":...,"type":"image_url"}
+	// objects. Relay upstreams reject that shape with HTTP 400 ("Unsupported
+	// content-type encountered when downloading image" / invalid_argument) and
+	// only accept the bare URL string, so clients following the xAI docs could
+	// not use image-to-video through a relay account at all. Collapse the
+	// object for relay endpoints only; official and CLI-proxy accounts keep the
+	// documented shape untouched.
+	if endpoint == GrokMediaEndpointVideosGenerations && isGrokRelayContentTarget(account) {
+		body, err = flattenGrokMediaVideoImageFields(body)
+		if err != nil {
+			return nil, "", err
+		}
+		// Bill what was actually rendered. Relay upstreams default to a shorter
+		// clip than the official 8s when the request omits duration (measured:
+		// 91topgo 4.042s with no duration, 12.042s / 4.042s / 1.042s for
+		// duration 12 / 4 / 1), so the amount we charge would not match the
+		// asset. Pin the create request to the duration that will be billed.
+		body, err = ensureGrokMediaVideoDuration(body)
+		if err != nil {
+			return nil, "", err
+		}
+	}
 	info := ParseGrokMediaRequest(contentType, body)
 	upstreamModel := NormalizeGrokMediaModelForEndpoint(endpoint, info.Model, info.HasInputImage())
 	if upstreamModel == "" || upstreamModel == info.Model {
@@ -1215,6 +1253,85 @@ func normalizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, cont
 		return nil, "", fmt.Errorf("rewrite grok media model: %w", err)
 	}
 	return out, contentType, nil
+}
+
+// isGrokRelayContentTarget reports whether this account has opted into the
+// relay compatibility rewrites. Third-party relays accept a narrower schema
+// than the official API, but guessing that from the base URL host is unsafe: a
+// customer proxy in front of api.x.ai, or any host we simply do not recognise,
+// would get silently rewritten. Opt-in keeps the documented request untouched
+// unless an administrator says this account is a relay.
+func isGrokRelayContentTarget(account *Account) bool {
+	if account == nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(account.GetCredential("video_relay_compat"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// flattenGrokMediaVideoImageFields rewrites image references from the official
+// object form to a bare URL string for relay upstreams. Only image and images
+// are handled: first_frame_image and input_reference are dropped by relays, so
+// rewriting them would make a silently-degraded text-to-video run look like a
+// successful image-to-video request.
+func flattenGrokMediaVideoImageFields(body []byte) ([]byte, error) {
+	out := body
+	for _, field := range []string{"image", "image_url"} {
+		value := gjson.GetBytes(out, field)
+		if !value.Exists() || !value.IsObject() {
+			continue
+		}
+		rawURL := extractGrokMediaImageURL(value)
+		if rawURL == "" {
+			continue
+		}
+		var err error
+		out, err = sjson.SetBytes(out, field, rawURL)
+		if err != nil {
+			return nil, fmt.Errorf("flatten grok media %s: %w", field, err)
+		}
+	}
+	if images := gjson.GetBytes(out, "images"); images.IsArray() {
+		for index, item := range images.Array() {
+			if !item.IsObject() {
+				continue
+			}
+			rawURL := extractGrokMediaImageURL(item)
+			if rawURL == "" {
+				continue
+			}
+			var err error
+			out, err = sjson.SetBytes(out, fmt.Sprintf("images.%d", index), rawURL)
+			if err != nil {
+				return nil, fmt.Errorf("flatten grok media images.%d: %w", index, err)
+			}
+		}
+	}
+	return out, nil
+}
+
+// ensureGrokMediaVideoDuration pins the create request to the duration that
+// billing will use. Parsing fills an omitted duration with the official 8s
+// default, but relay upstreams render a shorter clip when duration is absent,
+// so the asset would not match the charge. Writing the resolved value keeps the
+// two in sync; an explicit client duration is preserved (already clamped to the
+// upstream's 1-15s range by the parser).
+func ensureGrokMediaVideoDuration(body []byte) ([]byte, error) {
+	if !gjson.ValidBytes(body) {
+		return body, nil
+	}
+	duration := ParseGrokMediaRequest("application/json", body).DurationSeconds
+	if duration <= 0 {
+		return body, nil
+	}
+	current := gjson.GetBytes(body, "duration")
+	if current.Exists() && current.Type == gjson.Number && int(current.Int()) == duration {
+		return body, nil
+	}
+	return sjson.SetBytes(body, "duration", duration)
 }
 
 func canonicalizeGrokMediaImageURLFields(body []byte, fields ...string) ([]byte, error) {

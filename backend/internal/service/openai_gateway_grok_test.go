@@ -1101,7 +1101,7 @@ func TestNormalizeGrokMediaForwardBodyCanonicalizesImageURLAlias(t *testing.T) {
 		"duration":8
 	}`)
 
-	out, contentType, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json")
+	out, contentType, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", nil)
 
 	require.NoError(t, err)
 	require.Equal(t, "application/json", contentType)
@@ -1117,7 +1117,7 @@ func TestNormalizeGrokMediaForwardBodyPreservesImageToVideoModelForOfficialURL(t
 		"image":{"url":"https://example.com/source.png"}
 	}`)
 
-	out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json")
+	out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", nil)
 
 	require.NoError(t, err)
 	require.Equal(t, "grok-imagine-video-1.5", gjson.GetBytes(out, "model").String())
@@ -3815,4 +3815,132 @@ func TestBuildGrokSchedulerExtraUpdates_FeedsThresholdEvaluator(t *testing.T) {
 func TestBuildGrokSchedulerExtraUpdates_NilWhenNoQuotaWindows(t *testing.T) {
 	require.Nil(t, buildGrokSchedulerExtraUpdates(&xai.QuotaSnapshot{}))
 	require.Nil(t, buildGrokSchedulerExtraUpdates(nil))
+}
+
+func TestNormalizeGrokMediaForwardBodyFlattensImageForRelayAccounts(t *testing.T) {
+	relay := &Account{
+		ID: 283, Platform: PlatformGrok, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"base_url": "https://router.91topgo.com/v1", "api_key": "k", "video_relay_compat": "true"},
+	}
+	official := &Account{
+		ID: 124, Platform: PlatformGrok, Type: AccountTypeOAuth,
+		Credentials: map[string]any{"base_url": "https://api.x.ai/v1", "access_token": "t"},
+	}
+
+	t.Run("relay collapses the official object to a bare URL", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"animate","image":{"url":"https://cdn.example/a.png","type":"image_url"}}`)
+		out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", relay)
+		require.NoError(t, err)
+		require.Equal(t, "https://cdn.example/a.png", gjson.GetBytes(out, "image").String())
+		require.False(t, gjson.GetBytes(out, "image.url").Exists())
+	})
+
+	t.Run("relay keeps the requested model for image-to-video", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"animate","image":{"url":"https://cdn.example/a.png"}}`)
+		out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", relay)
+		require.NoError(t, err)
+		require.Equal(t, "grok-imagine-video-1.5", gjson.GetBytes(out, "model").String())
+	})
+
+	t.Run("relay flattens an images array", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"animate","images":[{"url":"https://cdn.example/a.png"},{"url":"https://cdn.example/b.png"}]}`)
+		out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", relay)
+		require.NoError(t, err)
+		require.Equal(t, "https://cdn.example/a.png", gjson.GetBytes(out, "images.0").String())
+		require.Equal(t, "https://cdn.example/b.png", gjson.GetBytes(out, "images.1").String())
+	})
+
+	t.Run("official account keeps the documented object shape", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"animate","image":{"url":"https://cdn.example/a.png"}}`)
+		out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", official)
+		require.NoError(t, err)
+		require.Equal(t, "https://cdn.example/a.png", gjson.GetBytes(out, "image.url").String())
+	})
+
+	t.Run("nil account keeps the documented object shape", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"animate","image":{"url":"https://cdn.example/a.png"}}`)
+		out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", nil)
+		require.NoError(t, err)
+		require.Equal(t, "https://cdn.example/a.png", gjson.GetBytes(out, "image.url").String())
+	})
+}
+
+func TestParseGrokMediaRequestReadsSecondsAndTopLevelImage(t *testing.T) {
+	t.Run("string seconds is captured as duration", func(t *testing.T) {
+		info := ParseGrokMediaRequest("application/json", []byte(`{"model":"grok-imagine-video-1.5","prompt":"x","seconds":"4"}`))
+		require.Equal(t, 4, info.DurationSeconds)
+	})
+
+	t.Run("numeric duration still wins", func(t *testing.T) {
+		info := ParseGrokMediaRequest("application/json", []byte(`{"model":"grok-imagine-video-1.5","duration":12,"seconds":"4"}`))
+		require.Equal(t, 12, info.DurationSeconds)
+	})
+
+	t.Run("top-level image_url counts as an input image", func(t *testing.T) {
+		info := ParseGrokMediaRequest("application/json", []byte(`{"model":"grok-imagine-video-1.5","prompt":"x","image_url":"https://cdn.example/a.png"}`))
+		require.True(t, info.HasInputImage())
+		require.Equal(t, []string{"https://cdn.example/a.png"}, info.InputImageURLs)
+	})
+
+	t.Run("undocumented image aliases are not treated as input images", func(t *testing.T) {
+		// 91topgo silently drops these and still reports done, so counting them
+		// as an input image would let a degraded text-to-video run look correct.
+		for _, field := range []string{"input_reference", "first_frame_image"} {
+			body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"x","` + field + `":"https://cdn.example/a.png"}`)
+			info := ParseGrokMediaRequest("application/json", body)
+			require.False(t, info.HasInputImage(), field)
+		}
+	})
+}
+
+func TestEnsureGrokMediaVideoDurationMatchesBilling(t *testing.T) {
+	t.Run("omitted duration is pinned to the billed default", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"x"}`)
+		out, err := ensureGrokMediaVideoDuration(body)
+		require.NoError(t, err)
+		require.Equal(t, int64(8), gjson.GetBytes(out, "duration").Int())
+	})
+
+	t.Run("explicit duration is preserved", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"x","duration":12}`)
+		out, err := ensureGrokMediaVideoDuration(body)
+		require.NoError(t, err)
+		require.Equal(t, int64(12), gjson.GetBytes(out, "duration").Int())
+	})
+
+	t.Run("string seconds becomes a numeric duration", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"x","seconds":"4"}`)
+		out, err := ensureGrokMediaVideoDuration(body)
+		require.NoError(t, err)
+		require.Equal(t, int64(4), gjson.GetBytes(out, "duration").Int())
+	})
+
+	t.Run("out-of-range duration is clamped to the upstream range", func(t *testing.T) {
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"x","duration":99}`)
+		out, err := ensureGrokMediaVideoDuration(body)
+		require.NoError(t, err)
+		require.Equal(t, int64(15), gjson.GetBytes(out, "duration").Int())
+	})
+
+	t.Run("relay video create pins duration end to end", func(t *testing.T) {
+		relay := &Account{
+			ID: 283, Platform: PlatformGrok, Type: AccountTypeAPIKey,
+			Credentials: map[string]any{"base_url": "https://router.91topgo.com/v1", "api_key": "k", "video_relay_compat": "true"},
+		}
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"x","seconds":"12"}`)
+		out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", relay)
+		require.NoError(t, err)
+		require.Equal(t, int64(12), gjson.GetBytes(out, "duration").Int())
+	})
+
+	t.Run("official account keeps the request as sent", func(t *testing.T) {
+		official := &Account{
+			ID: 124, Platform: PlatformGrok, Type: AccountTypeOAuth,
+			Credentials: map[string]any{"base_url": "https://api.x.ai/v1", "access_token": "t"},
+		}
+		body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"x"}`)
+		out, _, err := normalizeGrokMediaForwardBody(GrokMediaEndpointVideosGenerations, body, "application/json", official)
+		require.NoError(t, err)
+		require.False(t, gjson.GetBytes(out, "duration").Exists())
+	})
 }
