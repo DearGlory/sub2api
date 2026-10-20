@@ -47,6 +47,10 @@ type ChannelMonitorRepository interface {
 	// 返回的 entry 已按 checked_at DESC 排序（最新在前），不含 message 字段。
 	ListRecentHistoryForMonitors(ctx context.Context, ids []int64, primaryModels map[int64]string, perMonitorLimit int) (map[int64][]*ChannelMonitorHistoryEntry, error)
 
+	// ListHistoryInWindowByGroup 取时间窗内按监控分组名归档的探针历史，供 V2 矩阵在无真实流量
+	// 的时间桶上做主动探针兜底。返回 map[group_name] -> 历史列表（按 checked_at 升序）。
+	ListHistoryInWindowByGroup(ctx context.Context, start, end time.Time) (map[string][]*ChannelMonitorHistoryEntry, error)
+
 	// ---------- 聚合维护（OpsCleanupService 调用） ----------
 
 	// UpsertDailyRollupsFor 把 targetDate 当天的明细按 (monitor_id, model, bucket_date)
@@ -678,6 +682,7 @@ func (s *ChannelMonitorService) persistCheckResults(ctx context.Context, m *Chan
 			Status:        r.Status,
 			LatencyMs:     r.LatencyMs,
 			PingLatencyMs: r.PingLatencyMs,
+			TtftMs:        r.TtftMs,
 			Message:       r.Message,
 			CheckedAt:     r.CheckedAt,
 			Quota:         r.Quota,

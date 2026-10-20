@@ -41,6 +41,11 @@ func (ChannelMonitorHistory) Fields() []ent.Field {
 		field.Int("ping_latency_ms").
 			Optional().
 			Nillable(),
+		// ttft_ms: 首字时间。探针以流式短请求测得的真实首字延迟；
+		// 失败或无法流式探测的记录为 NULL（页面显示 '-'，不回落到端到端延迟）。
+		field.Int("ttft_ms").
+			Optional().
+			Nillable(),
 		field.String("message").
 			Optional().
 			Default("").

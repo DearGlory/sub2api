@@ -249,6 +249,9 @@ func (r *channelMonitorRepository) InsertHistoryBatch(ctx context.Context, rows 
 		if row.PingLatencyMs != nil {
 			c = c.SetPingLatencyMs(*row.PingLatencyMs)
 		}
+		if row.TtftMs != nil {
+			c = c.SetTtftMs(*row.TtftMs)
+		}
 		if row.Quota != nil {
 			c = c.SetQuota(row.Quota)
 		}
@@ -289,6 +292,7 @@ func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID in
 			Status:        string(row.Status),
 			LatencyMs:     row.LatencyMs,
 			PingLatencyMs: row.PingLatencyMs,
+			TtftMs:        row.TtftMs,
 			Message:       row.Message,
 			CheckedAt:     row.CheckedAt,
 			Quota:         row.Quota,
@@ -513,6 +517,49 @@ func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 		assignNullInt(&entry.LatencyMs, latency)
 		assignNullInt(&entry.PingLatencyMs, ping)
 		out[monitorID] = append(out[monitorID], entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListHistoryInWindowByGroup 取指定时间窗内、指定分组名下所有探针历史，供 V2 矩阵在无真实流量
+// 的时间桶上做主动探针兜底。
+//
+// 返回 map[group_name] -> []*ChannelMonitorHistoryEntry，按 checked_at 升序。分组名为空或区间非法
+// 时返回空 map。只读探针数据，绝不写回 V2 真实流量统计。
+func (r *channelMonitorRepository) ListHistoryInWindowByGroup(
+	ctx context.Context,
+	start, end time.Time,
+) (map[string][]*service.ChannelMonitorHistoryEntry, error) {
+	out := make(map[string][]*service.ChannelMonitorHistoryEntry)
+	if !end.After(start) {
+		return out, nil
+	}
+	const q = `
+		SELECT m.group_name, h.status, h.ttft_ms, h.checked_at
+		FROM channel_monitor_histories h
+		JOIN channel_monitors m ON m.id = h.monitor_id
+		WHERE h.checked_at >= $1 AND h.checked_at < $2
+		  AND COALESCE(m.group_name, '') <> ''
+		ORDER BY h.checked_at ASC
+	`
+	rows, err := r.db.QueryContext(ctx, q, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("query monitor history window: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var groupName string
+		entry := &service.ChannelMonitorHistoryEntry{}
+		var ttft sql.NullInt64
+		if err := rows.Scan(&groupName, &entry.Status, &ttft, &entry.CheckedAt); err != nil {
+			return nil, fmt.Errorf("scan monitor history window row: %w", err)
+		}
+		assignNullInt(&entry.TtftMs, ttft)
+		out[groupName] = append(out[groupName], entry)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -29,6 +29,14 @@ const rawUsageLogModelColumn = "model"
 // 配合 `FROM usage_logs ul` JOIN 查询使用。
 const usageLogSuccessFilterUL = "ul.actual_cost > 0"
 
+// usageLogProbeExcludeUL removes channel-monitor probes from V2 aggregation.
+//
+// Probes traverse the gateway like customer requests and land in usage_logs. If
+// they were aggregated, a group with no organic traffic would still look busy and
+// the status page would never fall back to active probing -- the very case the
+// hybrid monitor exists for. Service.ProbeUserAgent is stamped on every probe.
+const usageLogProbeExcludeUL = "COALESCE(ul.user_agent, '') <> '" + service.ProbeUserAgent + "'"
+
 // usageLogEffectivePlatformExpr 用于按"有效平台"维度聚合 usage_logs：
 // 优先取请求实际走的分组 platform，若分组未设置 platform 再 fallback 到 account.platform。
 // Composite groups are a routing layer, so platform analytics must use the

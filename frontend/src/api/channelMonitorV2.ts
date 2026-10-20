@@ -156,6 +156,8 @@ export interface MonitorMatrixBucket {
   bucket_start: string
   metrics: MonitorMetric
   health: MonitorHealth
+  // 数据来源：'probe' 表示该时间桶无真实流量，指标由主动探针兜底；缺省/空串按 'real' 处理。
+  source?: 'real' | 'probe'
 }
 
 export interface MonitorMatrixRow {

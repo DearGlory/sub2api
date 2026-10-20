@@ -13,10 +13,15 @@ import (
 	"github.com/lib/pq"
 )
 
-type channelMonitorV2Repository struct{ db *sql.DB }
+type channelMonitorV2Repository struct {
+	db *sql.DB
+	// monitorHistory 提供主动探针历史，用于在无真实流量的时间桶上做兜底。
+	// 与 V2 的 usage_logs 聚合是两条独立数据源，绝不互相写入。
+	monitorHistory service.ChannelMonitorRepository
+}
 
-func NewChannelMonitorV2Repository(db *sql.DB) service.ChannelMonitorV2Repository {
-	return &channelMonitorV2Repository{db: db}
+func NewChannelMonitorV2Repository(db *sql.DB, monitorHistory service.ChannelMonitorRepository) service.ChannelMonitorV2Repository {
+	return &channelMonitorV2Repository{db: db, monitorHistory: monitorHistory}
 }
 
 func (r *channelMonitorV2Repository) GetConfig(ctx context.Context) (*service.ChannelMonitorV2Config, error) {
@@ -492,7 +497,65 @@ func (r *channelMonitorV2Repository) GetMatrix(ctx context.Context, filter servi
 		}
 		return a.Model < b.Model
 	})
+
+	// Organic traffic is authoritative. Only after every real bucket is in place do
+	// we fill the gaps with active-probe samples, so a bucket that has traffic can
+	// never be overwritten by a probe.
+	r.applyProbeFallback(ctx, result, filter, cfg, admin)
+
 	return result, nil
+}
+
+// applyProbeFallback loads probe history for the matrix window and fills the
+// traffic-free buckets. A failure here must not fail the whole matrix: the page
+// degrades to showing only real traffic, which is exactly the pre-existing
+// behaviour.
+func (r *channelMonitorV2Repository) applyProbeFallback(
+	ctx context.Context,
+	matrix *service.ChannelMonitorV2Matrix,
+	filter service.ChannelMonitorV2Filter,
+	cfg service.ChannelMonitorV2Config,
+	admin bool,
+) {
+	if matrix == nil || len(matrix.Items) == 0 {
+		return
+	}
+	start, end, ok := channelMonitorProbeFallbackWindow(matrix, filter)
+	if !ok {
+		return
+	}
+	samples, err := r.monitorHistory.ListHistoryInWindowByGroup(ctx, start, end)
+	if err != nil || len(samples) == 0 {
+		return
+	}
+	bucketMinutes := int(filter.Bucket / time.Minute)
+	if bucketMinutes <= 0 {
+		return
+	}
+	bucketed := bucketProbeSamplesByGroup(samples, bucketMinutes)
+	applyProbeFallbackToMatrix(matrix, bucketed, bucketMinutes, admin)
+}
+
+// channelMonitorProbeFallbackWindow derives the probe query window from the
+// coverage the matrix already resolved, so probes and traffic describe the same
+// span. It uses the requested window rather than coverage start: a partially
+// backfilled matrix still has probes for the whole requested range.
+func channelMonitorProbeFallbackWindow(
+	matrix *service.ChannelMonitorV2Matrix,
+	filter service.ChannelMonitorV2Filter,
+) (time.Time, time.Time, bool) {
+	end := matrix.Coverage.RequestedEnd
+	if end.IsZero() {
+		end = filter.End
+	}
+	start := matrix.Coverage.RequestedStart
+	if start.IsZero() {
+		start = filter.Start
+	}
+	if !end.After(start) {
+		return time.Time{}, time.Time{}, false
+	}
+	return start, end, true
 }
 
 func channelMonitorV2MatrixDimensionKey(groupBy service.ChannelMonitorV2GroupBy, cfg service.ChannelMonitorV2Config, platform string, groupID int64, model string) channelMonitorV2MatrixKey {

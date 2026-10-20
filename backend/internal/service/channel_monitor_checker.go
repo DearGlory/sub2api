@@ -95,6 +95,7 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 			res.Message = truncateMessage("replace-mode: upstream returned 2xx with empty text")
 			return res
 		}
+		res.TtftMs = measureFirstTokenForResult(ctx, provider, endpoint, apiKey, model, opts)
 		return finalizeOperationalOrDegraded(res, latency, latencyMs)
 	}
 
@@ -104,7 +105,23 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 		return res
 	}
 
+	// The regular check reads the whole body, so its latency is end-to-end. Only
+	// after the channel proved healthy do we spend one extra short request to
+	// measure a real first-token latency for the status page.
+	res.TtftMs = measureFirstTokenForResult(ctx, provider, endpoint, apiKey, model, opts)
+
 	return finalizeOperationalOrDegraded(res, latency, latencyMs)
+}
+
+// measureFirstTokenForResult measures TTFT and swallows the error: a channel that
+// passed its health check must not be marked unhealthy just because it could not
+// produce a first-token sample. The page renders the missing value as '-'.
+func measureFirstTokenForResult(ctx context.Context, provider, endpoint, apiKey, model string, opts *CheckOptions) *int {
+	ttft, err := measureFirstToken(ctx, provider, endpoint, apiKey, model, opts)
+	if err != nil {
+		return nil
+	}
+	return ttft
 }
 
 // finalizeOperationalOrDegraded 负责走到最后一步的 operational/degraded 判定。
@@ -539,6 +556,8 @@ func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers ma
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// Probes must not look like customer traffic in usage_logs; see ProbeUserAgent.
+	req.Header.Set("User-Agent", ProbeUserAgent)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

@@ -138,8 +138,10 @@ type CheckResult struct {
 	Status        string // operational / degraded / failed / error
 	LatencyMs     *int
 	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
+	// TtftMs 是流式探针测得的首字延迟；非流式回退或失败时为 nil。
+	TtftMs    *int
+	Message   string
+	CheckedAt time.Time
 	// Quota 配额模式附带快照（quota 模式唯一数据；quota_probe 挂在主模型行）。
 	Quota *domain.MonitorQuotaSnapshot
 }
@@ -204,9 +206,11 @@ type ChannelMonitorHistoryRow struct {
 	Status        string
 	LatencyMs     *int
 	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
-	Quota         *domain.MonitorQuotaSnapshot
+	// TtftMs 是流式探针测得的首字延迟；非流式回退或失败时为 nil。
+	TtftMs    *int
+	Message   string
+	CheckedAt time.Time
+	Quota     *domain.MonitorQuotaSnapshot
 }
 
 // ChannelMonitorHistoryEntry 历史记录查询返回行（含 ent 主键 ID）。
@@ -216,9 +220,11 @@ type ChannelMonitorHistoryEntry struct {
 	Status        string
 	LatencyMs     *int
 	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
-	Quota         *domain.MonitorQuotaSnapshot
+	// TtftMs 是流式探针测得的首字延迟；NULL 表示该次未测到首字。
+	TtftMs    *int
+	Message   string
+	CheckedAt time.Time
+	Quota     *domain.MonitorQuotaSnapshot
 }
 
 // ChannelMonitorLatest 最近一次检测的简明信息（用于 UserMonitorView 聚合）。

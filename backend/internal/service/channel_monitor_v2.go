@@ -206,7 +206,18 @@ type ChannelMonitorV2TrendPoint struct {
 	BucketStart time.Time              `json:"bucket_start"`
 	Metrics     ChannelMonitorV2Metric `json:"metrics"`
 	Health      ChannelMonitorV2Health `json:"health"`
+	// Source 说明该时间桶的数据来源：真实流量（real）或主动探针兜底（probe）。
+	// 空串按 real 处理，兼容旧前端。探针桶不会与真实流量混算。
+	Source string `json:"source,omitempty"`
 }
+
+// 时间桶数据来源取值。
+const (
+	// ChannelMonitorBucketSourceReal 表示该桶的指标来自 usage_logs 真实流量聚合。
+	ChannelMonitorBucketSourceReal = "real"
+	// ChannelMonitorBucketSourceProbe 表示该桶无真实流量，指标由主动探针样本推导。
+	ChannelMonitorBucketSourceProbe = "probe"
+)
 
 type ChannelMonitorV2Snapshot struct {
 	Config   ChannelMonitorV2Config       `json:"config"`
