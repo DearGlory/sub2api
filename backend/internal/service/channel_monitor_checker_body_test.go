@@ -24,18 +24,35 @@ func swapMonitorHTTPClient(t *testing.T) {
 }
 
 // captureHandler 把每次收到的请求 body 和 headers 存起来，测试断言用。
+//
+// 一次 runCheckForModel 会发两类请求：主检查（非流式，读完整响应）和之后的
+// TTFT 探针（流式，只为测首 token）。两者都被记录，但分开存：
+// lastBody/lastHeaders 始终是主检查，probeBody/probeHeaders 是探针。
+// 混在一起会让探针覆盖主检查，断言就会看到 stream=true 和探针的 body。
 type captureHandler struct {
-	lastBody    map[string]any
-	lastHeaders http.Header
-	respondText string // 写到 Anthropic content[0].text 里（校验用）
-	status      int
+	lastBody     map[string]any
+	lastHeaders  http.Header
+	probeBody    map[string]any
+	probeHeaders http.Header
+	probeCount   int
+	respondText  string // 写到 Anthropic content[0].text 里（校验用）
+	status       int
 }
 
 func (h *captureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.lastHeaders = r.Header.Clone()
 	defer func() { _ = r.Body.Close() }()
 	var parsed map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&parsed)
+
+	if isProbeRequest(r) {
+		h.probeCount++
+		h.probeHeaders = r.Header.Clone()
+		h.probeBody = parsed
+		writeProbeSSE(w)
+		return
+	}
+
+	h.lastHeaders = r.Header.Clone()
 	h.lastBody = parsed
 
 	if h.status == 0 {
@@ -59,21 +76,56 @@ func setupFakeAnthropic(t *testing.T, handler *captureHandler) string {
 	return srv.URL
 }
 
+// isProbeRequest reports whether r is the extra streaming TTFT probe rather than
+// the primary health check.
+//
+// The User-Agent cannot distinguish them: both are probes and both carry
+// ProbeUserAgent so V2 aggregation filters them out of the organic sample. The
+// Accept header is the reliable signal — the TTFT probe asks for
+// text/event-stream, the primary check asks for application/json. Body shape is
+// deliberately not used: a replace-mode user body may set "stream": true while
+// still being the primary check.
+func isProbeRequest(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/event-stream")
+}
+
+// writeProbeSSE answers a TTFT probe with the smallest valid SSE stream: one
+// OpenAI-style content delta followed by [DONE]. The probe stops reading at the
+// first delta, so no further chunks are needed.
+func writeProbeSSE(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"1\"}}]}\n\n"))
+	_, _ = w.Write([]byte("data: [DONE]\n\n"))
+}
+
 type openAICaptureHandler struct {
 	lastBody                  map[string]any
 	lastHeaders               http.Header
 	lastPath                  string
+	probeBody                 map[string]any
+	probePath                 string
+	probeCount                int
 	status                    int
 	rawResponse               string
 	responsesLeadingReasoning bool
 }
 
 func (h *openAICaptureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.lastHeaders = r.Header.Clone()
-	h.lastPath = r.URL.Path
 	defer func() { _ = r.Body.Close() }()
 	var parsed map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&parsed)
+
+	if isProbeRequest(r) {
+		h.probeCount++
+		h.probeBody = parsed
+		h.probePath = r.URL.Path
+		writeProbeSSE(w)
+		return
+	}
+
+	h.lastHeaders = r.Header.Clone()
+	h.lastPath = r.URL.Path
 	h.lastBody = parsed
 
 	if h.status == 0 {
