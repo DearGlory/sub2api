@@ -34,6 +34,7 @@
         t('channelMonitorV2.settings.modeBanner', {
           mode: systemModeLabel,
           modeV2: t('channelMonitorV2.settings.modeV2'),
+          modeV3: t('channelMonitorV2.settings.modeV3'),
         })
       }}
       <router-link class="ml-1 font-medium underline" to="/admin/settings">{{ t('admin.settings.tabs.features') }}</router-link>
@@ -287,7 +288,7 @@ import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { getChannelMonitorMode, isChannelMonitorV2Mode } from '@/utils/featureFlags'
+import { getChannelMonitorMode, isChannelMonitorPassiveMode } from '@/utils/featureFlags'
 import {
   getConfig,
   updateConfig,
@@ -325,15 +326,23 @@ const errorCategories = MONITOR_ERROR_CATEGORIES
 const countedErrorCategoryCount = computed(
   () => errorCategories.length - (draft.value?.ignored_error_categories?.length || 0)
 )
-/** System settings mode must be v2 for aggregation to run; config remains editable for prep. */
-const systemModeV2 = computed(() => isChannelMonitorV2Mode())
+/**
+ * The banner warns only when the passive stack is off (mode v1 / feature disabled).
+ * Both v2 and the v3 hybrid run aggregation, so neither one shows the warning.
+ */
+const systemModeV2 = computed(() => isChannelMonitorPassiveMode())
 const systemModeLabel = computed(() => {
   if (!appStore.cachedPublicSettings?.channel_monitor_enabled) {
     return t('channelMonitorV2.settings.modeClosed')
   }
-  return getChannelMonitorMode() === 'v1'
-    ? t('channelMonitorV2.settings.modeV1')
-    : t('channelMonitorV2.settings.modeV2')
+  switch (getChannelMonitorMode()) {
+    case 'v1':
+      return t('channelMonitorV2.settings.modeV1')
+    case 'v3':
+      return t('channelMonitorV2.settings.modeV3')
+    default:
+      return t('channelMonitorV2.settings.modeV2')
+  }
 })
 const defaultThresholds = {
   minimum_sample: 50,

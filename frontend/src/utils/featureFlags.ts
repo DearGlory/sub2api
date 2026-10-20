@@ -183,13 +183,18 @@ export function isChannelMonitorRouteEnabled(): boolean {
   return isFeatureFlagEnabled(FeatureFlags.channelMonitor)
 }
 
-export type ChannelMonitorMode = 'v1' | 'v2'
+export type ChannelMonitorMode = 'v1' | 'v2' | 'v3'
 
-/** Exclusive channel-monitor implementation. Invalid/missing → v1 (opt-in to v2). */
+/**
+ * Channel-monitor implementation. Invalid/missing → v1 (opt-in to v2/v3).
+ *   v1 = active probes only
+ *   v2 = passive aggregation only
+ *   v3 = hybrid (passive aggregation + probe fallback on empty buckets)
+ */
 export function getChannelMonitorMode(): ChannelMonitorMode {
   const appStore = useAppStore()
   const mode = appStore.cachedPublicSettings?.channel_monitor_mode
-  return mode === 'v2' ? 'v2' : 'v1'
+  return mode === 'v2' ? 'v2' : mode === 'v3' ? 'v3' : 'v1'
 }
 
 export function isChannelMonitorV1Mode(): boolean {
@@ -198,6 +203,16 @@ export function isChannelMonitorV1Mode(): boolean {
 
 export function isChannelMonitorV2Mode(): boolean {
   return isChannelMonitorRouteEnabled() && getChannelMonitorMode() === 'v2'
+}
+
+/** True when the passive (V2/V3) stack is active — v2 or the v3 hybrid. */
+export function isChannelMonitorPassiveMode(): boolean {
+  return isChannelMonitorRouteEnabled() && getChannelMonitorMode() !== 'v1'
+}
+
+/** True when the currently active mode is the v3 hybrid. */
+export function isChannelMonitorHybridMode(): boolean {
+  return isChannelMonitorRouteEnabled() && getChannelMonitorMode() === 'v3'
 }
 
 export function getChannelMonitorRefreshIntervalSeconds(): number {

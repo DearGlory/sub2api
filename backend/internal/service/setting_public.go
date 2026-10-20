@@ -399,13 +399,15 @@ const (
 	defaultChannelMonitorMode      = ChannelMonitorModeV1
 )
 
-// normalizeChannelMonitorMode accepts only v1/v2; empty/invalid → v1 (safe default).
+// normalizeChannelMonitorMode accepts v1/v2/v3; empty/invalid → v1 (safe default).
 func normalizeChannelMonitorMode(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case ChannelMonitorModeV1, "":
 		return ChannelMonitorModeV1
 	case ChannelMonitorModeV2:
 		return ChannelMonitorModeV2
+	case ChannelMonitorModeV3:
+		return ChannelMonitorModeV3
 	default:
 		return defaultChannelMonitorMode
 	}
@@ -452,14 +454,27 @@ type ChannelMonitorRuntime struct {
 	HideUserRanking bool
 }
 
-// ActiveProbesAllowed reports whether V1 active provider probes may run.
+// ActiveProbesAllowed reports whether active provider probes may run.
+//
+//   - v1: probes are the only data source.
+//   - v2: passive aggregation only — probes are retired.
+//   - v3 (hybrid): passive aggregation runs and probes fill the buckets that
+//     carry no organic traffic.
 func (r ChannelMonitorRuntime) ActiveProbesAllowed() bool {
-	return r.Enabled && r.Mode == ChannelMonitorModeV1
+	return r.Enabled && (r.Mode == ChannelMonitorModeV1 || r.Mode == ChannelMonitorModeV3)
 }
 
-// PassiveAggregationAllowed reports whether V2 passive aggregation may run.
+// PassiveAggregationAllowed reports whether passive minute aggregation may run.
+//
+//   - v2 and v3 (hybrid) both run it; v1 does not.
 func (r ChannelMonitorRuntime) PassiveAggregationAllowed() bool {
-	return r.Enabled && r.Mode == ChannelMonitorModeV2
+	return r.Enabled && (r.Mode == ChannelMonitorModeV2 || r.Mode == ChannelMonitorModeV3)
+}
+
+// PassiveViewAllowed reports whether the user-facing V2/V3 passive views are
+// served. v1 is probe-only and uses the legacy V1 view instead.
+func (r ChannelMonitorRuntime) PassiveViewAllowed() bool {
+	return r.PassiveAggregationAllowed()
 }
 
 // GetChannelMonitorRuntime reads the channel monitor feature flags directly from

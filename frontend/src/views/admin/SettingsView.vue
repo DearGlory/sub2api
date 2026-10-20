@@ -7405,6 +7405,18 @@
                     type="button"
                     class="inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition"
                     :class="
+                      form.channel_monitor_mode === 'v3'
+                        ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'
+                    "
+                    @click="form.channel_monitor_mode = 'v3'"
+                  >
+                    {{ t('admin.settings.features.channelMonitor.modeV3') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition"
+                    :class="
                       form.channel_monitor_mode === 'v2'
                         ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300'
                         : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'
@@ -7430,7 +7442,9 @@
                   {{
                     form.channel_monitor_mode === 'v1'
                       ? t('admin.settings.features.channelMonitor.modeV1Hint')
-                      : t('admin.settings.features.channelMonitor.modeV2Hint')
+                      : form.channel_monitor_mode === 'v3'
+                        ? t('admin.settings.features.channelMonitor.modeV3Hint')
+                        : t('admin.settings.features.channelMonitor.modeV2Hint')
                   }}
                 </p>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -7438,7 +7452,7 @@
                 </p>
               </div>
 
-              <div v-if="form.channel_monitor_mode === 'v1'">
+              <div v-if="form.channel_monitor_mode === 'v1' || form.channel_monitor_mode === 'v3'">
                 <label class="input-label">
                   {{ t('admin.settings.features.channelMonitor.defaultInterval') }}
                   <span class="text-red-500">*</span>
@@ -7455,7 +7469,10 @@
                 </p>
               </div>
 
-              <div v-if="form.channel_monitor_mode === 'v2'" class="space-y-4">
+              <div
+                v-if="form.channel_monitor_mode === 'v2' || form.channel_monitor_mode === 'v3'"
+                class="space-y-4"
+              >
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0">
                     <p class="text-sm font-medium text-gray-900 dark:text-white">
@@ -10374,7 +10391,7 @@ const form = reactive<SettingsForm>({
   account_quota_notify_emails: [] as NotifyEmailEntry[],
   // Channel Monitor feature switch
   channel_monitor_enabled: true,
-  channel_monitor_mode: 'v1' as 'v1' | 'v2',
+  channel_monitor_mode: 'v1' as 'v1' | 'v2' | 'v3',
   channel_monitor_default_interval_seconds: 60,
   channel_monitor_hide_throughput: false,
   channel_monitor_show_quota: false,
@@ -11405,7 +11422,11 @@ async function loadSettings() {
     form.login_agreement_mode =
       settings.login_agreement_mode === "checkbox" ? "checkbox" : "modal";
     form.channel_monitor_mode =
-      settings.channel_monitor_mode === "v2" ? "v2" : "v1";
+      settings.channel_monitor_mode === "v2"
+        ? "v2"
+        : settings.channel_monitor_mode === "v3"
+          ? "v3"
+          : "v1";
     form.channel_monitor_hide_throughput = Boolean(
       settings.channel_monitor_hide_throughput
     );
@@ -12121,7 +12142,7 @@ async function saveSettings() {
       ).filter((e) => e.email.trim() !== ""),
       // Channel Monitor feature switch
       channel_monitor_enabled: form.channel_monitor_enabled,
-      channel_monitor_mode: form.channel_monitor_mode === 'v1' ? 'v1' : 'v2',
+      channel_monitor_mode: form.channel_monitor_mode,
       channel_monitor_default_interval_seconds:
         Number(form.channel_monitor_default_interval_seconds) || 60,
       channel_monitor_hide_throughput: Boolean(form.channel_monitor_hide_throughput),

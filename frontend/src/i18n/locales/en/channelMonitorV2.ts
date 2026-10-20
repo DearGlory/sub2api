@@ -86,10 +86,11 @@ export default {
       saveSuccess: 'V2 monitor config saved',
       saveFailed: 'Failed to save V2 config',
       modeBanner:
-        'System mode is currently {mode}. V2 minute aggregation will not run; this config can be prepared now and takes effect after switching to {modeV2}. Change mode under System Settings → Feature switches.',
+        'System mode is currently {mode}, so passive aggregation will not run; this config can be prepared now and takes effect after switching to {modeV2} or {modeV3}. Change mode under System Settings → Feature switches.',
       modeClosed: 'Channel monitor disabled',
       modeV1: 'V1 active probes',
       modeV2: 'V2 passive monitoring',
+      modeV3: 'V3 hybrid monitoring',
       enableTitle: 'Enable V2 aggregation',
       enableHint:
         'Applies when system mode is V2. Turning this off only stops this config’s aggregation; the system mode switch remains under Feature switches.',

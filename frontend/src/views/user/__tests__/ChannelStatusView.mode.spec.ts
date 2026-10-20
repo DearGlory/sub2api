@@ -3,11 +3,11 @@ import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
 
 const isV1 = vi.fn(() => false)
-const isV2 = vi.fn(() => false)
+const isPassive = vi.fn(() => false)
 
 vi.mock('@/utils/featureFlags', () => ({
   isChannelMonitorV1Mode: () => isV1(),
-  isChannelMonitorV2Mode: () => isV2(),
+  isChannelMonitorPassiveMode: () => isPassive(),
 }))
 
 vi.mock('../ChannelStatusV1View.vue', () => ({
@@ -30,9 +30,9 @@ function setSearch(search: string) {
 describe('ChannelStatusView mode switch', () => {
   beforeEach(() => {
     isV1.mockReset()
-    isV2.mockReset()
+    isPassive.mockReset()
     isV1.mockReturnValue(false)
-    isV2.mockReturnValue(false)
+    isPassive.mockReturnValue(false)
     setSearch('')
   })
 
@@ -44,23 +44,41 @@ describe('ChannelStatusView mode switch', () => {
     expect(wrapper.find('[data-testid="v3"]').exists()).toBe(false)
   })
 
-  it('renders V3 by default when the v2 stack is enabled', () => {
-    isV2.mockReturnValue(true)
+  it('renders V3 by default in v2 mode', () => {
+    isPassive.mockReturnValue(true)
     const wrapper = mount(ChannelStatusView)
     expect(wrapper.find('[data-testid="v3"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="v2"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="v1"]').exists()).toBe(false)
   })
 
+  it('renders V3 by default in v3 hybrid mode', () => {
+    // Both v2 and v3 ride the passive stack; only v1 is excluded.
+    isPassive.mockReturnValue(true)
+    const wrapper = mount(ChannelStatusView)
+    expect(wrapper.find('[data-testid="v3"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="v1"]').exists()).toBe(false)
+  })
+
   it('renders the legacy V2 view when ?monitor_view=v2 is set', () => {
-    isV2.mockReturnValue(true)
+    isPassive.mockReturnValue(true)
     setSearch('monitor_view=v2')
     const wrapper = mount(ChannelStatusView)
     expect(wrapper.find('[data-testid="v2"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="v3"]').exists()).toBe(false)
   })
 
-  it('ignores ?monitor_view=v2 when the v2 stack is disabled', () => {
+  it('keeps ?monitor_view=v2 working under the v3 hybrid', () => {
+    // Regression guard: v3 must not fall back to the plain V1 view nor break
+    // the legacy rollback surface.
+    isPassive.mockReturnValue(true)
+    setSearch('monitor_view=v2')
+    const wrapper = mount(ChannelStatusView)
+    expect(wrapper.find('[data-testid="v2"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="v1"]').exists()).toBe(false)
+  })
+
+  it('ignores ?monitor_view=v2 when the passive stack is disabled', () => {
     setSearch('monitor_view=v2')
     const wrapper = mount(ChannelStatusView)
     expect(wrapper.find('[data-testid="v3"]').exists()).toBe(true)

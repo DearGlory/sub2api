@@ -494,13 +494,19 @@ const (
 	// When false: runner skips scheduling and user-facing endpoints return an empty list.
 	SettingKeyChannelMonitorEnabled = "channel_monitor_enabled"
 
-	// SettingKeyChannelMonitorMode selects exclusive implementation:
-	// "v1" active probes, "v2" passive aggregation. Default "v1" (opt-in to v2).
+	// SettingKeyChannelMonitorMode selects the monitor implementation:
+	// "v1" active probes, "v2" passive aggregation, "v3" hybrid (both).
+	// Default "v1" (opt-in to v2/v3).
 	SettingKeyChannelMonitorMode = "channel_monitor_mode"
 
-	// ChannelMonitorModeV1/V2 are the only accepted mode values.
+	// ChannelMonitorModeV1/V2/V3 are the only accepted mode values.
+	//   v1 = active probes only
+	//   v2 = passive aggregation only
+	//   v3 = hybrid: passive aggregation plus active probes on buckets that
+	//        carry no organic traffic (probe fallback).
 	ChannelMonitorModeV1 = "v1"
 	ChannelMonitorModeV2 = "v2"
+	ChannelMonitorModeV3 = "v3"
 
 	// SettingKeyChannelMonitorDefaultIntervalSeconds controls the default interval (seconds)
 	// pre-filled when creating a new channel monitor from the admin UI. Range: [15, 3600].
