@@ -25,7 +25,10 @@ vi.mock('@/stores/app', () => ({ useAppStore: () => ({
 }) }))
 vi.mock('@/utils/featureFlags', () => ({
   getChannelMonitorMode: () => 'v2',
+  isChannelMonitorV1Mode: () => false,
   isChannelMonitorV2Mode: () => true,
+  isChannelMonitorPassiveMode: () => true,
+  isChannelMonitorHybridMode: () => false,
 }))
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key, te: () => false }),
