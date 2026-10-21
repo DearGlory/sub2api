@@ -335,7 +335,7 @@ func (s *groupRepoStubForAdmin) UpdateSortOrders(_ context.Context, _ []GroupSor
 	return nil
 }
 
-func TestAdminService_CreateGroup_RejectsTimePricing(t *testing.T) {
+func TestAdminService_CreateGroup_AcceptsTimePricing(t *testing.T) {
 	repo := &groupRepoStubForAdmin{createID: 51}
 	svc := &adminServiceImpl{groupRepo: repo}
 
@@ -351,14 +351,13 @@ func TestAdminService_CreateGroup_RejectsTimePricing(t *testing.T) {
 		}},
 	})
 
-	require.Error(t, err)
-	appErr := infraerrors.FromError(err)
-	require.Equal(t, int32(http.StatusBadRequest), appErr.Code)
-	require.Equal(t, "GROUP_MODEL_TIME_PRICING_UNSUPPORTED", appErr.Reason)
-	require.Nil(t, repo.created)
+	require.NoError(t, err)
+	require.NotNil(t, repo.created)
+	require.Len(t, repo.created.ModelPricing, 1)
+	require.NotNil(t, repo.created.ModelPricing[0].TimePricing)
 }
 
-func TestAdminService_UpdateGroup_RejectsTimePricing(t *testing.T) {
+func TestAdminService_UpdateGroup_AcceptsTimePricing(t *testing.T) {
 	existing := &Group{ID: 1, Name: "existing", Platform: PlatformOpenAI, Status: StatusActive}
 	repo := &groupRepoStubForAdmin{getByID: existing}
 	svc := &adminServiceImpl{groupRepo: repo}
@@ -371,11 +370,10 @@ func TestAdminService_UpdateGroup_RejectsTimePricing(t *testing.T) {
 
 	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{ModelPricing: &pricing})
 
-	require.Error(t, err)
-	appErr := infraerrors.FromError(err)
-	require.Equal(t, int32(http.StatusBadRequest), appErr.Code)
-	require.Equal(t, "GROUP_MODEL_TIME_PRICING_UNSUPPORTED", appErr.Reason)
-	require.Nil(t, repo.updated)
+	require.NoError(t, err)
+	require.NotNil(t, repo.updated)
+	require.Len(t, repo.updated.ModelPricing, 1)
+	require.NotNil(t, repo.updated.ModelPricing[0].TimePricing)
 }
 
 func TestNormalizeGroupModelPricing_NormalizesEmptyTimePricing(t *testing.T) {

@@ -251,7 +251,10 @@ func TestCalculateCostUnified_ChannelTimePricingScalesBaseOnUnmatchedInterval(t 
 	require.InDelta(t, 2.0, cost.TotalCost, 1e-12)
 }
 
-func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyToGroupPricing(t *testing.T) {
+// TestCalculateCostUnified_GroupTimePricingApplies 确认分组价卡上的分时倍率生效。
+// 分组卡命中时会覆盖渠道卡（Resolve 里 group 优先返回），所以分时配置必须
+// 随分组卡一起生效；否则把价卡从渠道级搬到分组级会让高峰倍率静默失效。
+func TestCalculateCostUnified_GroupTimePricingApplies(t *testing.T) {
 	resolved := channelTimeResolvedForTest(&ModelPricing{InputPricePerToken: 0.001}, nil)
 	resolved.Source = PricingSourceGroup
 	billing := NewBillingService(&config.Config{}, nil)
@@ -265,7 +268,28 @@ func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyToGroupPricing(t *te
 		PricingAt: time.Date(2026, 8, 17, 1, 0, 0, 0, time.UTC),
 	})
 	require.NoError(t, err)
-	require.InDelta(t, 1.0, cost.TotalCost, 1e-12)
+	require.InDelta(t, 2.0, cost.TotalCost, 1e-12)
+}
+
+// TestCalculateCostUnified_TimePricingIgnoredForOtherSources 确认只有
+// 分组 / 渠道两种来源能带分时倍率；LiteLLM、fallback 等来源一律按 1 计。
+func TestCalculateCostUnified_TimePricingIgnoredForOtherSources(t *testing.T) {
+	for _, source := range []string{"litellm", "fallback", ""} {
+		resolved := channelTimeResolvedForTest(&ModelPricing{InputPricePerToken: 0.001}, nil)
+		resolved.Source = source
+		billing := NewBillingService(&config.Config{}, nil)
+
+		cost, err := billing.CalculateCostUnified(CostInput{
+			Ctx:       context.Background(),
+			Model:     "model",
+			Tokens:    UsageTokens{InputTokens: 1000},
+			Resolver:  &ModelPricingResolver{},
+			Resolved:  resolved,
+			PricingAt: time.Date(2026, 8, 17, 1, 0, 0, 0, time.UTC),
+		})
+		require.NoError(t, err)
+		require.InDelta(t, 1.0, cost.TotalCost, 1e-12, "source=%q", source)
+	}
 }
 
 func TestCalculateCostUnified_ChannelTimePricingDoesNotApplyOutsideMatchingTime(t *testing.T) {

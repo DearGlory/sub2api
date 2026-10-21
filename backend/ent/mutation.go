@@ -22252,6 +22252,7 @@ type GroupMutation struct {
 	long_context_pricing_enabled            *bool
 	model_pricing                           *jsontext.Value
 	appendmodel_pricing                     jsontext.Value
+	model_plaza_enabled                     *bool
 	claude_code_only                        *bool
 	fallback_group_id                       *int64
 	addfallback_group_id                    *int64
@@ -24616,6 +24617,42 @@ func (m *GroupMutation) ResetModelPricing() {
 	delete(m.clearedFields, group.FieldModelPricing)
 }
 
+// SetModelPlazaEnabled sets the "model_plaza_enabled" field.
+func (m *GroupMutation) SetModelPlazaEnabled(b bool) {
+	m.model_plaza_enabled = &b
+}
+
+// ModelPlazaEnabled returns the value of the "model_plaza_enabled" field in the mutation.
+func (m *GroupMutation) ModelPlazaEnabled() (r bool, exists bool) {
+	v := m.model_plaza_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelPlazaEnabled returns the old "model_plaza_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldModelPlazaEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelPlazaEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelPlazaEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelPlazaEnabled: %w", err)
+	}
+	return oldValue.ModelPlazaEnabled, nil
+}
+
+// ResetModelPlazaEnabled resets all changes to the "model_plaza_enabled" field.
+func (m *GroupMutation) ResetModelPlazaEnabled() {
+	m.model_plaza_enabled = nil
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (m *GroupMutation) SetClaudeCodeOnly(b bool) {
 	m.claude_code_only = &b
@@ -26065,7 +26102,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 67)
+	fields := make([]string, 0, 68)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26191,6 +26228,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.model_pricing != nil {
 		fields = append(fields, group.FieldModelPricing)
+	}
+	if m.model_plaza_enabled != nil {
+		fields = append(fields, group.FieldModelPlazaEnabled)
 	}
 	if m.claude_code_only != nil {
 		fields = append(fields, group.FieldClaudeCodeOnly)
@@ -26359,6 +26399,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.LongContextPricingEnabled()
 	case group.FieldModelPricing:
 		return m.ModelPricing()
+	case group.FieldModelPlazaEnabled:
+		return m.ModelPlazaEnabled()
 	case group.FieldClaudeCodeOnly:
 		return m.ClaudeCodeOnly()
 	case group.FieldFallbackGroupID:
@@ -26502,6 +26544,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldLongContextPricingEnabled(ctx)
 	case group.FieldModelPricing:
 		return m.OldModelPricing(ctx)
+	case group.FieldModelPlazaEnabled:
+		return m.OldModelPlazaEnabled(ctx)
 	case group.FieldClaudeCodeOnly:
 		return m.OldClaudeCodeOnly(ctx)
 	case group.FieldFallbackGroupID:
@@ -26854,6 +26898,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetModelPricing(v)
+		return nil
+	case group.FieldModelPlazaEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelPlazaEnabled(v)
 		return nil
 	case group.FieldClaudeCodeOnly:
 		v, ok := value.(bool)
@@ -27666,6 +27717,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldModelPricing:
 		m.ResetModelPricing()
+		return nil
+	case group.FieldModelPlazaEnabled:
+		m.ResetModelPlazaEnabled()
 		return nil
 	case group.FieldClaudeCodeOnly:
 		m.ResetClaudeCodeOnly()

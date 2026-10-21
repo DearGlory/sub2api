@@ -253,8 +253,16 @@ func reasoningEffortBillingMultiplier(effort string, multipliers map[string]floa
 	return multiplier
 }
 
+// resolvedChannelTimeMultiplier 返回该次计费应乘的分时倍率。
+// 分时配置可以写在渠道价卡上，也可以写在分组价卡上：分组价卡一旦命中就会
+// 覆盖渠道价卡（Resolve 里 group 优先返回），所以只认 PricingSourceChannel
+// 会让分组卡上的分时配置被静默忽略、按 1 计。两种来源都读取
+// channelPricing.TimePricing —— 分组命中时它指向的就是分组卡本身。
 func resolvedChannelTimeMultiplier(resolved *ResolvedPricing, at time.Time) float64 {
-	if resolved == nil || resolved.Source != PricingSourceChannel || resolved.channelPricing == nil {
+	if resolved == nil || resolved.channelPricing == nil {
+		return 1
+	}
+	if resolved.Source != PricingSourceChannel && resolved.Source != PricingSourceGroup {
 		return 1
 	}
 	return resolved.channelPricing.TimePricing.MultiplierAt(at)

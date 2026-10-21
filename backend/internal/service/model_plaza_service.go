@@ -201,6 +201,14 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	out := make([]PlazaGroup, 0, len(order))
 	for _, gid := range order {
 		pg := byGroup[gid]
+		// 分组开启「独立展示」后，用分组自身配置补充 / 覆盖模型清单：
+		//   * 已绑定渠道的分组：渠道枚举给出模型名，分组价卡给出该分组的价格；
+		//   * 未绑定任何渠道的分组（视频 / Image 这类 composite 分组）：
+		//     模型清单直接来自分组自己的 model_pricing 与白名单。
+		// 两种情况都不再需要渠道级价卡才能显示价格。
+		if groupEnt[gid].ModelPlazaEnabled {
+			appendSelfDeclaredModels(ctx, pg, groupEnt[gid])
+		}
 		if len(pg.Models) == 0 {
 			continue
 		}
@@ -225,6 +233,87 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+// appendSelfDeclaredModels 用分组自身配置补充模型清单，供开启「独立展示」的
+// 分组使用，使价格展示不再依赖是否绑定了渠道。
+//
+// 模型名来源（按优先级去重合并）：
+//  1. 分组白名单启用了就把白名单条目当作候选；
+//  2. 分组 model_pricing 里每条定价的 models 列表（composite 分组尤其依赖这个，
+//     它没有渠道可用，价卡就是唯一的模型清单）。
+//
+// 平台归属：普通分组用分组自身 platform；composite 分组按价卡条目的 platform
+// 字段（composite 价卡的 platform 就是该模型实际请求的平台）。缺少 platform
+// 的条目跳过——广场要按平台过滤，猜一个会让价格显示到错误的平台上。
+//
+// 已存在的条目不会被覆盖：渠道枚举已经给出该模型时，以渠道那条为准（它的
+// 价格随后由 fillDisplayPricing 用分组价卡覆盖）。
+func appendSelfDeclaredModels(ctx context.Context, pg *PlazaGroup, g *Group) {
+	if pg == nil || g == nil {
+		return
+	}
+	type selfKey struct {
+		platform string
+		name     string
+	}
+	seen := make(map[selfKey]struct{}, len(pg.Models))
+	for i := range pg.Models {
+		seen[selfKey{platform: pg.Models[i].Platform, name: strings.ToLower(pg.Models[i].Name)}] = struct{}{}
+	}
+
+	add := func(platform, name string) {
+		platform = strings.TrimSpace(platform)
+		name = strings.TrimSpace(name)
+		if platform == "" || name == "" {
+			return
+		}
+		// 与渠道枚举的过滤口径保持一致：composite 只接受具体可请求的平台，
+		// 普通分组只接受与自身平台相同的模型。
+		if pg.Platform == PlatformComposite {
+			if !isConcreteRequestPlatform(platform) {
+				return
+			}
+		} else if platform != pg.Platform {
+			return
+		}
+		key := selfKey{platform: platform, name: strings.ToLower(name)}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		pg.Models = append(pg.Models, PlazaModel{Name: name, Platform: platform})
+	}
+
+	// platformFor 决定模型归到哪个平台：
+	//   * composite 分组：就用价卡自己声明的平台（它的价卡 platform 字段就是
+	//     该模型实际请求的平台）；
+	//   * 普通分组：价卡没写平台时退回分组平台；写了别的平台则原样返回，
+	//     随后被 add 的平台过滤挡掉——否则会把其它平台的价挂到本分组上。
+	platformFor := func(cardPlatform string) string {
+		if cardPlatform == "" {
+			return pg.Platform
+		}
+		return cardPlatform
+	}
+
+	// 1) 分组价卡：模型名的最可靠来源（未绑定渠道的分组只有它）。
+	for i := range g.ModelPricing {
+		card := &g.ModelPricing[i]
+		for _, name := range card.Models {
+			add(platformFor(card.Platform), name)
+		}
+	}
+
+	// 2) 白名单：补充价卡没覆盖到的模型名（它们没有分组价，展示时走目录价）。
+	if g.ModelAllowlist.Enabled {
+		for _, name := range g.ModelAllowlist.Models {
+			if strings.Contains(name, "*") {
+				continue // 通配条目无法展开成具体模型名，交给价卡覆盖
+			}
+			add(platformFor(""), name)
+		}
+	}
 }
 
 // fillDisplayPricing 把模型的展示定价换成实收口径：

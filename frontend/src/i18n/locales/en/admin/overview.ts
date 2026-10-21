@@ -1113,6 +1113,8 @@ export default {
         description: 'Overrides channel and built-in prices for matching models. Long-context tiers come from official presets — do not enter custom intervals. Use per-request tiers such as realtime, tts, and stt for audio.',
         longContext: 'Enable long-context tier pricing',
         longContextHint: 'When checked, channel intervals or official preset tiers apply. Otherwise the first tier is used unless the account explicitly enables long-context billing.',
+        plazaEnabled: 'Show this group separately in the model plaza',
+        plazaEnabledHint: 'When checked, the plaza lists this group with its own prices, even if no channel is bound (needed for composite image/video groups).',
         add: 'Add model price'
       },
       voicePricing: {

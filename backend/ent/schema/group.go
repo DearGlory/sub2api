@@ -199,6 +199,9 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
 			Comment("分组逐模型定价；优先级高于渠道和内置定价"),
+		field.Bool("model_plaza_enabled").
+			Default(false).
+			Comment("分组是否在模型广场按自身配置独立展示；与是否绑定渠道无关"),
 
 		// Claude Code 客户端限制 (added by migration 029)
 		field.Bool("claude_code_only").

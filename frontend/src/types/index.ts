@@ -596,6 +596,7 @@ export interface Group {
   weekly_limit_usd: number | null
   monthly_limit_usd: number | null
   long_context_pricing_enabled: boolean
+  model_plaza_enabled: boolean
   // 图片生成计费配置
   allow_image_generation: boolean
   allow_batch_image_generation: boolean
@@ -819,6 +820,7 @@ export interface CreateGroupRequest {
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
   long_context_pricing_enabled?: boolean
+  model_plaza_enabled?: boolean
   force_openai_fast?: boolean
   free_openai_fast?: boolean
   model_pricing?: import('@/api/admin/channels').ChannelModelPricing[]

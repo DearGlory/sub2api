@@ -250,6 +250,11 @@ func LongContextPricingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldLongContextPricingEnabled, v))
 }
 
+// ModelPlazaEnabled applies equality check predicate on the "model_plaza_enabled" field. It's identical to ModelPlazaEnabledEQ.
+func ModelPlazaEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldModelPlazaEnabled, v))
+}
+
 // ClaudeCodeOnly applies equality check predicate on the "claude_code_only" field. It's identical to ClaudeCodeOnlyEQ.
 func ClaudeCodeOnly(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldClaudeCodeOnly, v))
@@ -2083,6 +2088,16 @@ func ModelPricingIsNil() predicate.Group {
 // ModelPricingNotNil applies the NotNil predicate on the "model_pricing" field.
 func ModelPricingNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldModelPricing))
+}
+
+// ModelPlazaEnabledEQ applies the EQ predicate on the "model_plaza_enabled" field.
+func ModelPlazaEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldModelPlazaEnabled, v))
+}
+
+// ModelPlazaEnabledNEQ applies the NEQ predicate on the "model_plaza_enabled" field.
+func ModelPlazaEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldModelPlazaEnabled, v))
 }
 
 // ClaudeCodeOnlyEQ applies the EQ predicate on the "claude_code_only" field.

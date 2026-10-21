@@ -579,6 +579,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		WeeklyLimitUSD:                  weeklyLimit,
 		MonthlyLimitUSD:                 monthlyLimit,
 		LongContextPricingEnabled:       input.LongContextPricingEnabled,
+		ModelPlazaEnabled:               input.ModelPlazaEnabled,
 		ModelPricing:                    modelPricing,
 		AllowImageGeneration:            allowImageGeneration,
 		AllowBatchImageGeneration:       allowBatchImageGeneration,
@@ -805,6 +806,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.LongContextPricingEnabled != nil {
 		group.LongContextPricingEnabled = *input.LongContextPricingEnabled
+	}
+	if input.ModelPlazaEnabled != nil {
+		group.ModelPlazaEnabled = *input.ModelPlazaEnabled
 	}
 	if input.ModelPricing != nil {
 		modelPricing, normalizeErr := normalizeGroupModelPricing(group.Platform, *input.ModelPricing)
@@ -1160,11 +1164,12 @@ func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) 
 		out[i] = pricing[i].Clone()
 		out[i].ID = 0
 		out[i].ChannelID = 0
-		if out[i].TimePricing != nil && len(out[i].TimePricing.Periods) > 0 {
-			return nil, infraerrors.BadRequest(
-				"GROUP_MODEL_TIME_PRICING_UNSUPPORTED",
-				"group model pricing does not support time pricing",
-			)
+		// 分组价卡允许携带分时倍率：分组卡命中时会覆盖渠道卡，若这里拒绝写入，
+		// 分时配置就只能存在渠道级卡上，而渠道卡一旦按分组拆分/删除，高峰倍率
+		// 就会静默失效（resolvedChannelTimeMultiplier 返回 1）。
+		// 校验沿用渠道价卡的规则，空 periods 归一成 nil。
+		if err := validatePricingTimePricing(out[i : i+1]); err != nil {
+			return nil, err
 		}
 		if strings.TrimSpace(out[i].Platform) == "" {
 			out[i].Platform = platform

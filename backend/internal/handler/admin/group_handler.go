@@ -196,6 +196,7 @@ type CreateGroupRequest struct {
 	WeeklyLimitUSD            optionalLimitField            `json:"weekly_limit_usd"`
 	MonthlyLimitUSD           optionalLimitField            `json:"monthly_limit_usd"`
 	LongContextPricingEnabled bool                          `json:"long_context_pricing_enabled"`
+	ModelPlazaEnabled         bool                          `json:"model_plaza_enabled"`
 	ModelPricing              []service.ChannelModelPricing `json:"model_pricing"`
 	// 图片生成计费配置（antigravity 和 gemini 平台使用，负数表示清除配置）
 	AllowImageGeneration            bool                          `json:"allow_image_generation"`
@@ -272,6 +273,7 @@ type UpdateGroupRequest struct {
 	WeeklyLimitUSD            optionalLimitField             `json:"weekly_limit_usd"`
 	MonthlyLimitUSD           optionalLimitField             `json:"monthly_limit_usd"`
 	LongContextPricingEnabled *bool                          `json:"long_context_pricing_enabled"`
+	ModelPlazaEnabled         *bool                          `json:"model_plaza_enabled"`
 	ModelPricing              *[]service.ChannelModelPricing `json:"model_pricing"`
 	// 图片生成计费配置（antigravity 和 gemini 平台使用，负数表示清除配置）
 	AllowImageGeneration            *bool                         `json:"allow_image_generation"`
@@ -678,6 +680,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		WeeklyLimitUSD:                  req.WeeklyLimitUSD.ToServiceInput(),
 		MonthlyLimitUSD:                 req.MonthlyLimitUSD.ToServiceInput(),
 		LongContextPricingEnabled:       req.LongContextPricingEnabled,
+		ModelPlazaEnabled:               req.ModelPlazaEnabled,
 		ModelPricing:                    req.ModelPricing,
 		AllowImageGeneration:            req.AllowImageGeneration,
 		AllowBatchImageGeneration:       req.AllowBatchImageGeneration,
@@ -825,6 +828,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		WeeklyLimitUSD:                  req.WeeklyLimitUSD.ToServiceInput(),
 		MonthlyLimitUSD:                 req.MonthlyLimitUSD.ToServiceInput(),
 		LongContextPricingEnabled:       req.LongContextPricingEnabled,
+		ModelPlazaEnabled:               req.ModelPlazaEnabled,
 		ModelPricing:                    req.ModelPricing,
 		AllowImageGeneration:            req.AllowImageGeneration,
 		AllowBatchImageGeneration:       req.AllowBatchImageGeneration,

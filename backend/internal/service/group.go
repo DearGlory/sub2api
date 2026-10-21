@@ -108,6 +108,11 @@ type Group struct {
 	DefaultMappedModel          string
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
 	ModelAllowlist              GroupModelAllowlist
+	// ModelPlazaEnabled 控制该分组是否按自身配置在模型广场独立展示。
+	// 为 false 时，广场仍按「绑定了渠道」的旧口径枚举该分组的模型；
+	// 为 true 时，广场直接使用分组自己的 platform / model_pricing /
+	// composite 路由枚举模型，不再依赖渠道绑定。
+	ModelPlazaEnabled bool
 	// CodexModelsManifestConfig 开启后，普通模型列表与 Codex manifest 优先使用
 	// 固定账号列表拉取并合并，不经过调度器（仅 openai 平台）。
 	CodexModelsManifestConfig GroupCodexModelsManifestConfig

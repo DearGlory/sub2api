@@ -586,6 +586,20 @@ func (_c *GroupCreate) SetModelPricing(v jsontext.Value) *GroupCreate {
 	return _c
 }
 
+// SetModelPlazaEnabled sets the "model_plaza_enabled" field.
+func (_c *GroupCreate) SetModelPlazaEnabled(v bool) *GroupCreate {
+	_c.mutation.SetModelPlazaEnabled(v)
+	return _c
+}
+
+// SetNillableModelPlazaEnabled sets the "model_plaza_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableModelPlazaEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetModelPlazaEnabled(*v)
+	}
+	return _c
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (_c *GroupCreate) SetClaudeCodeOnly(v bool) *GroupCreate {
 	_c.mutation.SetClaudeCodeOnly(v)
@@ -1133,6 +1147,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultLongContextPricingEnabled
 		_c.mutation.SetLongContextPricingEnabled(v)
 	}
+	if _, ok := _c.mutation.ModelPlazaEnabled(); !ok {
+		v := group.DefaultModelPlazaEnabled
+		_c.mutation.SetModelPlazaEnabled(v)
+	}
 	if _, ok := _c.mutation.ClaudeCodeOnly(); !ok {
 		v := group.DefaultClaudeCodeOnly
 		_c.mutation.SetClaudeCodeOnly(v)
@@ -1349,6 +1367,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.LongContextPricingEnabled(); !ok {
 		return &ValidationError{Name: "long_context_pricing_enabled", err: errors.New(`ent: missing required field "Group.long_context_pricing_enabled"`)}
+	}
+	if _, ok := _c.mutation.ModelPlazaEnabled(); !ok {
+		return &ValidationError{Name: "model_plaza_enabled", err: errors.New(`ent: missing required field "Group.model_plaza_enabled"`)}
 	}
 	if _, ok := _c.mutation.ClaudeCodeOnly(); !ok {
 		return &ValidationError{Name: "claude_code_only", err: errors.New(`ent: missing required field "Group.claude_code_only"`)}
@@ -1625,6 +1646,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ModelPricing(); ok {
 		_spec.SetField(group.FieldModelPricing, field.TypeJSON, value)
 		_node.ModelPricing = value
+	}
+	if value, ok := _c.mutation.ModelPlazaEnabled(); ok {
+		_spec.SetField(group.FieldModelPlazaEnabled, field.TypeBool, value)
+		_node.ModelPlazaEnabled = value
 	}
 	if value, ok := _c.mutation.ClaudeCodeOnly(); ok {
 		_spec.SetField(group.FieldClaudeCodeOnly, field.TypeBool, value)
@@ -2593,6 +2618,18 @@ func (u *GroupUpsert) UpdateModelPricing() *GroupUpsert {
 // ClearModelPricing clears the value of the "model_pricing" field.
 func (u *GroupUpsert) ClearModelPricing() *GroupUpsert {
 	u.SetNull(group.FieldModelPricing)
+	return u
+}
+
+// SetModelPlazaEnabled sets the "model_plaza_enabled" field.
+func (u *GroupUpsert) SetModelPlazaEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldModelPlazaEnabled, v)
+	return u
+}
+
+// UpdateModelPlazaEnabled sets the "model_plaza_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateModelPlazaEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldModelPlazaEnabled)
 	return u
 }
 
@@ -3828,6 +3865,20 @@ func (u *GroupUpsertOne) UpdateModelPricing() *GroupUpsertOne {
 func (u *GroupUpsertOne) ClearModelPricing() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearModelPricing()
+	})
+}
+
+// SetModelPlazaEnabled sets the "model_plaza_enabled" field.
+func (u *GroupUpsertOne) SetModelPlazaEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetModelPlazaEnabled(v)
+	})
+}
+
+// UpdateModelPlazaEnabled sets the "model_plaza_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateModelPlazaEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateModelPlazaEnabled()
 	})
 }
 
@@ -5288,6 +5339,20 @@ func (u *GroupUpsertBulk) UpdateModelPricing() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearModelPricing() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearModelPricing()
+	})
+}
+
+// SetModelPlazaEnabled sets the "model_plaza_enabled" field.
+func (u *GroupUpsertBulk) SetModelPlazaEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetModelPlazaEnabled(v)
+	})
+}
+
+// UpdateModelPlazaEnabled sets the "model_plaza_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateModelPlazaEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateModelPlazaEnabled()
 	})
 }
 
