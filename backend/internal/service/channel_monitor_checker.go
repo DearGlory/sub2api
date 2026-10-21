@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
@@ -116,12 +118,34 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 // measureFirstTokenForResult measures TTFT and swallows the error: a channel that
 // passed its health check must not be marked unhealthy just because it could not
 // produce a first-token sample. The page renders the missing value as '-'.
+//
+// The reason is still logged at debug level: without it a permanently NULL TTFT
+// looks identical to "not measured yet", and there is no way to tell a provider
+// that rejects streaming from a probe that is simply failing.
 func measureFirstTokenForResult(ctx context.Context, provider, endpoint, apiKey, model string, opts *CheckOptions) *int {
 	ttft, err := measureFirstToken(ctx, provider, endpoint, apiKey, model, opts)
 	if err != nil {
+		logFirstTokenProbeFailure(provider, model, err)
 		return nil
 	}
 	return ttft
+}
+
+// logFirstTokenProbeFailure records why a first-token probe produced no sample.
+//
+// It logs once per (provider, model) per process. A channel whose upstream rejects
+// streaming fails on every check cycle, and a per-check warning would bury the
+// rest of the log; one line is enough to tell "provider does not stream" from a
+// probe that is simply broken.
+var firstTokenProbeFailures sync.Map
+
+func logFirstTokenProbeFailure(provider, model string, err error) {
+	key := provider + "/" + model
+	if _, seen := firstTokenProbeFailures.LoadOrStore(key, struct{}{}); seen {
+		return
+	}
+	slog.Warn("channel_monitor: first-token probe produced no sample (logged once)",
+		"provider", provider, "model", model, "error", err)
 }
 
 // finalizeOperationalOrDegraded 负责走到最后一步的 operational/degraded 判定。
