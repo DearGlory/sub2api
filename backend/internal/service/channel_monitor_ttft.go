@@ -148,13 +148,17 @@ func readFirstTokenDelta(body io.Reader, start time.Time) (*time.Duration, error
 // Reasoning deltas count: on thinking models they are the first emitted token,
 // which is what a user waits for.
 //
-// Two wire shapes are supported because the probe runs against whichever API mode
-// the monitor is configured for:
+// Three wire shapes are supported because the probe runs against whichever API
+// mode the monitor is configured for, and a provider fronted by this gateway does
+// not always answer in the shape its endpoint name suggests:
 //   - chat_completions: choices[].delta.{content,reasoning_content,reasoning}
-//   - responses:        {"type":"response.output_text.delta"|"...reasoning_text.delta", "delta":"..."}
+//   - responses:        {"type":"response.output_text.delta"|..., "delta":"..."}
+//   - anthropic native: {"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}
 //
-// Without the second branch every `responses` monitor stored a NULL TTFT and the
-// page showed "-" forever, which reads as if the channel has no first-token data.
+// delta is decoded as raw JSON, not as a string. Anthropic sends it as an object
+// while the OpenAI shapes send a string, and a struct that pins it to one type
+// fails to unmarshal the other completely — losing even the choices branch — so
+// the whole stream reads as "no first token" and the page shows "-" forever.
 func firstTokenFromSSELine(line string, start time.Time) (time.Duration, bool) {
 	payload, ok := strings.CutPrefix(line, "data:")
 	if !ok {
@@ -173,9 +177,11 @@ func firstTokenFromSSELine(line string, start time.Time) (time.Duration, bool) {
 				Reasoning        string `json:"reasoning"`
 			} `json:"delta"`
 		} `json:"choices"`
-		// responses
-		Type  string `json:"type"`
-		Delta string `json:"delta"`
+		// responses: delta is a string.
+		// anthropic: delta is an object; content_block is an object.
+		Type         string          `json:"type"`
+		Delta        json.RawMessage `json:"delta"`
+		ContentBlock json.RawMessage `json:"content_block"`
 	}
 	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 		return 0, false
@@ -185,16 +191,49 @@ func firstTokenFromSSELine(line string, start time.Time) (time.Duration, bool) {
 			return time.Since(start), true
 		}
 	}
-	// responses streams emit incremental text under a per-event "type"; only the
-	// delta events carry tokens, the lifecycle events (created/in_progress/
-	// completed) do not.
 	switch chunk.Type {
 	case "response.output_text.delta",
 		"response.reasoning_text.delta",
 		"response.reasoning_summary_text.delta":
-		if chunk.Delta != "" {
+		if deltaCarriesToken(chunk.Delta) {
+			return time.Since(start), true
+		}
+	case "content_block_delta":
+		// Every delta kind counts: text_delta, thinking_delta, input_json_delta
+		// (tool use) all mean the upstream started producing output.
+		if deltaCarriesToken(chunk.Delta) {
+			return time.Since(start), true
+		}
+	case "content_block_start":
+		// Often an empty placeholder block; only counts once it holds text.
+		if deltaCarriesToken(chunk.ContentBlock) {
 			return time.Since(start), true
 		}
 	}
 	return 0, false
+}
+
+// deltaCarriesToken reports whether a delta payload holds any emitted output.
+// It accepts both wire shapes: a bare JSON string, or an object. Anthropic names
+// the payload by delta kind — "text" for text_delta, "thinking" for
+// thinking_delta, "partial_json" for input_json_delta — and an object with none
+// of those is an empty placeholder, not a token.
+func deltaCarriesToken(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text != ""
+	}
+	var obj struct {
+		Text        string `json:"text"`
+		Content     string `json:"content"`
+		Thinking    string `json:"thinking"`
+		PartialJSON string `json:"partial_json"`
+	}
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return false
+	}
+	return obj.Text != "" || obj.Content != "" || obj.Thinking != "" || obj.PartialJSON != ""
 }

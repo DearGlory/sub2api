@@ -133,3 +133,53 @@ func TestBuildStreamingProbeBodyForcesStreamAndSmallBudget(t *testing.T) {
 		t.Fatalf("probe body must keep the requested model: %s", text)
 	}
 }
+
+func TestFirstTokenFromSSELineMatchesAnthropicNativeDeltas(t *testing.T) {
+	start := time.Now().Add(-80 * time.Millisecond)
+
+	for _, tc := range []struct {
+		name string
+		line string
+	}{
+		{"text_delta", `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1"}}`},
+		{"thinking_delta", `data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}}`},
+		{"input_json_delta", `data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := firstTokenFromSSELine(tc.line, start); !ok {
+				t.Fatalf("anthropic native delta must count as the first token: %s", tc.line)
+			}
+		})
+	}
+}
+
+// A pinned `Delta string` field made json.Unmarshal fail on the object-shaped
+// anthropic delta, which silently discarded the whole frame — choices included —
+// and every non-Grok monitor stored a NULL ttft.
+func TestFirstTokenFromSSELineAnthropicObjectDeltaDoesNotBreakChoices(t *testing.T) {
+	start := time.Now()
+
+	if _, ok := firstTokenFromSSELine(
+		`data: {"choices":[{"delta":{"content":"1"}}],"type":"content_block_delta","delta":{"type":"text_delta","text":"1"}}`,
+		start,
+	); !ok {
+		t.Fatal("an object-shaped delta must not invalidate a frame that also carries choices")
+	}
+}
+
+func TestFirstTokenFromSSELineIgnoresAnthropicLifecycleEvents(t *testing.T) {
+	start := time.Now()
+
+	for _, line := range []string{
+		`data: {"type":"message_start","message":{"id":"msg_1","content":[]}}`,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+		`data: {"type":"content_block_stop","index":0}`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}`,
+		`data: {"type":"message_stop"}`,
+		`data: {"type":"ping"}`,
+	} {
+		if _, ok := firstTokenFromSSELine(line, start); ok {
+			t.Fatalf("lifecycle frame carries no token: %s", line)
+		}
+	}
+}
