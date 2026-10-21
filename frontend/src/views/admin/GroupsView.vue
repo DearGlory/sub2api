@@ -1495,7 +1495,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.plazaEnabled") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.plazaEnabledHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals enable-time-pricing @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -3149,7 +3149,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.plazaEnabled") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.plazaEnabledHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals enable-time-pricing @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -4318,13 +4318,16 @@ import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
 import type { PricingFormEntry } from "@/components/admin/channel/types";
 import {
   apiIntervalsToForm,
+  apiTimePricingToForm,
   createDefaultTimePricingForm,
   formIntervalsToAPI,
   formReasoningEffortMultipliersToAPI,
+  formTimePricingToAPI,
   mTokToPerToken,
   perTokenToMTok,
   toNullableNumber,
   validateReasoningEffortMultipliers,
+  validateTimePricing,
 } from "@/components/admin/channel/types";
 import type { ChannelModelPricing } from "@/api/admin/channels";
 import { VueDraggable } from "vue-draggable-plus";
@@ -4428,7 +4431,7 @@ const groupPricingFromAPI = (
     image_output_price: perTokenToMTok(entry.image_output_price),
     per_request_price: entry.per_request_price,
     intervals: apiIntervalsToForm(entry.intervals || []),
-    time_pricing: createDefaultTimePricingForm(),
+    time_pricing: apiTimePricingToForm(entry.time_pricing),
   }));
 
 const groupPricingToAPI = (
@@ -4456,7 +4459,7 @@ const groupPricingToAPI = (
         entry.billing_mode === "token"
           ? []
           : formIntervalsToAPI(entry.intervals || []),
-      time_pricing: null,
+      time_pricing: formTimePricingToAPI(entry.time_pricing),
     }));
 
 const { t } = useI18n();
@@ -5894,6 +5897,30 @@ const validateGroupReasoningMultipliers = (pricing: PricingFormEntry[]): boolean
   return true;
 };
 
+// 分组价卡同样能带分时倍率；后端 TIME_PRICING_UNSUPPORTED_MODE 只允许 token 模式，
+// 这里先在界面上拦下，否则按次计费的卡填了时段会在保存时直接 400。
+const validateGroupTimePricing = (pricing: PricingFormEntry[]): boolean => {
+  for (const entry of pricing) {
+    if (!entry.time_pricing?.periods?.length) continue;
+    const modelLabel =
+      entry.models.join(", ") || t("admin.channels.form.unnamed");
+    if (entry.billing_mode && entry.billing_mode !== "token") {
+      appStore.showError(
+        t("admin.groups.modelPricing.timePricingTokenOnly", {
+          models: modelLabel,
+        }),
+      );
+      return false;
+    }
+    const error = validateTimePricing(entry.time_pricing, t);
+    if (error) {
+      appStore.showError(`${modelLabel}: ${error}`);
+      return false;
+    }
+  }
+  return true;
+};
+
 const handleCreateGroup = async () => {
   if (!createForm.name.trim()) {
     appStore.showError(t("admin.groups.nameRequired"));
@@ -5910,6 +5937,7 @@ const handleCreateGroup = async () => {
     return;
   }
   if (!validateGroupReasoningMultipliers(createForm.model_pricing)) return;
+  if (!validateGroupTimePricing(createForm.model_pricing)) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     createModelAllowlistState.enabled &&
@@ -6251,6 +6279,7 @@ const handleUpdateGroup = async () => {
     return;
   }
   if (!validateGroupReasoningMultipliers(editForm.model_pricing)) return;
+  if (!validateGroupTimePricing(editForm.model_pricing)) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     editModelAllowlistState.enabled &&
