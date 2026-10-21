@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -217,4 +218,7 @@ var (
 		"CHANNEL_MONITOR_MODE_MISMATCH",
 		"channel monitor mode does not allow this operation",
 	)
+	// ErrChannelMonitorOrganicTrafficPresent 是跳过信号，不是故障：分组当前已有真实
+	// 用户请求，探针无需再跑。runner 用 errors.Is 识别后按正常 no-op 处理。
+	ErrChannelMonitorOrganicTrafficPresent = errors.New("channel monitor: group already has organic traffic; probe skipped")
 )

@@ -16,12 +16,6 @@
             data-testid="channel-status-sample-badge"
             class="channel-signal-card__sample shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300"
           >{{ t('channelMonitorV3.unknown') }}</span>
-      <span
-            v-else-if="latestIsProbe"
-            data-testid="channel-status-probe-badge"
-            class="channel-signal-card__sample shrink-0 rounded-full border border-dashed border-gray-300 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
-            :title="t('channelMonitorV3.probeNotice')"
-          >{{ t('channelMonitorV3.probeSample') }}</span>
     </header>
 
     <div class="channel-signal-card__metrics mt-5 grid grid-cols-3 gap-2">
@@ -90,7 +84,4 @@ const showInsufficientSample = computed(() => {
   const overall = latestHealth.value.overall
   return overall !== 'healthy' && overall !== 'warning' && overall !== 'critical'
 })
-// The headline numbers come from the newest bucket, which may be probe-derived
-// when the group has been idle. Say so, so probe figures never pass as traffic.
-const latestIsProbe = computed(() => latestBucket.value?.source === 'probe')
 </script>

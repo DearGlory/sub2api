@@ -147,6 +147,14 @@ func readFirstTokenDelta(body io.Reader, start time.Time) (*time.Duration, error
 // firstTokenFromSSELine reports whether one SSE line carries the first token.
 // Reasoning deltas count: on thinking models they are the first emitted token,
 // which is what a user waits for.
+//
+// Two wire shapes are supported because the probe runs against whichever API mode
+// the monitor is configured for:
+//   - chat_completions: choices[].delta.{content,reasoning_content,reasoning}
+//   - responses:        {"type":"response.output_text.delta"|"...reasoning_text.delta", "delta":"..."}
+//
+// Without the second branch every `responses` monitor stored a NULL TTFT and the
+// page showed "-" forever, which reads as if the channel has no first-token data.
 func firstTokenFromSSELine(line string, start time.Time) (time.Duration, bool) {
 	payload, ok := strings.CutPrefix(line, "data:")
 	if !ok {
@@ -157,6 +165,7 @@ func firstTokenFromSSELine(line string, start time.Time) (time.Duration, bool) {
 		return 0, false
 	}
 	var chunk struct {
+		// chat_completions
 		Choices []struct {
 			Delta struct {
 				Content          string `json:"content"`
@@ -164,12 +173,26 @@ func firstTokenFromSSELine(line string, start time.Time) (time.Duration, bool) {
 				Reasoning        string `json:"reasoning"`
 			} `json:"delta"`
 		} `json:"choices"`
+		// responses
+		Type  string `json:"type"`
+		Delta string `json:"delta"`
 	}
 	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 		return 0, false
 	}
 	for _, choice := range chunk.Choices {
 		if choice.Delta.Content != "" || choice.Delta.ReasoningContent != "" || choice.Delta.Reasoning != "" {
+			return time.Since(start), true
+		}
+	}
+	// responses streams emit incremental text under a per-event "type"; only the
+	// delta events carry tokens, the lifecycle events (created/in_progress/
+	// completed) do not.
+	switch chunk.Type {
+	case "response.output_text.delta",
+		"response.reasoning_text.delta",
+		"response.reasoning_summary_text.delta":
+		if chunk.Delta != "" {
 			return time.Since(start), true
 		}
 	}

@@ -567,6 +567,43 @@ func (r *channelMonitorRepository) ListHistoryInWindowByGroup(
 	return out, nil
 }
 
+// HasOrganicTrafficSince reports whether the group behind groupName served real
+// user requests at or after `since`.
+//
+// Probes are excluded by user_agent: they are written to usage_logs so the
+// operator can audit them, and counting them here would make every probe look
+// like traffic and permanently disable the probe that produced it.
+//
+// A group that is already serving traffic has all the samples the page needs, so
+// the runner skips its probe entirely — that is what keeps probe data from ever
+// mixing with organic numbers on a busy channel.
+func (r *channelMonitorRepository) HasOrganicTrafficSince(
+	ctx context.Context,
+	groupName string,
+	since time.Time,
+) (bool, error) {
+	groupName = strings.TrimSpace(groupName)
+	if groupName == "" {
+		return false, nil
+	}
+	const q = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM usage_logs ul
+			JOIN groups g ON g.id = ul.group_id
+			WHERE g.name = $1
+			  AND ul.created_at >= $2
+			  AND COALESCE(ul.user_agent, '') <> $3
+			LIMIT 1
+		)
+	`
+	var exists bool
+	if err := r.db.QueryRowContext(ctx, q, groupName, since, service.ProbeUserAgent).Scan(&exists); err != nil {
+		return false, fmt.Errorf("query organic traffic for group %q: %w", groupName, err)
+	}
+	return exists, nil
+}
+
 // buildMonitorModelPairs 基于 ids 过滤出有效的 (monitor_id, model) 对，model 为空时跳过。
 // 保证两个数组长度一致且一一对应，供 unnest 展开。
 func buildMonitorModelPairs(ids []int64, primaryModels map[int64]string) ([]int64, []string) {

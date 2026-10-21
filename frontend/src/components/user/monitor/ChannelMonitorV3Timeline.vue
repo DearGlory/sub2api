@@ -27,7 +27,7 @@
           <span class="v3-bar-visual" :style="barMotionStyle(index)" aria-hidden="true">
             <span
               class="v3-soft-glass-bar"
-              :class="[bar.colorClass, { 'v3-soft-glass-bar--probe': bar.isProbe }]"
+              :class="bar.colorClass"
               :style="{ height: `${bar.heightPct}%`, animationDelay: `${index * 18}ms` }"
             />
           </span>
@@ -137,10 +137,6 @@ interface TimelineBar {
   colorClass: string
   heightPct: number
   title: string
-  // isProbe marks a bucket whose figures came from the active probe because the
-  // window had no organic traffic. It is rendered as a dashed outline so the page
-  // never presents probe-derived numbers as if they were customer traffic.
-  isProbe: boolean
 }
 
 function formatBucketTime(value: string) {
@@ -175,19 +171,24 @@ const displayBars = computed<TimelineBar[]>(() => {
     bars.push({
       key: bucket.bucket_start,
       ...style,
-      isProbe: bucket.source === 'probe',
       title: t('channelMonitorV3.timelineTooltip', {
         time: formatBucketTime(bucket.bucket_start),
         availability: formatMonitorPercent(1 - bucket.metrics.error_rate, locale.value || 'zh-CN'),
         cache: formatMonitorPercent(bucket.metrics.cache_rate, locale.value || 'zh-CN'),
         ttft: formatMonitorMs(bucket.metrics.ttft.p50_ms),
-      }) + (bucket.source === 'probe' ? ` · ${t('channelMonitorV3.probeSample')}` : ''),
+      }),
     })
   }
 
   const missing = Math.max(0, props.length - real.length)
   for (let index = 0; index < missing; index += 1) {
-    bars.push({ key: `empty-${index}`, ...STATUS_STYLE.unknown, title: '', isProbe: false })
+    bars.push({
+      key: `empty-${index}`,
+      ...STATUS_STYLE.unknown,
+      // No tooltip: an empty slot means the range has not been filled yet, and a
+      // hover card reading "-" on every field would look like a broken channel.
+      title: '',
+    })
   }
   return bars
 })
@@ -219,10 +220,8 @@ const tooltipStyle = computed(() => ({
 }
 
 .v3-soft-glass-bar--probe {
-	/* Distinguish a probe-derived bucket from real traffic without changing the
-	   health colour, which still has to read as healthy/warning/critical. */
-	outline: 1px dashed rgb(148 163 184 / 0.9);
-	outline-offset: -1px;
+	/* Probe-derived buckets are deliberately styled exactly like organic ones:
+	   any visual difference would disclose which channels saw no real traffic. */
 }
 
 .v3-bar-slot {

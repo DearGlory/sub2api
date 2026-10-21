@@ -246,14 +246,15 @@ func TestChannelMonitorV2HealthBlendsErrorTTFTAndCache(t *testing.T) {
 	require.NotNil(t, health.Score)
 	require.InDelta(t, 100.0, *health.Score, 0.01)
 
-	// Small samples stay unknown
+	// A handful of requests is enough to score: the old 50-sample floor left most
+	// real 5-minute buckets unscored and the timeline drew them as empty slots.
 	health = ChannelMonitorV2HealthFor(ChannelMonitorV2Metric{RequestCount: 2})
-	require.Equal(t, "unknown", health.Overall)
-	require.Nil(t, health.Score)
+	require.NotEqual(t, "unknown", health.Overall)
+	require.NotNil(t, health.Score)
 }
 
 func TestChannelMonitorV2HealthRequiresRequestSamples(t *testing.T) {
-	for _, requestCount := range []int64{0, 8, 9, 49} {
+	for _, requestCount := range []int64{0} {
 		t.Run(fmt.Sprintf("requests_%d", requestCount), func(t *testing.T) {
 			thresholds := DefaultChannelMonitorV2HealthThresholds()
 			thresholds.WarningCacheRate = 0.85
@@ -265,9 +266,34 @@ func TestChannelMonitorV2HealthRequiresRequestSamples(t *testing.T) {
 			health := ChannelMonitorV2HealthForWithThresholds(metrics, thresholds)
 			require.Equal(t, ChannelMonitorV2Health{
 				Overall: "unknown", ErrorRate: "unknown", TTFT: "unknown", Cache: "unknown",
-				MinimumSample: 50, Thresholds: NormalizeChannelMonitorV2HealthThresholds(thresholds),
+				MinimumSample: 1, Thresholds: NormalizeChannelMonitorV2HealthThresholds(thresholds),
 			}, health)
 		})
+	}
+}
+
+func TestChannelMonitorV2HealthScoresSingleRequestBucket(t *testing.T) {
+	// A 5-minute bucket on a low-traffic group often holds one request. That single
+	// outcome must still produce a verdict instead of staying unscored: the page
+	// renders unscored buckets as empty slots, which is what made healthy channels
+	// look like black bars. The exact band follows the weighted blend of error,
+	// TTFT and cache, so only "not unknown" and the critical case are asserted.
+	thresholds := DefaultChannelMonitorV2HealthThresholds()
+	thresholds.WarningCacheRate = 0.85
+	thresholds.CriticalCacheRate = 0.60
+
+	ok := ChannelMonitorV2HealthForWithThresholds(ChannelMonitorV2Metric{
+		SuccessRequests: 1, RequestCount: 1, CacheRateDenominator: 1,
+	}, thresholds)
+	if ok.Overall == "unknown" {
+		t.Fatal("one successful request must produce a verdict, not an unscored bucket")
+	}
+
+	failed := ChannelMonitorV2HealthForWithThresholds(ChannelMonitorV2Metric{
+		SuccessRequests: 0, RequestCount: 1, CacheRateDenominator: 1,
+	}, thresholds)
+	if failed.Overall == "unknown" || failed.Overall == "healthy" {
+		t.Fatalf("one failed request must not read as fine, got %q", failed.Overall)
 	}
 }
 
@@ -279,8 +305,8 @@ func TestChannelMonitorV2HealthMinimumSampleBoundaries(t *testing.T) {
 	}{
 		{name: "configured", minimumSample: 20, wantMinimum: 20},
 		{name: "configured_one", minimumSample: 1, wantMinimum: 1},
-		{name: "normalized_zero", minimumSample: 0, wantMinimum: 50},
-		{name: "normalized_negative", minimumSample: -1, wantMinimum: 50},
+		{name: "normalized_zero", minimumSample: 0, wantMinimum: 1},
+		{name: "normalized_negative", minimumSample: -1, wantMinimum: 1},
 		{name: "normalized_maximum", minimumSample: 10001, wantMinimum: 10000},
 	} {
 		t.Run(test.name, func(t *testing.T) {

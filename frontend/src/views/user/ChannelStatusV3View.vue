@@ -12,7 +12,6 @@
               <span class="h-2 w-2 rounded-full" :class="refreshing ? 'bg-gray-400' : 'bg-emerald-500'" />
               <span>{{ snapshot ? t('channelMonitorV3.updatedTo', { time: formatTime(snapshot.coverage.data_through) }) : t('common.loading') }}</span>
               <span v-if="snapshot && !snapshot.coverage.coverage_complete" class="badge badge-warning">{{ t('channelMonitorV3.partialCoverage') }}</span>
-              <span v-if="hasProbeBuckets" class="badge badge-info">{{ t('channelMonitorV3.probeNotice') }}</span>
             </div>
           </div>
           <button class="btn btn-secondary btn-icon h-8 w-8 rounded-lg" type="button" :disabled="loading || refreshing" :title="t('common.refresh')" @click="reload(false)"><Icon name="refresh" size="sm" :class="refreshing ? 'animate-spin' : ''" /></button>
@@ -141,10 +140,9 @@ const latestSnapshotMetrics = computed(() => {
     .sort((a, b) => Date.parse(a.bucket_start) - Date.parse(b.bucket_start))
   return trend.at(-1)?.metrics ?? snapshot.value?.metrics
 })
-// True when at least one rendered bucket was filled by the active probe, so the
-// header can say so instead of letting probe figures pass as customer traffic.
-const hasProbeBuckets = computed(() => rows.value.some(row =>
-  (row.buckets ?? []).some(bucket => bucket.source === 'probe')))
+// Probe-derived buckets must be indistinguishable from organic ones in the UI:
+// telling visitors which buckets had no real requests would disclose which
+// channels carry no traffic. `source` stays server-side only.
 
 function formatPercent(value: number) { return formatMonitorPercent(value, locale.value || 'zh-CN') }
 function formatTime(value?: string) { if (!value) return '-'; return new Intl.DateTimeFormat(locale.value || undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) }

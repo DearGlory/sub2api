@@ -51,6 +51,11 @@ type ChannelMonitorRepository interface {
 	// 的时间桶上做主动探针兜底。返回 map[group_name] -> 历史列表（按 checked_at 升序）。
 	ListHistoryInWindowByGroup(ctx context.Context, start, end time.Time) (map[string][]*ChannelMonitorHistoryEntry, error)
 
+	// HasOrganicTrafficSince 报告某个分组在 since 之后是否有过真实用户请求（探针不计）。
+	// 探针调度在派出探测前用它跳过"C 端已经在打流量"的分组：这些分组的真实样本
+	// 已经足够，探测只会烧上游配额并给页面注入一份本不属于流量的数据。
+	HasOrganicTrafficSince(ctx context.Context, groupName string, since time.Time) (bool, error)
+
 	// ---------- 聚合维护（OpsCleanupService 调用） ----------
 
 	// UpsertDailyRollupsFor 把 targetDate 当天的明细按 (monitor_id, model, bucket_date)
@@ -618,6 +623,12 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	if err != nil {
 		return nil, err
 	}
+	// Hybrid mode: a group already serving real traffic has all the samples the
+	// page needs, so skip the probe instead of spending upstream quota to
+	// duplicate data that is already there. Only idle groups get probed.
+	if rt.Mode == ChannelMonitorModeV3 && s.hasOrganicTraffic(ctx, m) {
+		return nil, ErrChannelMonitorOrganicTrafficPresent
+	}
 	checkMode := defaultCheckMode(m.CheckMode)
 	if checkMode != MonitorCheckModeQuota && m.APIKeyDecryptFailed {
 		return nil, ErrChannelMonitorAPIKeyDecryptFailed
@@ -635,6 +646,41 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	}
 	s.persistCheckResults(ctx, m, results)
 	return results, nil
+}
+
+// hasOrganicTraffic reports whether the monitor's group already served real user
+// traffic inside the bucket that is currently open.
+//
+// The window starts at the bucket boundary (now truncated to the monitor's own
+// interval), not at now-interval. A rolling window would look back into the
+// previous bucket: a request at 10:04 would suppress the probe that fills
+// 10:05-10:10, and since that bucket has no traffic of its own it would render as
+// an empty slot. Anchoring to the boundary means a bucket is skipped only when it
+// genuinely has real data, and every traffic-free bucket still gets one probe.
+//
+// Failure is treated as "no traffic" (fail-open to probing): a probe on a busy
+// group wastes one upstream request, whereas a probe that never runs leaves a
+// hole in the page.
+func (s *ChannelMonitorService) hasOrganicTraffic(ctx context.Context, m *ChannelMonitor) bool {
+	if s == nil || s.repo == nil || m == nil {
+		return false
+	}
+	groupName := strings.TrimSpace(m.GroupName)
+	if groupName == "" {
+		return false
+	}
+	interval := time.Duration(m.IntervalSeconds) * time.Second
+	if interval <= 0 {
+		interval = 300 * time.Second
+	}
+	bucketStart := time.Now().UTC().Truncate(interval)
+	busy, err := s.repo.HasOrganicTrafficSince(ctx, groupName, bucketStart)
+	if err != nil {
+		slog.Warn("channel_monitor: organic traffic check failed, probing anyway",
+			"monitor_id", m.ID, "group_name", groupName, "error", err)
+		return false
+	}
+	return busy
 }
 
 // runQuotaOnlyCheck quota 模式：一次配额抓取 → 单条 CheckResult

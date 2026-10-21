@@ -805,7 +805,12 @@ var DefaultChannelMonitorV2IgnoredErrorCategories = []string{
 
 func DefaultChannelMonitorV2HealthThresholds() ChannelMonitorV2HealthThresholds {
 	return ChannelMonitorV2HealthThresholds{
-		MinimumSample:     50,
+		// 1, not 50: at 5-minute bucket granularity most groups carry a handful of
+		// requests per bucket (measured 1–26). A 50-request floor left nearly every
+		// real bucket unscored and the page rendered them as empty slots, so the
+		// chart showed black bars for channels that were serving fine. One request
+		// is enough evidence: success → healthy, failure → critical.
+		MinimumSample:     1,
 		WarningErrorRate:  0.05,
 		CriticalErrorRate: 0.20,
 		TargetTTFTMs:      3000,

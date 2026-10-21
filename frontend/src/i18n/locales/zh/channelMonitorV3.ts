@@ -2,7 +2,7 @@
 export default {
   channelMonitorV3: {
     title: '渠道状态',
-    description: '真实流量优先 · 无流量时用主动探针兜底',
+    description: 'V3 混合监控',
     updatedTo: '更新至 {time}',
     partialCoverage: '部分历史覆盖',
     loadFailed: '渠道状态加载失败',
@@ -23,9 +23,6 @@ export default {
     emptyDescription: '当前时间范围内还没有可展示的监控数据',
     platformSection: '{platform}',
     summary: '可用率 {success} · 缓存率 {cache}',
-    probeSample: '主动探针',
-    realTrafficSample: '真实流量',
-    probeNotice: '该时段无真实请求，数据来自主动探针',
     ranges: { '90m': '90m', '24h': '24h', '7d': '7d', '30d': '30d' },
   },
 }

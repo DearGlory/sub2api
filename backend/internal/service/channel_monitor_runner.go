@@ -316,6 +316,13 @@ func (r *ChannelMonitorRunner) runOne(id int64, name string) {
 		if errors.Is(err, ErrChannelMonitorAPIKeyDecryptFailed) {
 			r.Unschedule(id)
 		}
+		// Hybrid mode skips probing a group that is already serving traffic. That
+		// is the intended outcome, not a failure, so it must not spam the log.
+		if errors.Is(err, ErrChannelMonitorOrganicTrafficPresent) {
+			slog.Debug("channel_monitor: probe skipped, group has organic traffic",
+				"monitor_id", id, "name", name)
+			return
+		}
 		slog.Warn("channel_monitor: run check failed",
 			"monitor_id", id, "name", name, "error", err)
 	}

@@ -2,7 +2,7 @@
 export default {
   channelMonitorV3: {
     title: 'Channel Status',
-    description: 'Real traffic first · active probes fill idle windows',
+    description: 'V3 hybrid monitoring',
     updatedTo: 'Updated {time}',
     partialCoverage: 'Partial history coverage',
     loadFailed: 'Failed to load channel status',
@@ -23,9 +23,6 @@ export default {
     emptyDescription: 'No monitoring data to show in this range yet',
     platformSection: '{platform}',
     summary: 'Availability {success} · cache {cache}',
-    probeSample: 'Active probe',
-    realTrafficSample: 'Real traffic',
-    probeNotice: 'No real requests in this bucket; figures come from the active probe',
     ranges: { '90m': '90m', '24h': '24h', '7d': '7d', '30d': '30d' },
   },
 }

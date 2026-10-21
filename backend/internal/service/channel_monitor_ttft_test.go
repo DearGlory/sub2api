@@ -30,6 +30,44 @@ func TestFirstTokenFromSSELineCountsReasoningDeltas(t *testing.T) {
 	}
 }
 
+func TestFirstTokenFromSSELineMatchesResponsesDeltas(t *testing.T) {
+	// `responses` monitors stream a completely different envelope from
+	// chat_completions: the token arrives as a typed event with a top-level
+	// "delta", not inside choices[]. Missing this shape is what left every
+	// responses-mode monitor with a NULL TTFT.
+	start := time.Now().Add(-90 * time.Millisecond)
+	for _, line := range []string{
+		`data: {"type":"response.output_text.delta","delta":"Hello"}`,
+		`data: {"type":"response.reasoning_text.delta","delta":"thinking"}`,
+		`data: {"type":"response.reasoning_summary_text.delta","delta":"summary"}`,
+	} {
+		elapsed, ok := firstTokenFromSSELine(line, start)
+		if !ok {
+			t.Fatalf("a responses delta event carries the first token: %s", line)
+		}
+		if elapsed < 90*time.Millisecond {
+			t.Fatalf("elapsed %v must be measured from the request start", elapsed)
+		}
+	}
+}
+
+func TestFirstTokenFromSSELineIgnoresResponsesLifecycleEvents(t *testing.T) {
+	// Lifecycle events precede the first token; counting them would report a
+	// TTFT that only measures how fast the upstream accepted the request.
+	start := time.Now()
+	for _, line := range []string{
+		`data: {"type":"response.created"}`,
+		`data: {"type":"response.in_progress"}`,
+		`data: {"type":"response.output_item.added"}`,
+		`data: {"type":"response.completed"}`,
+		`data: {"type":"response.output_text.delta","delta":""}`,
+	} {
+		if _, ok := firstTokenFromSSELine(line, start); ok {
+			t.Fatalf("a lifecycle event or empty delta is not a first token: %s", line)
+		}
+	}
+}
+
 func TestFirstTokenFromSSELineIgnoresNonTokenFrames(t *testing.T) {
 	start := time.Now()
 	for _, line := range []string{
