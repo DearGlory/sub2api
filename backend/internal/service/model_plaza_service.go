@@ -270,8 +270,13 @@ func appendSelfDeclaredModels(ctx context.Context, pg *PlazaGroup, g *Group) {
 		}
 		// 与渠道枚举的过滤口径保持一致：composite 只接受具体可请求的平台，
 		// 普通分组只接受与自身平台相同的模型。
+		//
+		// composite 价卡的 platform 常常就写成 "composite"（视频分组即如此，
+		// 它的价卡不记录目标平台，目标平台在 composite_model_routes 里）。
+		// 这种情况不能当作"平台不明"丢弃，否则视频分组的价一个都显示不出来；
+		// 保留 composite 原值，让定价解析与计费按 composite 语义处理。
 		if pg.Platform == PlatformComposite {
-			if !isConcreteRequestPlatform(platform) {
+			if platform != PlatformComposite && !isConcreteRequestPlatform(platform) {
 				return
 			}
 		} else if platform != pg.Platform {

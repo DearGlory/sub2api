@@ -104,6 +104,35 @@ func TestListPlazaGroups_BoundGroupOwnPriceBeatsChannel(t *testing.T) {
 	require.True(t, found, "分组自己的模型必须出现在广场上")
 }
 
+// TestListPlazaGroups_CompositeCardPlatformKept 确认 composite 价卡把 platform
+// 写成 "composite" 时不会被当成"平台不明"丢弃：视频分组正是这种写法，
+// 一旦丢弃，视频分组的价一个都显示不出来。
+func TestListPlazaGroups_CompositeCardPlatformKept(t *testing.T) {
+	videoPrice := 0.25
+	groups := []Group{{
+		ID: 30, Name: "视频分组", Platform: PlatformComposite, RateMultiplier: 1,
+		ModelPlazaEnabled: true,
+		ModelPricing: []ChannelModelPricing{
+			{Platform: PlatformComposite, Models: []string{"seedance-2.0-0826-480p"},
+				BillingMode: BillingModePerRequest, PerRequestPrice: &videoPrice},
+			// 具体平台混用也要保留，两者都是合法写法。
+			{Platform: "grok", Models: []string{"grok-imagine-video"},
+				BillingMode: BillingModePerRequest, PerRequestPrice: &videoPrice},
+		},
+	}}
+	svc := newPlazaService(nil, groups, nil)
+	out, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+
+	names := make([]string, 0, len(out[0].Models))
+	for _, m := range out[0].Models {
+		names = append(names, m.Name)
+	}
+	require.ElementsMatch(t,
+		[]string{"seedance-2.0-0826-480p", "grok-imagine-video"}, names)
+}
+
 // TestListPlazaGroups_SelfDeclaredSkipsWrongPlatform 确认平台过滤没有被放松：
 // composite 分组只接受具体可请求平台，普通分组只接受与自身平台相同的模型。
 func TestListPlazaGroups_SelfDeclaredSkipsWrongPlatform(t *testing.T) {
