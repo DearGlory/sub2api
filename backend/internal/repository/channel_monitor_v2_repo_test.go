@@ -483,3 +483,28 @@ func TestChannelMonitorV2CatalogFilterClearsMultiSelectDimensions(t *testing.T) 
 	require.Equal(t, []int64{3, 4}, configuredChannelMonitorV2GroupIDs(catalog, cfg))
 	require.Equal(t, []int64{3}, configuredChannelMonitorV2GroupIDs(filter, cfg))
 }
+
+func TestRestrictToMonitoredGroupsDropsUnmonitored(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &channelMonitorV2Repository{db: db}
+
+	mock.ExpectQuery("JOIN channel_monitors").
+		WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(17)).AddRow(int64(20)))
+
+	got, err := repo.restrictToMonitoredGroups(context.Background(), []int64{17, 18, 20, 30})
+	require.NoError(t, err)
+	// Order follows the input so the board keeps a stable row order; unmonitored
+	// groups 18 and 30 are dropped.
+	require.Equal(t, []int64{17, 20}, got)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRestrictToMonitoredGroupsKeepsEmptyInput(t *testing.T) {
+	repo := &channelMonitorV2Repository{}
+	got, err := repo.restrictToMonitoredGroups(context.Background(), nil)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}

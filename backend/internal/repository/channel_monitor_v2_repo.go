@@ -399,6 +399,19 @@ func (r *channelMonitorV2Repository) GetMatrix(ctx context.Context, filter servi
 		}
 		seedGroupIDs = allIDs
 	}
+	seedGroupIDs, err = r.restrictToMonitoredGroups(ctx, seedGroupIDs)
+	if err != nil {
+		return nil, err
+	}
+	// Facts from an unmonitored group must not resurrect a row that the seed just
+	// dropped: a group with traffic but no monitor has no probed buckets, so it
+	// would render as a full row of empty bars.
+	monitoredIDs := make(map[int64]struct{}, len(seedGroupIDs))
+	for _, id := range seedGroupIDs {
+		monitoredIDs[id] = struct{}{}
+	}
+	groupScoped := groupBy == service.ChannelMonitorV2GroupByPlatformGroup ||
+		groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel
 	groupInfo, err := r.loadChannelMonitorV2GroupInfo(ctx, seedGroupIDs)
 	if err != nil {
 		return nil, err
@@ -409,9 +422,13 @@ func (r *channelMonitorV2Repository) GetMatrix(ctx context.Context, filter servi
 			continue
 		}
 		// platform_group dimensions require a real group; skip group_id=0 traffic rows.
-		if (groupBy == service.ChannelMonitorV2GroupByPlatformGroup || groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel) &&
-			fact.GroupID <= 0 {
+		if groupScoped && fact.GroupID <= 0 {
 			continue
+		}
+		if groupScoped {
+			if _, ok := monitoredIDs[fact.GroupID]; !ok {
+				continue
+			}
 		}
 		key := channelMonitorV2MatrixDimensionKey(groupBy, cfg, fact.Platform, fact.GroupID, fact.Model)
 		acc := accs[key]
@@ -657,6 +674,42 @@ func channelMonitorV2CatalogFilter(filter service.ChannelMonitorV2Filter) servic
 	catalog.GroupIDs = nil
 	catalog.Models = nil
 	return catalog
+}
+
+// restrictToMonitoredGroups drops groups that have no channel monitor.
+//
+// The matrix seeds a row per configured group, and V3 fills those rows from
+// probed buckets. A group with traffic but no monitor never gets probed, so its
+// row would render as eighteen empty bars with no way to ever fill them — the
+// exact "black bucket" the V3 mode exists to avoid. Only monitored groups have
+// a data source, so only those belong on the board.
+func (r *channelMonitorV2Repository) restrictToMonitoredGroups(ctx context.Context, groupIDs []int64) ([]int64, error) {
+	if len(groupIDs) == 0 {
+		return groupIDs, nil
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT g.id FROM groups g JOIN channel_monitors m ON m.group_name = g.name AND m.enabled WHERE g.id = ANY($1)`, pq.Array(groupIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	monitored := make(map[int64]struct{}, len(groupIDs))
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		monitored[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]int64, 0, len(monitored))
+	for _, id := range groupIDs {
+		if _, ok := monitored[id]; ok {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 func configuredChannelMonitorV2GroupIDs(filter service.ChannelMonitorV2Filter, cfg service.ChannelMonitorV2Config) []int64 {
