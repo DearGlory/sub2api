@@ -509,3 +509,120 @@ func TestListGroups_TimePricingPassthrough(t *testing.T) {
 	// 展示单价为标准时段价
 	require.InDelta(t, 0.28e-6, *m.Pricing.InputPrice, 1e-15)
 }
+
+// TestListPlazaGroups_GroupCardsBoundModelSet 是「分组只展示自己卖的模型」的
+// 回归测试。场景：同一个渠道同时绑定了 openai 分组和国产分组，渠道声称支持
+// 两边的模型；国产分组的价卡只声明了国产模型，国产分组历史上被塞进跨组模型的
+// 白名单。
+//
+// 期望：国产分组只出现自己价卡里的模型——既不因渠道枚举而拿到 gpt-*，
+// 也不因白名单而拿到别的分组模型。这条规则不受「独立展示」开关影响。
+func TestListPlazaGroups_GroupCardsBoundModelSet(t *testing.T) {
+	for _, switchOn := range []bool{true, false} {
+		ch := Channel{
+			ID: 1, Name: "shared", Status: StatusActive, GroupIDs: []int64{10, 20},
+			ModelPricing: []ChannelModelPricing{{
+				Platform:    PlatformOpenAI,
+				Models:      []string{"gpt-6", "grok-4.7", "glm-5.3", "kimi-k3"},
+				BillingMode: BillingModeToken,
+				InputPrice:  testPtrFloat64(1e-6),
+				OutputPrice: testPtrFloat64(2e-6),
+			}},
+		}
+		cnGroup := Group{
+			ID: 20, Name: "cn", Platform: PlatformOpenAI, RateMultiplier: 0.15,
+			ModelPlazaEnabled: switchOn,
+			ModelPricing: []ChannelModelPricing{{
+				Platform:    PlatformOpenAI,
+				Models:      []string{"glm-5.3", "kimi-k3"},
+				BillingMode: BillingModeToken,
+				InputPrice:  testPtrFloat64(0.1e-6),
+				OutputPrice: testPtrFloat64(0.2e-6),
+			}},
+			// 历史污染：白名单里有别的分组的模型。
+			ModelAllowlist: GroupModelAllowlist{
+				Enabled: true,
+				Models:  []string{"glm-5.3", "kimi-k3", "gpt-6", "grok-4.7"},
+			},
+		}
+		usGroup := Group{
+			ID: 10, Name: "us", Platform: PlatformOpenAI, RateMultiplier: 1,
+			ModelPlazaEnabled: switchOn,
+			ModelPricing: []ChannelModelPricing{{
+				Platform:    PlatformOpenAI,
+				Models:      []string{"gpt-6", "grok-4.7"},
+				BillingMode: BillingModeToken,
+				InputPrice:  testPtrFloat64(1e-6),
+				OutputPrice: testPtrFloat64(2e-6),
+			}},
+		}
+
+		svc := newPlazaService([]Channel{ch}, []Group{cnGroup, usGroup}, nil)
+		out, err := svc.ListGroups(context.Background())
+		require.NoError(t, err)
+
+		got := map[string][]string{}
+		for _, g := range out {
+			names := make([]string, 0, len(g.Models))
+			for _, m := range g.Models {
+				names = append(names, m.Name)
+			}
+			got[g.Name] = names
+		}
+
+		// 国产分组恰好两个国产模型，不含渠道多的 gpt-6 / grok-4.7。
+		require.ElementsMatch(t, []string{"glm-5.3", "kimi-k3"}, got["cn"],
+			"switch=%v: 国产分组只能展示自己价卡里的模型", switchOn)
+		require.ElementsMatch(t, []string{"gpt-6", "grok-4.7"}, got["us"],
+			"switch=%v: 另一分组不受影响", switchOn)
+	}
+}
+
+// TestListPlazaGroups_AllowlistOnlyWhenNoCards 验证白名单只在分组没有价卡时
+// 作为兜底：未定价的分组不能凭空从广场消失，但已定价的分组不得再参考白名单。
+func TestListPlazaGroups_AllowlistOnlyWhenNoCards(t *testing.T) {
+	channels := []Channel{{
+		ID: 1, Name: "ch", Status: StatusActive, GroupIDs: []int64{10, 20},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformOpenAI, Models: []string{"gpt-6"},
+			BillingMode: BillingModeToken, InputPrice: testPtrFloat64(1e-6),
+		}},
+	}}
+	groups := []Group{
+		{
+			// 有价卡：白名单里的 other-model 不得出现。
+			ID: 10, Name: "priced", Platform: PlatformOpenAI, RateMultiplier: 1,
+			ModelPlazaEnabled: true,
+			ModelPricing: []ChannelModelPricing{{
+				Platform: PlatformOpenAI, Models: []string{"gpt-6"},
+				BillingMode: BillingModeToken, InputPrice: testPtrFloat64(1e-6),
+			}},
+			ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"other-model"}},
+		},
+		{
+			// 无价卡：白名单是唯一声明，应保留，避免分组从广场消失。
+			ID: 20, Name: "unpriced", Platform: PlatformOpenAI, RateMultiplier: 2,
+			ModelPlazaEnabled: true,
+			ModelAllowlist:    GroupModelAllowlist{Enabled: true, Models: []string{"only-model"}},
+		},
+	}
+
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 2)
+
+	for _, g := range out {
+		names := make([]string, 0, len(g.Models))
+		for _, m := range g.Models {
+			names = append(names, m.Name)
+		}
+		switch g.Name {
+		case "priced":
+			require.ElementsMatch(t, []string{"gpt-6"}, names, "有价卡时不得掺入白名单条目")
+		case "unpriced":
+			// 没有价卡就没有收敛依据，渠道枚举（gpt-6）加白名单兜底（only-model）都在。
+			require.ElementsMatch(t, []string{"gpt-6", "only-model"}, names,
+				"无价卡时退回渠道口径并用白名单兜底，分组不得消失")
+		}
+	}
+}
