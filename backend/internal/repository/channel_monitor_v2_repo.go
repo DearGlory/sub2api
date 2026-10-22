@@ -399,19 +399,23 @@ func (r *channelMonitorV2Repository) GetMatrix(ctx context.Context, filter servi
 		}
 		seedGroupIDs = allIDs
 	}
-	seedGroupIDs, err = r.restrictToMonitoredGroups(ctx, seedGroupIDs)
-	if err != nil {
-		return nil, err
-	}
-	// Facts from an unmonitored group must not resurrect a row that the seed just
-	// dropped: a group with traffic but no monitor has no probed buckets, so it
-	// would render as a full row of empty bars.
-	monitoredIDs := make(map[int64]struct{}, len(seedGroupIDs))
-	for _, id := range seedGroupIDs {
-		monitoredIDs[id] = struct{}{}
-	}
+	// A group belongs on the board if it can be measured at all: either it has an
+	// enabled monitor (so V3 can probe it) or it has real traffic in the window (so
+	// V2 already measured it). Dropping a group because it has no monitor hid
+	// freshly configured groups that were live but not yet monitored, which reads
+	// as "the group I just added never appears".
 	groupScoped := groupBy == service.ChannelMonitorV2GroupByPlatformGroup ||
 		groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel
+	if groupScoped {
+		seedGroupIDs, err = r.retainObservableGroups(ctx, seedGroupIDs, facts)
+		if err != nil {
+			return nil, err
+		}
+	}
+	observableIDs := make(map[int64]struct{}, len(seedGroupIDs))
+	for _, id := range seedGroupIDs {
+		observableIDs[id] = struct{}{}
+	}
 	groupInfo, err := r.loadChannelMonitorV2GroupInfo(ctx, seedGroupIDs)
 	if err != nil {
 		return nil, err
@@ -426,7 +430,7 @@ func (r *channelMonitorV2Repository) GetMatrix(ctx context.Context, filter servi
 			continue
 		}
 		if groupScoped {
-			if _, ok := monitoredIDs[fact.GroupID]; !ok {
+			if _, ok := observableIDs[fact.GroupID]; !ok {
 				continue
 			}
 		}
@@ -676,36 +680,47 @@ func channelMonitorV2CatalogFilter(filter service.ChannelMonitorV2Filter) servic
 	return catalog
 }
 
-// restrictToMonitoredGroups drops groups that have no channel monitor.
+// retainObservableGroups keeps groups the board can actually say something about:
+// groups with an enabled monitor (probed by V3) plus groups that already have
+// traffic in the queried window (measured by V2).
 //
-// The matrix seeds a row per configured group, and V3 fills those rows from
-// probed buckets. A group with traffic but no monitor never gets probed, so its
-// row would render as eighteen empty bars with no way to ever fill them — the
-// exact "black bucket" the V3 mode exists to avoid. Only monitored groups have
-// a data source, so only those belong on the board.
-func (r *channelMonitorV2Repository) restrictToMonitoredGroups(ctx context.Context, groupIDs []int64) ([]int64, error) {
+// Filtering on monitors alone is wrong. A group created and enabled a minute ago
+// has live traffic but no monitor yet, so a monitor-only filter drops it and the
+// board looks like the group was never added. Traffic is the stronger signal — if
+// V2 recorded requests, there is something to draw.
+func (r *channelMonitorV2Repository) retainObservableGroups(ctx context.Context, groupIDs []int64, facts []channelMonitorV2Fact) ([]int64, error) {
 	if len(groupIDs) == 0 {
 		return groupIDs, nil
 	}
+	keep := make(map[int64]struct{}, len(groupIDs))
+
 	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT g.id FROM groups g JOIN channel_monitors m ON m.group_name = g.name AND m.enabled WHERE g.id = ANY($1)`, pq.Array(groupIDs))
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	monitored := make(map[int64]struct{}, len(groupIDs))
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
 			return nil, err
 		}
-		monitored[id] = struct{}{}
+		keep[id] = struct{}{}
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
 		return nil, err
 	}
-	out := make([]int64, 0, len(monitored))
+	_ = rows.Close()
+
+	for _, fact := range facts {
+		if fact.GroupID > 0 {
+			keep[fact.GroupID] = struct{}{}
+		}
+	}
+
+	out := make([]int64, 0, len(keep))
 	for _, id := range groupIDs {
-		if _, ok := monitored[id]; ok {
+		if _, ok := keep[id]; ok {
 			out = append(out, id)
 		}
 	}

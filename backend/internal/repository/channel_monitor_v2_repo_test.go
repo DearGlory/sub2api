@@ -484,7 +484,34 @@ func TestChannelMonitorV2CatalogFilterClearsMultiSelectDimensions(t *testing.T) 
 	require.Equal(t, []int64{3}, configuredChannelMonitorV2GroupIDs(filter, cfg))
 }
 
-func TestRestrictToMonitoredGroupsDropsUnmonitored(t *testing.T) {
+func TestRetainObservableGroupsKeepsMonitoredAndTrafficked(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &channelMonitorV2Repository{db: db}
+
+	// Groups 17 and 20 have an enabled monitor.
+	mock.ExpectQuery("JOIN channel_monitors").
+		WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(17)).AddRow(int64(20)))
+
+	// Group 129 has traffic but no monitor yet — a freshly enabled group.
+	// Group 30 has neither, so it is the only one dropped.
+	facts := []channelMonitorV2Fact{
+		{GroupID: 17, Platform: "grok"},
+		{GroupID: 129, Platform: "anthropic"},
+	}
+	got, err := repo.retainObservableGroups(context.Background(), []int64{17, 20, 30, 129}, facts)
+	require.NoError(t, err)
+	// Order follows the input so the board keeps a stable row order.
+	require.Equal(t, []int64{17, 20, 129}, got)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// A group created and enabled but not yet monitored must still appear: V2 already
+// measured its traffic, and dropping it reads as "the group I just added is
+// missing".
+func TestRetainObservableGroupsKeepsTrafficOnlyGroup(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
@@ -492,19 +519,17 @@ func TestRestrictToMonitoredGroupsDropsUnmonitored(t *testing.T) {
 
 	mock.ExpectQuery("JOIN channel_monitors").
 		WithArgs(sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(17)).AddRow(int64(20)))
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
-	got, err := repo.restrictToMonitoredGroups(context.Background(), []int64{17, 18, 20, 30})
+	facts := []channelMonitorV2Fact{{GroupID: 129, Platform: "anthropic"}}
+	got, err := repo.retainObservableGroups(context.Background(), []int64{129}, facts)
 	require.NoError(t, err)
-	// Order follows the input so the board keeps a stable row order; unmonitored
-	// groups 18 and 30 are dropped.
-	require.Equal(t, []int64{17, 20}, got)
-	require.NoError(t, mock.ExpectationsWereMet())
+	require.Equal(t, []int64{129}, got)
 }
 
-func TestRestrictToMonitoredGroupsKeepsEmptyInput(t *testing.T) {
+func TestRetainObservableGroupsKeepsEmptyInput(t *testing.T) {
 	repo := &channelMonitorV2Repository{}
-	got, err := repo.restrictToMonitoredGroups(context.Background(), nil)
+	got, err := repo.retainObservableGroups(context.Background(), nil, nil)
 	require.NoError(t, err)
 	require.Empty(t, got)
 }
