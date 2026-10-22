@@ -304,6 +304,26 @@ func extractUpstreamErrorMessage(body []byte) string {
 		return m
 	}
 
+	// xAI / Grok CLI proxy 风格：{"error":"Invalid or expired credentials (...)"}
+	// error 是**字符串**而非对象。上面的 error.message 读不到，若不单独处理，
+	// 真实的鉴权失败文案会被调用方的占位符（如 "xAI upstream returned status 401"）
+	// 覆盖，日志里就再也看不到上游说了什么。
+	// 只接受 JSON 字符串：error 为对象时已被上面的分支处理，为对象但无 message
+	// 时不能把整段 Raw JSON 当成消息写进日志。
+	if errNode := gjson.GetBytes(body, "error"); errNode.Type == gjson.String {
+		if s := strings.TrimSpace(errNode.String()); s != "" {
+			// error 字符串里也可能内嵌完整 JSON（部分网关会二次包装）。
+			if strings.HasPrefix(s, "{") {
+				for _, path := range []string{"error.message", "message"} {
+					if innerMsg := strings.TrimSpace(gjson.Get(s, path).String()); innerMsg != "" {
+						return innerMsg
+					}
+				}
+			}
+			return s
+		}
+	}
+
 	// ChatGPT 内部 API 风格：{"detail":"..."}
 	if d := gjson.GetBytes(body, "detail").String(); strings.TrimSpace(d) != "" {
 		return d

@@ -2111,7 +2111,25 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 	}
 	switch statusCode {
 	case http.StatusUnauthorized:
-		s.tempUnscheduleGrok(ctx, account, 10*time.Minute, "grok credentials unauthorized")
+		// A Grok 401 is NOT unconditionally an auth failure. The cli-chat-proxy
+		// edge emits 401 for transient link problems too, and production showed
+		// ~90% of them are followed by a successful request from the same account
+		// within 60s. Read the body: only an explicit credential rejection
+		// ("Invalid or expired credentials ... upstream=Unauthenticated|
+		// PermissionDenied") is a real auth failure worth quarantining. Anything
+		// else — empty body, rewritten status, capacity or quota wording — must
+		// only fail over, leaving the account schedulable.
+		//
+		// Body-only by design: latency and prior-attempt signals were evaluated
+		// and rejected as unreliable proxies for this decision.
+		if cooldown, class := shouldCooldownGrok401(statusCode, responseBody); cooldown {
+			slog.Info("grok_401_auth_confirmed",
+				"account_id", account.ID, "marker", class.Marker, "detail", class.Detail)
+			s.tempUnscheduleGrok(ctx, account, grokAuthCooldown, "grok credentials unauthorized")
+		} else {
+			slog.Info("grok_401_not_auth_failure",
+				"account_id", account.ID, "body_len", len(responseBody))
+		}
 	case http.StatusPaymentRequired:
 		// 402 without a body-classified billing decision: keep the legacy 30m cool.
 		s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok payment required")

@@ -3047,10 +3047,15 @@ func TestHandleGrokAccountUpstreamErrorSpendingLimitUsesRecoverableProbeCool(t *
 }
 
 func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *testing.T) {
+	// A Grok 401 is body-classified: only an explicit credential rejection cools
+	// the account, so this case must carry the real xAI body. Status-only 401s
+	// are covered by TestHandleGrokAccountUpstreamErrorBare401DoesNotCool.
+	unauthorizedBody := []byte(`{"error":"Invalid or expired credentials (auth_kind=bearer, upstream=PermissionDenied, reason=no auth context)"}`)
 	tests := []struct {
 		name            string
 		status          int
 		headers         http.Header
+		body            []byte
 		wantReason      string
 		wantMinCooldown time.Duration
 		wantMaxCooldown time.Duration
@@ -3058,6 +3063,7 @@ func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *test
 		{
 			name:            "unauthorized reauth",
 			status:          http.StatusUnauthorized,
+			body:            unauthorizedBody,
 			wantReason:      "grok credentials unauthorized",
 			wantMinCooldown: 10*time.Minute - time.Second,
 			wantMaxCooldown: 10*time.Minute + time.Second,
@@ -3092,7 +3098,7 @@ func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *test
 			svc := &OpenAIGatewayService{accountRepo: repo}
 			before := time.Now()
 
-			svc.handleGrokAccountUpstreamError(context.Background(), account, tt.status, tt.headers, nil)
+			svc.handleGrokAccountUpstreamError(context.Background(), account, tt.status, tt.headers, tt.body)
 
 			require.True(t, svc.isOpenAIAccountRuntimeBlocked(account))
 			require.Equal(t, 1, repo.tempUnschedCalls)
@@ -3101,6 +3107,36 @@ func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *test
 			require.Equal(t, tt.wantReason, repo.lastTempUnschedReason)
 			require.True(t, repo.lastTempUnschedUntil.After(before.Add(tt.wantMinCooldown)))
 			require.True(t, repo.lastTempUnschedUntil.Before(before.Add(tt.wantMaxCooldown)))
+		})
+	}
+}
+
+func TestHandleGrokAccountUpstreamErrorBare401DoesNotCool(t *testing.T) {
+	// The regression this guards: a transient 401 from the cli-chat-proxy edge
+	// (no body, or a rewritten non-auth body) used to park a healthy account for
+	// 10 minutes. Production showed ~90% of such 401s are followed by a
+	// successful request from the same account within 60s.
+	cases := []struct {
+		name string
+		body []byte
+	}{
+		{name: "nil body", body: nil},
+		{name: "empty body", body: []byte{}},
+		{name: "gateway queue body", body: []byte(`{"error":"gateway_queue_full"}`)},
+		{name: "capacity body", body: []byte(`{"error":{"message":"model at capacity, retry"}}`)},
+		{name: "html edge error", body: []byte(`<html>502</html>`)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			account := &Account{ID: 61, Platform: PlatformGrok, Type: AccountTypeOAuth}
+			repo := &grokQuotaAccountRepo{}
+			svc := &OpenAIGatewayService{accountRepo: repo}
+
+			svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusUnauthorized, nil, tc.body)
+
+			require.Zero(t, repo.tempUnschedCalls,
+				"a 401 without a credential marker must not cool the account")
+			require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
 		})
 	}
 }
