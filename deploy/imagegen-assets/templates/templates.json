@@ -1,0 +1,2090 @@
+{
+  "version": 2,
+  "updatedAt": "2026-05-11T17:59:01+08:00",
+  "templates": [
+    {
+      "name": "设备拆分图",
+      "tag": "Featured",
+      "source": "YouMind awesome-gpt-image-2 #1 id 13460",
+      "preview": "previews/template-001-b0eb3f27f3.webp",
+      "prompt": "{\n  \"type\": \"exploded view product diagram poster\",\n  \"subject\": \"VR headset\",\n  \"style\": \"clean high-tech 3D render, studio lighting, glowing accents\",\n  \"background\": \"{argument name=\\\"background color\\\" default=\\\"soft purple and blue gradient\\\"}\",\n  \"header\": {\n    \"logo\": \"∞ {argument name=\\\"product name\\\" default=\\\"Meta Quest 3\\\"}\",\n    \"subtitle\": \"{argument name=\\\"main catchphrase\\\" default=\\\"まったく新しい現実を、まったく新しい構造から。\\\"}\"\n  },\n  \"layout\": {\n    \"centerpiece\": \"vertically stacked exploded view of a VR headset showing 9 distinct layers of internal components: outer shell, camera sensors, motherboard with chip, pancake lenses, internal frame, battery packs, side straps, top strap, and facial interface cushion.\",\n    \"callout_labels\": {\n      \"count\": 8,\n      \"left_side\": [\n        \"Snapdragon® XR2 Gen 2\\n圧倒的な処理性能でリアルタイムな体験を。\",\n        \"調整可能なIPD機構\\n幅広いユーザーに快適なフィット感を。\",\n        \"精密設計されたヘッドストラップ\\n快適さと安定性を追求したエルゴノミクス。\"\n      ],\n      \"right_side\": [\n        \"フェイスプレート\\n洗練されたデザインと最適な重量バランス。\",\n        \"トラッキングカメラ\\n高精度な位置トラッキングと環境認識を実現。\",\n        \"パンケーキレンズ\\n薄型設計で広い視野角と鮮明な映像を提供。\",\n        \"高性能バッテリー\\n長時間駆動を支える最適化された電源設計。\",\n        \"柔らかなフェイスインターフェース\\n長時間でも快適な装着感を実現。\"\n      ]\n    },\n    \"footer\": {\n      \"left_text_block\": {\n        \"headline\": \"{argument name=\\\"bottom headline\\\" default=\\\"体験は、構造から進化する。\\\"}\",\n        \"body\": \"一つひとつのパーツに、没入体験を支える最先端テクノロジーとこだわりの設計。Meta Quest 3は、未来を感じさせる体験を内部から生み出しています。\"\n      },\n      \"right_logo\": \"∞ Meta\"\n    }\n  }\n}",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高科技 VR 设备爆炸拆解海报，适合硬件卖点展示。",
+      "category": "信息图表"
+    },
+    {
+      "name": "城市美食地图",
+      "tag": "Featured",
+      "source": "YouMind awesome-gpt-image-2 #2 id 13515",
+      "preview": "previews/template-002-72e7da422c.webp",
+      "prompt": "{\n  \"type\": \"illustrated map infographic\",\n  \"style\": \"{argument name=\\\"art style\\\" default=\\\"watercolor and ink hand-drawn illustration on vintage parchment\\\"}\",\n  \"title_section\": {\n    \"text\": \"{argument name=\\\"city name\\\" default=\\\"成都\\\"} {argument name=\\\"map title\\\" default=\\\"吃货暴走地图\\\"}\",\n    \"mascot\": \"cartoon red chili pepper wearing sunglasses and giving a thumbs up\"\n  },\n  \"border\": \"{argument name=\\\"border decoration\\\" default=\\\"vine of green leaves and red chili peppers\\\"}\",\n  \"layout\": {\n    \"background\": \"textured beige parchment paper with yellow roads, blue rivers, and green park areas\",\n    \"sections\": [\n      {\n        \"title\": \"landmarks\",\n        \"count\": 6,\n        \"illustrations\": [\"traditional pavilion\", \"traditional monastery\", \"modern skyscraper with climbing panda\", \"tall TV tower\", \"traditional gate\", \"industrial buildings\"],\n        \"labels\": [\"人民公园\", \"文殊院\", \"IFS\", \"339电视塔\", \"宽窄巷子\", \"东郊记忆\"]\n      },\n      {\n        \"title\": \"food_spots\",\n        \"count\": 12,\n        \"illustrations\": [\"mapo tofu\", \"dumplings in chili oil\", \"skewers in pot\", \"sticky rice balls\", \"egg baking cake\", \"nine-grid hotpot\", \"sweet potato noodles\", \"cold skewers\", \"spicy mixed dish\", \"covered tea bowl\", \"ice jelly dessert\", \"spicy rabbit heads\"],\n        \"labels\": [\"1 陈麻婆豆腐\", \"2 钟水饺\", \"3 春熙路\", \"4 宽窄巷子·三大炮\", \"5 建设路·叶婆婆蛋烘糕\", \"6 玉林路·小龙坎火锅\", \"7 香香巷·肥肠粉\", \"8 武侯祠大街·钵钵鸡\", \"9 东郊记忆·冒椒火辣\", \"10 人民公园·鹤鸣茶社\", \"11 锦里古街·冰粉\", \"12 双流老妈兔头\"]\n      },\n      {\n        \"title\": \"图例\",\n        \"position\": \"bottom-right\",\n        \"count\": 5,\n        \"items\": [\"red dot\", \"green house\", \"green tree\", \"blue line\", \"yellow double line\"],\n        \"labels\": [\"美食地点\", \"地标景点\", \"公园绿地\", \"河流湖泊\", \"主要道路\"]\n      }\n    ],\n    \"centerpiece\": \"giant panda sitting and eating bamboo\",\n    \"bottom_right_extras\": [\"vintage compass rose with N, S, E, W\", \"disclaimer text '温馨提示：吃辣需谨慎，肠胃要保护~' with a red chili pepper icon\"]\n  }\n}",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "手绘水彩城市美食地图，带编号、地标和图例。",
+      "category": "信息图表"
+    },
+    {
+      "name": "桃太郎说明页",
+      "tag": "Featured",
+      "source": "YouMind awesome-gpt-image-2 #3 id 13983",
+      "preview": "previews/template-003-22c0a3fcb7.webp",
+      "prompt": "Create an explanatory slide ({argument name=\"format\" default=\"ponchi-e diagram\"}) for {argument name=\"theme\" default=\"Momotaro\"} that fuses the gentle atmosphere of \"Irasutoya\" with the overwhelming information density of \"Kasumigaseki slides\".",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高信息密度的日式解释型幻灯片，适合知识讲解。",
+      "category": "信息图表"
+    },
+    {
+      "name": "电商直播界面",
+      "tag": "Featured",
+      "source": "YouMind awesome-gpt-image-2 #4 id 14036",
+      "preview": "previews/template-004-ab96ec6c69.webp",
+      "prompt": "{\n  \"type\": \"live stream UI mockup\",\n  \"subject\": {\n    \"description\": \"portrait of {argument name=\\\"host name\\\" default=\\\"Elon Musk\\\"}, smiling, wearing a black t-shirt with a white technical schematic graphic\",\n    \"background\": \"left side shows a screen with '{argument name=\\\"left background logo\\\" default=\\\"SPACEX\\\"}' text, right side shows a red '{argument name=\\\"right background logo\\\" default=\\\"Tesla T logo\\\"}' and a dark car\"\n  },\n  \"ui_overlay\": {\n    \"top_header\": {\n      \"host_info\": \"avatar, name '{argument name=\\\"host name\\\" default=\\\"Elon Musk\\\"}', subtext '55.6万本场点赞', red '关注' button\",\n      \"rank_badge\": \"gold coin icon with '全站第1名'\",\n      \"viewer_stats\": \"3 top viewer avatars with '12.3w', '8.6w', '5.7w', total '68.7万', 'X' close button\",\n      \"right_links\": \"'更多直播 >', '礼物展馆 0/24' with blue '经典' tag\"\n    },\n    \"mid_left_gifts\": {\n      \"count\": 2,\n      \"items\": [\n        \"avatar '科技爱好者', '送小心心', heart icon x 1314\",\n        \"avatar '星辰大海', '送火箭', rocket icon x 666\"\n      ]\n    },\n    \"bottom_left_chat\": {\n      \"system_message\": \"level 37 badge '宇宙漫游者 加入了直播间'\",\n      \"message_count\": 7,\n      \"messages\": [\n        \"小火箭: 马斯克！未来可期！🚀\",\n        \"future: 特斯拉Model 2什么时候出？\",\n        \"星空梦想家: SpaceX今年能上火星吗？\",\n        \"AI探索者: Neuralink进展如何？\",\n        \"帅气的网友: 马总好！\",\n        \"Mars: 第一次来你的直播，超激动！\",\n        \"用户123: 讲讲AI吧，会取代人类吗？\"\n      ]\n    },\n    \"bottom_right_product_card\": {\n      \"hot_tag\": \"orange '热卖 x 1888'\",\n      \"image\": \"Tesla Cybertruck\",\n      \"title\": \"{argument name=\\\"product name\\\" default=\\\"特斯拉Cybertruck 电动皮卡\\\"}\",\n      \"price\": \"{argument name=\\\"product price\\\" default=\\\"¥ 1,618,000\\\"}\",\n      \"button\": \"red '抢' button\",\n      \"floating_animation\": \"translucent hearts floating up the right edge\"\n    },\n    \"bottom_bar\": {\n      \"input_field\": \"'说点什么...'\",\n      \"icons\": [\"smiley face\", \"three dots\", \"shopping cart\", \"gift box\", \"share\"]\n    }\n  }\n}",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "电商直播卖货 UI 画面，适合直播间和商品运营图。",
+      "category": "UI设计"
+    },
+    {
+      "name": "动漫格斗场景",
+      "tag": "Featured",
+      "source": "YouMind awesome-gpt-image-2 #5 id 13467",
+      "preview": "previews/template-005-a99be45a18.webp",
+      "prompt": "An anime-style illustration of a {argument name=\"action type\" default=\"high-impact martial arts battle\"} between two young female fighters in a {argument name=\"setting\" default=\"traditional wooden martial arts dojo\"}. In the foreground, a girl with black hair in a high bun wears a {argument name=\"character 1 color theme\" default=\"red and white\"} Chinese-style martial arts outfit with baggy pants. She is in a dynamic, low, forward-thrusting stance, surrounded by swirling red energy and water splashes. In the background to the right, a girl with light purple hair in twin buns wears a {argument name=\"character 2 color theme\" default=\"green and purple\"} Chinese dress with gold embroidery and black tights. She is leaping through the air in a flying kick pose, surrounded by swirling blue energy. The wooden floorboards are splintering from the intense impact, with debris and dust flying through the air. Above them hangs a weathered wooden sign with the text \"{argument name=\"sign text\" default=\"武術会\"}\". The scene features dramatic lighting, a low-angle dynamic perspective, and intense action effects.",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "热血动漫武术战斗插画，动势强，冲击力高。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "石阶演化信息图",
+      "tag": "Featured",
+      "source": "YouMind awesome-gpt-image-2 #6 id 13491",
+      "preview": "previews/template-006-0d1ee4bbeb.webp",
+      "prompt": "{\n  \"type\": \"evolutionary timeline infographic\",\n  \"instruction\": \"Using REFERENCE_0 as a structural base, transform the flat vector design into a highly realistic 3D infographic. Replace the smooth ramps with distinct stone steps and upgrade all organisms to photorealistic 3D models.\",\n  \"style\": {\n    \"background\": \"{argument name=\\\"background style\\\" default=\\\"vintage textured parchment paper\\\"}\",\n    \"staircase\": \"{argument name=\\\"staircase material\\\" default=\\\"realistic textured stone blocks\\\"}\",\n    \"subjects\": \"{argument name=\\\"organism style\\\" default=\\\"highly detailed photorealistic 3D renders\\\"}\"\n  },\n  \"layout\": {\n    \"main_title\": \"{argument name=\\\"main title\\\" default=\\\"人类演化\\\"}\",\n    \"sections\": [\n      {\n        \"position\": \"left sidebar\",\n        \"count\": 8,\n        \"labels\": [\"L0: 单细胞生命\", \"L1: 多细胞生物\", \"L2: 动物界\", \"L3: 脊索动物\", \"L4: 上陆革命\", \"L5: 哺乳纲\", \"L6: 人科演化\", \"L7: 智人纪元\"]\n      },\n      {\n        \"position\": \"top right\",\n        \"title\": \"获得的功能 / 失去的功能\",\n        \"description\": \"Legend with plus and minus icons\"\n      },\n      {\n        \"position\": \"bottom center\",\n        \"title\": \"演化关键里程碑\",\n        \"count\": 6,\n        \"description\": \"Timeline with a silhouette graphic of 6 figures showing ape-to-human evolution\"\n      }\n    ],\n    \"centerpiece\": {\n      \"description\": \"Winding stone staircase with 25 numbered steps featuring specific organisms.\",\n      \"count\": 25,\n      \"notable_elements\": [\n        \"Step 07: Jellyfish\",\n        \"Step 09: Ammonite\",\n        \"Step 10: Trilobite\",\n        \"Step 24: Walking human\",\n        \"Step 25: {argument name=\\\"future evolution concept\\\" default=\\\"glowing cosmic silhouette with a question mark\\\"}\"\n      ]\n    }\n  }\n}",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "3D 石阶演化过程信息图，适合历史或结构讲解。",
+      "category": "信息图表"
+    },
+    {
+      "name": "粉彩动漫头像",
+      "tag": "Profile / Avatar",
+      "source": "YouMind awesome-gpt-image-2 #1 id 19369",
+      "preview": "previews/template-007-623b92934b.webp",
+      "prompt": "Create a vertical pastel anime social-media greeting illustration of a youthful androgynous character with {argument name=\"hair color\" default=\"bright cyan blue\"} fluffy bob-length hair, wearing a loose dark navy beret, an oversized navy haori-style cardigan over a white shirt, and a small blue crystal pendant necklace. The character is shown from chest up in a sunny softly blurred room by a window, warm golden morning light and bokeh in the background, holding one hand beside the cheek in a V-sign peace pose. Place a large soft-edged square privacy block over the center of the face, colored as a muted blue-to-pink gradient, hiding the facial features. Use glossy modern anime rendering, delicate linework, luminous highlights, soft sparkles, and a cute sticker-decorated layout. Add exactly 2 Japanese text stickers: a large puffy rounded headline at the upper left reading {argument name=\"headline text\" default=\"おはようございます\"} in blue and pink letters with a thick white outline, and a cloud speech bubble at lower left reading {argument name=\"bubble text\" default=\"ぴっぴ\"} with a small pink heart. Add exactly 3 sun doodle marks near the top headline: one simple yellow sun with rays above the hair, one small yellow burst near the left side, and one curved pink heart-arrow flourish at the lower right. Add exactly 4 small flower doodles scattered around the image, plus tiny plus signs, dots, hearts, and star sparkles for a cheerful morning sticker aesthetic. Use a vertical 9:16 composition, close crop, dreamy pastel palette, high detail, clean illustration, no photorealism.",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "柔和晨光动漫头像，适合社媒头像和问候图。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "手绘涂鸦叠加图",
+      "tag": "Social Media Post",
+      "source": "YouMind awesome-gpt-image-2 #21 id 19220",
+      "preview": "previews/template-008-68a53af06c.webp",
+      "prompt": "Analyse the uploaded image and preserve the original subject, composition, and lighting. Do not alter the identity or structure of the main subject. Add {argument name=\"doodle style\" default=\"playful, hand-drawn doodles\"} that interact directly with the subject in the image. The doodles should {argument name=\"interaction type\" default=\"mimic, follow, or exaggerate\"} the shapes, gestures, or motion present—such as outlining poses, extending limbs, adding motion lines, or creating imaginative elements that “respond” to the subject.",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "真实照片上叠加手绘互动涂鸦，适合社媒玩法图。",
+      "category": "社媒封面"
+    },
+    {
+      "name": "奶茶飞溅广告",
+      "tag": "Social Media Post",
+      "source": "YouMind awesome-gpt-image-2 #22 id 19302",
+      "preview": "previews/template-009-bf95a9977a.webp",
+      "prompt": "Create a hyper-realistic vertical action photograph inside a modern bubble tea shop kitchen, filled with explosive summer tropical fruit milk tea energy. A young female bubble tea worker, {argument name=\"character name\" default=\"anonymous barista\"}, crouches low on the wet reflective floor in a dynamic wide-angle pose, one hand thrust toward the camera in extreme foreground and the other arm reaching upward, wearing a beige baseball cap, cream polo shirt with dark green collar and sleeve trim, black apron, loose white pants, and white sneakers; her long dark hair is in two braids, and her face is covered by a centered soft-edged square privacy blur. Around her, a large sealed plastic cup of orange mango milk tea with black tapioca pearls and a domed lid floats diagonally at the upper left, surrounded by a dramatic frozen splash of creamy orange liquid, droplets, ice cubes, and tapioca pearls. Count exactly 7 prominent fruit pieces suspended in midair: 3 orange-yellow melon or peach wedges, 1 halved passion fruit at the bottom left, 2 green grapes, and multiple small mango cubes treated as one scattered garnish group; include numerous black boba pearls on the floor and in the drink. The environment should show stainless-steel counters and glass display cases on both sides, bright circular ceiling lights, warm reflections, and a cinematic fisheye perspective with shallow depth of field. Use glossy wet-floor reflections, motion-freeze photography, high-speed splash details, sparkling droplets, sticky creamy texture, vivid tropical orange and yellow color palette, summer freshness, dramatic lighting, realistic skin and fabric texture, and an energetic commercial advertising style for {argument name=\"drink flavor\" default=\"tropical mango fruit milk tea\"}.",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "热带奶茶飞溅动作广告图，适合饮品营销。",
+      "category": "电商产品"
+    },
+    {
+      "name": "赛博雾海人物",
+      "tag": "Social Media Post",
+      "source": "YouMind awesome-gpt-image-2 #23 id 19262",
+      "preview": "previews/template-010-59c54bf609.webp",
+      "prompt": "Apply the style and character reference of {argument name=\"style reference\" default=\"image 1\"} to the painting seen in {argument name=\"original painting\" default=\"image 2\"}, which is a famous painting of \"Wanderer above the Sea of Fog\". Retain the same stance as the man standing in the painting. Fog and clouds partially cover the view of the building below. The woman stands atop a post war Japan circa 2040. Architecture is modern and not futuristic. Abandonded buildings, a slightly destroyed Tokyo tower is in the background. There is no debis on the tower, it is slightly bent, as if it was hit by bombs. Her left leg is proped up on the ledge of the building and her right hand rests on her hip. Retain the same composition and vanishing point as seen in image 2.",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "赛博朋克人物站在雾海上方的电影感社媒图。",
+      "category": "社媒封面"
+    },
+    {
+      "name": "牛顿棱镜实验图",
+      "tag": "Infographic / Edu Visual",
+      "source": "YouMind awesome-gpt-image-2 #35 id 19308",
+      "preview": "previews/template-011-814801bcb3.webp",
+      "prompt": "Create a cinematic photorealistic 18th-century science laboratory scene inspired by Newton’s prism experiment. A {argument name=\"scientist\" default=\"Sir Isaac Newton\"} figure sits in deep darkness behind a polished table, wearing a voluminous {argument name=\"wig color\" default=\"silvery white\"} curly powdered wig and period clothing with ruffled cuffs; the face is deliberately obscured by a flat opaque dark-brown square censor block centered over the head. On the left, one hand adjusts a small antique brass optical apparatus with screws and a vertical rod, producing a bright white horizontal beam of light. The beam travels across the table into a transparent triangular glass prism at center-right, where it refracts into a vivid rainbow spectrum extending diagonally to the right, with clearly separated red, orange, yellow, green, blue, and violet bands. Use a black background, strong chiaroscuro, dramatic lens flares, glowing caustics, reflections on the glossy tabletop, delicate glass outlines, and a moody historical-scientific atmosphere. Wide cinematic aspect ratio, high contrast, realistic materials, shallow depth of field, dark teal and gold color grading, no text.",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "牛顿棱镜实验教育视觉，适合科普和课程封面。",
+      "category": "信息图表"
+    },
+    {
+      "name": "岩浆猫便当食谱",
+      "tag": "Infographic / Edu Visual",
+      "source": "YouMind awesome-gpt-image-2 #36 id 19370",
+      "preview": "previews/template-012-e25b037896.webp",
+      "prompt": "{\"type\":\"cute Japanese recipe infographic poster for a character bento\",\"style\":\"bright kawaii food magazine layout, clean vector-and-photo hybrid, rounded orange border, cream background with pale yellow stripes, playful rounded Japanese typography, warm studio lighting, appetizing realistic bento photography with illustrated sparkle accents\",\"main_subject\":{\"dish\":\"magma-pattern black cat character bento made from rice and seaweed\",\"character_name\":\"{argument name=\\\"character name\\\" default=\\\"マグマグ\\\"}\",\"description\":\"a chibi black cat sitting inside a rectangular lunch box on a bed of white rice, made with glossy black seaweed, orange magma cracks, large golden sparkling eyes, small orange nose, pointed ears with orange cheese-like inner ears, tiny paws, curled tail, cute smile\",\"bento_contents\":{\"count\":4,\"items\":[\"white rice base\",\"black cat seaweed character\",\"green broccoli florets\",\"red cherry tomato and sliced sausage flower\"]}},\"layout\":{\"format\":\"single-page vertical recipe card, 4:5 aspect ratio\",\"top_section\":{\"position\":\"top half\",\"count\":3,\"elements\":[\"left title block with paw icon and headline\",\"large right bento hero image\",\"orange ribbon character-name label\"]},\"visible_text\":{\"headline\":\"{argument name=\\\"headline text\\\" default=\\\"のせごはんで作る！マグマグキャラ弁\\\"}\",\"character_label\":\"キャラクター名：マグマグ\",\"point_box_title\":\"キャラらしさポイント\"},\"character_points\":{\"count\":3,\"items\":[\"黒ねこベース\",\"オレンジのマグマ模様\",\"大きなきらきら目\"]},\"info_cards\":{\"position\":\"middle row\",\"count\":5,\"cards\":[{\"icon\":\"clock\",\"label\":\"調理時間\",\"value\":\"約18分\"},{\"icon\":\"chef hat\",\"label\":\"難易度\",\"value\":\"★★☆\"},{\"icon\":\"person\",\"label\":\"1人分\",\"value\":\"1人分\"},{\"icon\":\"scissors\",\"label\":\"道具\",\"value\":\"はさみとラップでOK\"},{\"icon\":\"bento bowl\",\"label\":\"推定\",\"value\":\"約430kcal\"}]},\"lower_section\":{\"columns\":3,\"left_column\":{\"title\":\"材料\",\"count\":9,\"items\":[\"ごはん\",\"のり\",\"スライスチーズ\",\"薄焼き卵\",\"にんじん\",\"コーン\",\"ウインナー\",\"ブロッコリー\",\"プチトマト\"]},\"center_top\":{\"title\":\"工程\",\"count\":4,\"steps\":[{\"number\":1,\"label\":\"ごはんをつめる\",\"image\":\"plain white rice packed in the lunch box\"},{\"number\":2,\"label\":\"のりで黒ねこに\",\"image\":\"black seaweed silhouette of cat placed on rice\"},{\"number\":3,\"label\":\"卵とにんじんで模様\",\"image\":\"cat face completed with eyes and orange magma markings\"},{\"number\":4,\"label\":\"おかずを入れて完成\",\"image\":\"finished bento with broccoli, tomato, and sausage garnish\"}]},\"center_bottom\":{\"title\":\"作り方\",\"count\":4,\"steps\":[\"ごはんをラップで軽く整え、顔と体の土台を作る\",\"大きめに切ったのりをのせて黒ねこの形にする\",\"薄焼き卵とにんじんを細く切り、マグマ模様と耳を作る\",\"チーズ・コーン・のりで目を作り、おかずを詰めて仕上げる\"]},\"right_bottom\":{\"title\":\"コツ\",\"count\":3,\"tips\":[\"のりは大きめに切ると作りやすい\",\"模様は細すぎず太めにのせると崩れにくい\",\"顔パーツは最後に置くときれい\"]}},\"design_details\":{\"colors\":\"orange, cream, brown, black, white, green, red\",\"decorations\":\"small paw prints, orange section ribbons, thin rounded dividers, numbered orange squares, soft drop shadows\",\"typography\":\"large orange headline for マグマグ, dark brown secondary text, clean legible Japanese body text\",\"camera\":\"top-down three-quarter product view for the bento, consistent miniature photos for process steps\",\"quality\":\"high-resolution, crisp print-ready recipe sheet, no clutter, all Japanese text sharp and readable\"}}",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "可爱便当食谱信息图，食材和步骤表达清晰。",
+      "category": "信息图表"
+    },
+    {
+      "name": "翠玉白菜档案海报",
+      "tag": "Infographic / Edu Visual",
+      "source": "YouMind awesome-gpt-image-2 #37 id 19385",
+      "preview": "previews/template-013-d516ed010a.webp",
+      "prompt": "{\"type\":\"national museum civilization archive poster\",\"style\":\"premium Chinese museum exhibition poster fused with futuristic archival UI, cinematic photorealistic artifact photography, warm parchment background, translucent glassmorphism data panels, gold fine-line connectors, scholarly editorial layout, subtle ancient palace silhouette, ink-wash texture, sepia and jade green palette\",\"main artifact\":{\"name\":\"{argument name=\\\"artifact name\\\" default=\\\"翠玉白菜\\\"}\",\"position\":\"center, dominant full-height object on a circular museum display plinth\",\"description\":\"a highly realistic jadeite cabbage sculpture with milky white translucent stalk and layered deep emerald green leaves, glossy carved veins, dew-like highlights, mounted on an ornate dark carved wooden stand, lit like a national treasure in a museum showcase\",\"material\":\"{argument name=\\\"material\\\" default=\\\"jadeite\\\"}\",\"lighting\":\"soft spotlight from upper left, reflective jade translucency, dramatic shadow under plinth\"},\"header and branding\":{\"top right museum mark\":\"國立故宮博物院 / NATIONAL PALACE MUSEUM with a red seal logo\",\"left vertical title\":\"{argument name=\\\"main title text\\\" default=\\\"翠玉白菜\\\"}\",\"left dynasty strip\":\"清代　宮廷玉雕　國寶級文物\",\"English artifact label\":\"JADEITE CABBAGE / NATIONAL PALACE MUSEUM\",\"subtitle\":\"自然之美 匠人工藝 宮廷收藏 文化象徵\",\"collection line\":\"台北故宮博物院藏\"},\"layout\":{\"background\":\"aged beige parchment with faint map contours, palace architecture silhouette, delicate decorative motifs, museum archive atmosphere\",\"central composition\":\"large vertical artifact slightly angled right, transparent golden circular data ring around the plinth, thin connector lines radiating to annotation cards\",\"sections\":[{\"title\":\"artifact analysis cards\",\"position\":\"surrounding the artifact in a radial grid\",\"count\":8,\"labels\":[\"01 天然色層\",\"02 蟲蟻寓意\",\"03 精湛雕工\",\"04 玉質結構\",\"05 清宮收藏\",\"06 底座工藝\",\"07 微雕細節\",\"08 包漿痕跡\"],\"appearance\":\"each card is a semi-transparent frosted-glass rectangle with rounded clipped corners, small gold number, Chinese paragraph text, and a small inset macro photograph or museum photo connected by thin gold circuit-like lines\"},{\"title\":\"document information block\",\"position\":\"lower left beside faint line drawing of the artifact\",\"count\":7,\"labels\":[\"名稱：翠玉白菜\",\"類別：玉器\",\"時代：清代（19世紀）\",\"尺寸：長18.7公分／寬9.1公分／厚5.07公分\",\"材質：翠玉（硬玉）\",\"來源：台北故宮博物院\",\"故宮藏001257\"],\"appearance\":\"small scholarly catalog text under the heading 文物資訊 with red square seal stamp\"},{\"title\":\"history timeline\",\"position\":\"bottom horizontal band\",\"count\":5,\"labels\":[\"清代（19世紀）\",\"~1948年\",\"1965年\",\"2000年後\",\"現代研究\"],\"appearance\":\"gold timeline line with circular nodes, each node has a sepia or color thumbnail image below and short Chinese explanatory text, left vertical heading 歷史軌跡\"}]},\"callout card details\":{\"01 天然色層\":\"explains white-to-green natural jade color gradation with a leaf macro inset\",\"02 蟲蟻寓意\":\"shows insects on cabbage leaves as auspicious symbols with a green macro inset\",\"03 精湛雕工\":\"shows carved leaf ridges and delicate craftsmanship\",\"04 玉質結構\":\"shows white jade texture and striations\",\"05 清宮收藏\":\"shows a dim museum gallery display photo\",\"06 底座工藝\":\"shows the dark wooden stand close-up\",\"07 微雕細節\":\"shows slender leaf veins and tiny carved details\",\"08 包漿痕跡\":\"shows aged surface patina and polishing marks\"},\"typography\":\"large expressive black Chinese calligraphy for the title, refined Song/Ming style Chinese body text, small uppercase serif English, careful museum-catalog hierarchy\",\"color palette\":\"{argument name=\\\"color palette\\\" default=\\\"warm ivory parchment, antique gold, ink black, jade green, dark walnut brown, muted sepia\\\"}\",\"rendering requirements\":\"ultra-detailed 4:5 vertical poster, photorealistic central artifact, clean high-end museum design, readable Chinese labels, elegant balance between ancient cultural relic and futuristic archive interface, no people, no clutter, national museum special exhibition poster quality\"}",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "博物馆藏品档案式海报，适合文物和展览介绍。",
+      "category": "信息图表"
+    },
+    {
+      "name": "拉面爆炸信息图",
+      "tag": "Infographic / Edu Visual",
+      "source": "YouMind awesome-gpt-image-2 #41 id 19239",
+      "preview": "previews/template-014-14a7fc5016.webp",
+      "prompt": "Hyper-realistic cinematic ramen infographic. Deep black bowl on dark stone, glowing tonkotsu broth, ingredients exploding upward — swirling noodles, floating chashu pork, split ajitama egg dripping gold yolk, chili oil sparks, rising steam. Dark Tokyo alleyway background, blurred neon kanji, warm lantern glow. Luxury anime-editorial style. 8K, 85mm lens, shallow depth of field.",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "电影感拉面食材爆炸视图，适合食品内容营销。",
+      "category": "信息图表"
+    },
+    {
+      "name": "樱花校园缩略图",
+      "tag": "YouTube Thumbnail",
+      "source": "YouMind awesome-gpt-image-2 #51 id 19331",
+      "preview": "previews/template-015-a9c882adb0.webp",
+      "prompt": "Create a bright anime-style YouTube thumbnail illustration in 16:9 landscape format, set at the entrance of a Japanese school during spring cherry blossom season. Show exactly 4 high-school girls standing side by side on the right half of the image, each wearing the same uniform: dark green sailor-style blazer with white trim, large burgundy bow, mustard-yellow pleated skirt, white socks, brown loafers, and each holding a brown leather school satchel in front of her. Give the 4 girls distinct hairstyles and hair colors: long flowing pink hair, short wavy light brown hair, long blonde hair, and long straight black hair. Keep their faces softly blurred or featureless so the thumbnail emphasizes the concept rather than individual identities. The background should feature a school gate, school building hints, blue sky, sunlight, abundant pink cherry blossom trees, and many falling sakura petals, with a polished colorful anime-game look, high saturation, crisp lighting, and cheerful romantic spring atmosphere. On the left half, add large bold Japanese thumbnail text reading {argument name=\"headline text\" default=\"もっと！モット！ときめき'99\"}, using thick rounded lettering, white fill with vivid pink outline and warm orange shadow, arranged dynamically with oversized emphasis on “モット!” and “'99”. Add small decorative hearts, sparkles, and an underline swoosh around the text. Compose it like a clickable nostalgic dating-sim themed thumbnail: characters on the right, text dominating the left, energetic diagonal layout, glossy highlights, clean readable typography, cinematic depth, floating petals in the foreground, no extra characters, no logos, no watermark.",
+      "params": {
+        "size": "1792x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "恋爱模拟游戏风 YouTube 缩略图，点击感强。",
+      "category": "海报广告"
+    },
+    {
+      "name": "电影角色海报",
+      "tag": "YouTube Thumbnail",
+      "source": "YouMind awesome-gpt-image-2 #61 id 18327",
+      "preview": "previews/template-016-9c0bee5a17.webp",
+      "prompt": "Design a high-end cinematic character poster in a layered depth composition (9:16 vertical) with a strong foreground–midground–background separation instead of silhouette framing.\nThe {argument name=\"character\" default=\"character\"} stands slightly off-center in a dynamic, perspective-driven pose, interacting naturally with the {argument name=\"environment\" default=\"environment (wind, light, particles, fabric movement)\"}. The camera angle should feel intentional—low-angle for power or slight tilt for tension—creating a sense of motion and presence.\nThe background should not be contained inside shapes. Instead, build a living world around the character:\natmospheric environments (fog, city lights, ruins, nature, etc.)\nlight rays, volumetric glow, drifting particles\nsubtle storytelling elements placed naturally in space (not collage-based)\nIntroduce floating fragments or layered planes (glass shards, light panels, memories, holographic slices, or torn paper edges) that orbit or intersect the scene, each containing faint symbolic visuals tied to the character’s story—keep them minimal and elegant, not cluttered.\nLighting should be cinematic and directional:\nstrong key light shaping the subject\nrim lighting to separate from background\nsoft gradients and shadow falloff for depth\nColor palette should follow a {argument name=\"color palette\" default=\"controlled dual-tone system (e.g., teal–orange, violet–gold, crimson–black)\"} with smooth transitions and no oversaturation.\nTypography:\nplace the title in a clean, modern cinematic layout\nintegrate text subtly into the environment (ground plane, light projection, or floating UI style)\navoid heavy or oversized typography\nOverall style: ultra-realistic + cinematic editorial, sharp detail on subject, soft atmospheric depth in background, minimal but intentional storytelling elements, premium movie-poster quality.\nAvoid: silhouette fill compositions, heavy collage density, watercolor textures, or ink-wash edges. Focus on spatial depth, realism, and cinematic immersion.",
+      "params": {
+        "size": "1792x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "多层景深电影角色海报，适合视频封面和人物宣传。",
+      "category": "海报广告"
+    },
+    {
+      "name": "动漫分镜表",
+      "tag": "Comic / Storyboard",
+      "source": "YouMind awesome-gpt-image-2 #71 id 19352",
+      "preview": "previews/template-017-06184d65e8.webp",
+      "prompt": "{\"type\":\"anime film storyboard sheet / production conte page\",\"format\":\"clean printable A4 vertical layout, black grid lines, red accent labels, white paper background, professional Japanese animation storyboard template\",\"header\":{\"work title\":\"{argument name=\\\"work title\\\" default=\\\"Scarlet Wizard / 緋色の魔法遣い\\\"}\",\"episode\":\"{argument name=\\\"episode number\\\" default=\\\"01\\\"}\",\"scene\":\"{argument name=\\\"scene number\\\" default=\\\"01\\\"}\",\"duration\":\"{argument name=\\\"duration\\\" default=\\\"7 sec\\\"}\"},\"main scene visual\":{\"title\":\"SCENE VISUAL (INITIAL STATE)\",\"position\":\"large widescreen panel across upper half\",\"image description\":\"misty dawn fantasy mountain village, blue-gray early morning light, pine-covered hills and layered mountains in the distance, old timber houses with slate roofs, warm window lights, cobblestone village path, wooden fences, a church bell tower with a cross on the right, stacked firewood on the left. In the foreground a small silver-haired anime girl named {argument name=\\\"character name\\\" default=\\\"Alvina\\\"} chops wood with an axe beside a stump; she wears a pale simple dress, sandals, and a red flower hair ornament, quiet melancholic atmosphere, cinematic background art, detailed hand-painted anime style.\",\"composition\":\"wide establishing shot with the character left of center, woodpile at far left, village and tower receding into mist, dramatic but subdued dawn sky\"},\"scene summary\":{\"title\":\"SCENE SUMMARY\",\"count\":4,\"items\":[\"1. Misty dawn establishes the village.\",\"2. Alvina works alone by the woodpile.\",\"3. Slow camera movement shows four years passed.\",\"4. Quiet axe sounds define the morning.\"]},\"cut list\":{\"title\":\"CUT LIST\",\"total cards\":8,\"filled cards\":4,\"blank cards\":4,\"layout\":\"two rows of four storyboard cards beneath the main panel, each card has a red numbered box, time field, camera field, image thumbnail area, and cut summary lines\",\"cards\":[{\"number\":1,\"time\":\"00:00 - 00:02\",\"camera\":\"WIDE / STATIC\",\"thumbnail\":\"wide view of misty mountain village at dawn with church tower and rooftops\",\"cut summary\":[\"Scene 01.\",\"Misty village dawn.\"]},{\"number\":2,\"time\":\"00:02 - 00:04\",\"camera\":\"WIDE / SLOW DOLLY IN\",\"thumbnail\":\"Alvina chopping wood near the woodpile in the village foreground\",\"cut summary\":[\"Alvina works\",\"alone.\"]},{\"number\":3,\"time\":\"00:04 - 00:06\",\"camera\":\"MEDIUM\",\"thumbnail\":\"medium shot of Alvina swinging the axe, wood chips and stump visible, determined tired expression\",\"cut summary\":[\"Axe strike\",\"breaks silence.\"]},{\"number\":4,\"time\":\"00:06 - 00:07\",\"camera\":\"CLOSE\",\"thumbnail\":\"close-up profile of Alvina's silver hair and red flower ornament, face partly obscured by a gray censor-like square placeholder\",\"cut summary\":[\"Four years\",\"have passed.\"]},{\"number\":5,\"time\":\"blank line\",\"camera\":\"blank line\",\"thumbnail\":\"empty placeholder box labeled CUT IMAGE with faint diagonal guide arrows\",\"cut summary\":\"blank ruled lines\"},{\"number\":6,\"time\":\"blank line\",\"camera\":\"blank line\",\"thumbnail\":\"empty placeholder box labeled CUT IMAGE with faint diagonal guide arrows\",\"cut summary\":\"blank ruled lines\"},{\"number\":7,\"time\":\"blank line\",\"camera\":\"blank line\",\"thumbnail\":\"empty placeholder box labeled CUT IMAGE with faint diagonal guide arrows\",\"cut summary\":\"blank ruled lines\"},{\"number\":8,\"time\":\"blank line\",\"camera\":\"blank line\",\"thumbnail\":\"empty placeholder box labeled CUT IMAGE with faint diagonal guide arrows\",\"cut summary\":\"blank ruled lines\"}]},\"typography\":\"bold sans-serif uppercase English labels, red section headers, thin gray form lines, strong black borders, small neat production notes text\",\"style\":\"highly legible storyboard planning document, anime concept art thumbnails, muted desaturated colors, cinematic fantasy realism, no extra pages, no watermark\"}",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "动漫故事板九宫格，适合剧情分镜和漫画规划。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "立体绘本场景",
+      "tag": "Comic / Storyboard",
+      "source": "YouMind awesome-gpt-image-2 #81 id 19310",
+      "preview": "previews/template-018-4eb25c6576.webp",
+      "prompt": "{\"type\":\"whimsical pop-up storybook diorama illustration\",\"style\":\"soft watercolor and colored-pencil children's picture book art, layered paper-cut pop-up construction, warm golden lighting, delicate outlines, cozy pastel palette, shallow depth of field, highly detailed but gentle\",\"main_subject\":{\"count\":1,\"description\":\"a young girl standing upright in the center of an open pop-up book, face intentionally featureless and softly blurred, wearing a fluffy white sheep-eared hood, a cream oversized sweater with a sheep face motif, a pale blue knee-length skirt printed with small white sheep, white socks, and brown lace-up boots\",\"customizable_name\":\"{argument name=\\\"character name\\\" default=\\\"chi\\\"}\",\"sweater_motif\":\"{argument name=\\\"sweater motif\\\" default=\\\"sheep\\\"}\"},\"setting\":{\"default_concept\":\"{argument name=\\\"setting concept\\\" default=\\\"a gentle sheep-themed world emerging from an open picture book\\\"}\",\"environment\":\"an open book lies on a wooden table, with layered pop-up pages forming a miniature village garden; background is softly blurred with forest-like vertical shadows and glowing bokeh\",\"major_scenery_count\":7,\"major_scenery_items\":[\"storybook title arch at upper left\",\"moon-and-stars night sky backdrop\",\"small cottage with chimney at upper right\",\"garden path with stepping stones\",\"white picket fences\",\"flower beds and baskets\",\"open book and paper plaques on the lower pages\"]},\"layout\":{\"composition\":\"wide horizontal 16:9 image, the open book fills the foreground, the central girl stands between the title arch and cottage, with readable paper signs distributed around the scene\",\"labeled_text_panels_count\":5,\"labeled_text_panels\":[{\"position\":\"upper left large scalloped sign\",\"visible_text\":[\"{argument name=\\\"title text\\\" default=\\\"chi\\\"}\",\"ひつじの女の子\",\"やさしい世界のものがたり\"]},{\"position\":\"left middle rectangular page sign\",\"visible_text\":[\"はじまりのページ\",\"ふわふわの雲のむこうには、\",\"ひつじの女の子 chi が暮らす、\",\"やさしい世界が広がっています。\"]},{\"position\":\"lower left open-book chapter panel\",\"visible_text\":[\"1\",\"おはなしの章\",\"ひつじと風の丘\",\"風がやさしくふく丘で、chi は\",\"今日もみんなに笑顔をとどけます。\"]},{\"position\":\"lower right long paper note\",\"visible_text\":[\"今日の小さなできごと\",\"お花をつんで、星にお願いをしたよ。\",\"明日も、誰かにやさしくできますように。\"]},{\"position\":\"right middle welcome sign\",\"visible_text\":[\"ようこそ、\",\"chi の世界へ\"]}]},\"characters_and_mascots\":{\"total_living_figures_count\":4,\"items\":[\"1 central sheep-hooded girl\",\"1 small sheep mascot sitting on a bench in the left background\",\"1 small sheep character printed on the central sweater\",\"1 freestanding sheep mascot doll with blue bow beside the right welcome sign\"]},\"decorative_elements\":{\"counted_groups_count\":8,\"groups\":[\"crescent moon and small stars across the upper sky\",\"cloud cutouts behind the title and cottage\",\"rounded leafy trees and bushes\",\"tiny white and yellow flowers scattered through the garden\",\"vintage black lamp post near the path\",\"wooden bench under the trees\",\"stone marker with the number 1 near the lower center-left\",\"ribbon bow attached to the upper-left title sign\"]},\"rendering_instructions\":\"make the entire scene look like layered cardboard pages rising from a real open book, with visible page edges, tabs, folds, shadows between paper layers, creamy off-white paper texture, hand-painted floral borders, and a dreamy bedtime-story atmosphere; keep all text hand-lettered and integrated into paper signs; no photorealistic people, no harsh contrast, no modern UI elements\"}",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "羊女孩立体纸雕绘本场景，童话感强。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "机甲拟人设定",
+      "tag": "Comic / Storyboard",
+      "source": "YouMind awesome-gpt-image-2 #86 id 19122",
+      "preview": "previews/template-019-47faa0f02f.webp",
+      "prompt": "Using REFERENCE_0 as the design motif, transform the robot model into a cute anime-style gijinka girl while keeping only the recognizable color inspiration and mecha identity: deep green/brown outerwear, tan/gray uniform tones, claw/monster-like silhouette cues, and a glowing mono-eye-style emblem. Replace the toy/table setting with a dramatic outdoor scene at a seaside shrine during sunset, with large red torii gate pillars behind her and the ocean horizon visible. Add a handheld black Canon-style camera in her hands as if she is taking photos. Give the character exactly 2 black curved horns with neon green glow accents, exactly 2 small black bat-like wings, short white/silver hair, a green cardigan over a white shirt and gray pleated skirt, white thigh-high socks, and a glowing green emblem on the cardigan chest. Cover the character's face with a plain beige square censor block so facial features are hidden. Render as polished high-detail anime illustration with cinematic lighting, low-angle composition, vivid colors, shallow depth of field, and no visible toy/plastic texture. Optional customization: {argument name=\"character style\" default=\"cute anime gijinka girl\"}, {argument name=\"location\" default=\"seaside shrine with red torii gates at sunset\"}, {argument name=\"held object\" default=\"black Canon-style camera\"}, {argument name=\"glowing emblem color\" default=\"neon green\"}, {argument name=\"face censor\" default=\"plain beige square covering the face\"}.",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "把机甲玩具转成动漫拟人角色设定图。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "韩系水感面霜广告",
+      "tag": "Product Marketing",
+      "source": "YouMind awesome-gpt-image-2 #90 id 19361",
+      "preview": "previews/template-020-9cddadc3a9.webp",
+      "prompt": "{\"type\":\"Korean skincare advertising poster\",\"format\":\"single vertical social media ad, 4:5 aspect ratio\",\"style\":\"premium photorealistic summer beauty commercial, bright airy blue-and-white palette, clean Korean cosmetics layout, glossy water reflections, soft sunlight, shallow depth of field\",\"scene\":{\"background\":\"sunlit outdoor pool or seaside spa setting with sparkling blue water bokeh, pale sky, soft green tropical leaves entering from the upper-right and lower-right corners\",\"model\":\"young woman with wet dark hair and bare shoulders in water, positioned on the left half, hand touching cheek, dewy skin with water droplets, face covered by a large semi-opaque square privacy placeholder in muted beige-gray gradient, placeholder centered over the face and upper neck\",\"mood\":\"cool, refreshing, hydrated, calm summer morning\"},\"product\":{\"item\":\"transparent turquoise cosmetic jar filled with aqua gel cream\",\"position\":\"lower-right foreground on a wet stone or pool ledge\",\"label text\":\"{argument name=\\\"product label text\\\" default=\\\"LIGHT AQUA\\\\nWATER CREAM\\\\nHydrating & Refreshing\\\\n50 ml / 1.69 fl. oz.\\\"}\",\"appearance\":\"open glass jar with screw-top rim, blue-tinted water cream mounded into a glossy icy peak, condensation droplets on the jar, realistic refractions and highlights\"},\"typography\":{\"language\":\"Korean\",\"font style\":\"modern clean sans serif, large bold blue headline with lighter supporting text\",\"main headline\":\"{argument name=\\\"headline text\\\" default=\\\"여름 아침을 깨우는\\\\n산뜻한 수분\\\"}\",\"subheadline\":\"{argument name=\\\"subheadline text\\\" default=\\\"가볍게 스며들고, 끈적임 없이 촉촉하게\\\"}\",\"product ribbon\":\"{argument name=\\\"product ribbon text\\\" default=\\\"라이트 아쿠아 수분크림\\\"}\"},\"layout\":{\"top-right text block\":\"headline at upper right, subheadline below, light blue rectangular ribbon beneath\",\"benefit icons\":{\"count\":3,\"position\":\"center-right above product jar\",\"style\":\"thin blue line icons inside faint circles\",\"items\":[{\"icon\":\"water droplet\",\"label\":\"투명 젤 텍스처\"},{\"icon\":\"leaf\",\"label\":\"여름철 산뜻 보습\"},{\"icon\":\"snowflake\",\"label\":\"쿨링감 있는 사용감\"}]},\"bottom information panel\":{\"count\":2,\"position\":\"bottom third, translucent white rounded rectangle spanning almost full width\",\"cards\":[{\"title\":\"용도\",\"icon\":\"water droplet\",\"body\":\"여름철 열감으로 지친 피부에 가볍고 산뜻한 수분을 채워주는데 도움을 줍니다.\"},{\"title\":\"목적\",\"icon\":\"leaf\",\"body\":\"무겁지 않은 보습 루틴으로 피부를 편안하고 촉촉하게 유지하도록 제안합니다.\"}]},\"call to action\":{\"position\":\"centered at very bottom inside blue rounded pill button\",\"icon\":\"small water droplet\",\"text\":\"{argument name=\\\"button text\\\" default=\\\"올여름, 산뜻한 수분 루틴 시작하기\\\"}\"}},\"composition\":\"model fills left side, product jar anchors lower right, headline occupies upper right, UI panel overlays bottom, all elements aligned with generous whitespace and polished ecommerce ad hierarchy\",\"lighting\":\"high-key natural daylight, cool blue highlights, glossy reflections, realistic moisture and glass caustics\",\"quality\":\"ultra-realistic advertising photography with crisp product rendering, readable Korean text, no extra logos, no clutter\"}",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "韩系夏日清爽护肤品广告，适合美妆电商图。",
+      "category": "电商产品"
+    },
+    {
+      "name": "低多边形武士村落",
+      "tag": "游戏概念",
+      "source": "wuyoscar gallery No. 21 (gallery-gaming.md)",
+      "preview": "previews/template-021-88e6f6a0be.webp",
+      "prompt": "Create a production-ready game concept image for [主题/产品/人物] using the visual direction \"Low-poly samurai strategy village\". Emphasize readable silhouette, worldbuilding details, coherent lighting, strong mood, and concept-art clarity suitable for a pitch deck. Target effect: 低多边形策略游戏地图，适合游戏世界观和关卡概念图。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "低多边形策略游戏地图，适合游戏世界观和关卡概念图。",
+      "category": "信息图表"
+    },
+    {
+      "name": "暗黑幻想九宫格",
+      "tag": "游戏概念",
+      "source": "wuyoscar gallery No. 22 (gallery-gaming.md)",
+      "preview": "previews/template-022-45ebc6e008.webp",
+      "prompt": "Create a production-ready game concept image for [主题/产品/人物] using the visual direction \"Nine-panel dark-fantasy worldbuilding set\". Emphasize readable silhouette, worldbuilding details, coherent lighting, strong mood, and concept-art clarity suitable for a pitch deck. Target effect: 一张图展示多个世界观场景，适合设定集和灵感板。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "一张图展示多个世界观场景，适合设定集和灵感板。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "赛博机甲海堡",
+      "tag": "复古赛博",
+      "source": "wuyoscar gallery No. 23 (gallery-retro-and-cyberpunk.md)",
+      "preview": "previews/template-023-0d8f70f42b.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Cyberpunk mecha girl over sea fortress\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 霓虹机甲与海上堡垒组合，适合科幻角色视觉。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "霓虹机甲与海上堡垒组合，适合科幻角色视觉。",
+      "category": "其他"
+    },
+    {
+      "name": "霓虹街区设计板",
+      "tag": "复古赛博",
+      "source": "wuyoscar gallery No. 24 (gallery-retro-and-cyberpunk.md)",
+      "preview": "previews/template-024-14eb5c679d.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Neon Orchid District design board\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 赛博街区招牌、建筑和色彩系统的设计展示板。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "赛博街区招牌、建筑和色彩系统的设计展示板。",
+      "category": "空间建筑"
+    },
+    {
+      "name": "异星夜生活九宫格",
+      "tag": "复古赛博",
+      "source": "wuyoscar gallery No. 25 (gallery-retro-and-cyberpunk.md)",
+      "preview": "previews/template-025-a1c7d7d89d.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Synth Moon Crew alien nightlife grid\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 复古合成器风格的外星角色和夜店氛围组图。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "复古合成器风格的外星角色和夜店氛围组图。",
+      "category": "其他"
+    },
+    {
+      "name": "皮克斯感动画剧照",
+      "tag": "电影动画",
+      "source": "wuyoscar gallery No. 26 (gallery-cinematic-and-animation.md)",
+      "preview": "previews/template-026-7b91c84caa.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Pixar-style 3D animation still (kitten)\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 温暖 3D 动画电影感，适合可爱角色和室内场景。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "温暖 3D 动画电影感，适合可爱角色和室内场景。",
+      "category": "空间建筑"
+    },
+    {
+      "name": "黑色电影侦探剧照",
+      "tag": "电影动画",
+      "source": "wuyoscar gallery No. 27 (gallery-cinematic-and-animation.md)",
+      "preview": "previews/template-027-8ed93b3e06.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"1940s film-noir still\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 1940 年代 noir 光影，适合悬疑、侦探和复古叙事。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "1940 年代 noir 光影，适合悬疑、侦探和复古叙事。",
+      "category": "摄影写实"
+    },
+    {
+      "name": "六格电影分镜板",
+      "tag": "电影动画",
+      "source": "wuyoscar gallery No. 28 (gallery-cinematic-and-animation.md)",
+      "preview": "previews/template-028-7134a5b236.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Professional 6-panel film storyboard\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 专业电影分镜布局，适合广告、短片和动画脚本预演。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "专业电影分镜布局，适合广告、短片和动画脚本预演。",
+      "category": "海报广告"
+    },
+    {
+      "name": "吉卜力感田园剧照",
+      "tag": "电影动画",
+      "source": "wuyoscar gallery No. 29 (gallery-cinematic-and-animation.md)",
+      "preview": "previews/template-029-0ab7624b00.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Studio-Ghibli-style animation still\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 柔和手绘动画气质，适合自然、乡村和治愈场景。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "柔和手绘动画气质，适合自然、乡村和治愈场景。",
+      "category": "摄影写实"
+    },
+    {
+      "name": "VHS 复古混乱剧照",
+      "tag": "电影动画",
+      "source": "wuyoscar gallery No. 30 (gallery-cinematic-and-animation.md)",
+      "preview": "previews/template-030-201c44759b.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"VHS grocery-store chaos still\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 低保真录像质感，适合怪诞、幽默和复古实验画面。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "低保真录像质感，适合怪诞、幽默和复古实验画面。",
+      "category": "摄影写实"
+    },
+    {
+      "name": "角色三视图设定",
+      "tag": "角色设定",
+      "source": "wuyoscar gallery No. 31 (gallery-character-design.md)",
+      "preview": "previews/template-031-d4718940a8.webp",
+      "prompt": "Create a production-ready game concept image for [主题/产品/人物] using the visual direction \"Official character reference sheet\". Emphasize readable silhouette, worldbuilding details, coherent lighting, strong mood, and concept-art clarity suitable for a pitch deck. Target effect: 官方角色参考表，包含正侧背和表情细节。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "官方角色参考表，包含正侧背和表情细节。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "精灵弓手概念稿",
+      "tag": "角色设定",
+      "source": "wuyoscar gallery No. 32 (gallery-character-design.md)",
+      "preview": "previews/template-032-a4845975f4.webp",
+      "prompt": "Create a production-ready game concept image for [主题/产品/人物] using the visual direction \"Elven archer sketchbook concept sheet\". Emphasize readable silhouette, worldbuilding details, coherent lighting, strong mood, and concept-art clarity suitable for a pitch deck. Target effect: 幻想角色速写本风格，适合游戏和小说人物设定。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "幻想角色速写本风格，适合游戏和小说人物设定。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "中式茶饮上市海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 33 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-033-c64b796f1d.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Chinese tea launch poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 高级茶饮产品发布海报，适合新品和品牌主视觉。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高级茶饮产品发布海报，适合新品和品牌主视觉。",
+      "category": "电商产品"
+    },
+    {
+      "name": "80 年代宣传海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 34 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-034-b687878a25.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"1980s propaganda poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 强烈平面构图和复古印刷感，适合活动传播视觉。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "强烈平面构图和复古印刷感，适合活动传播视觉。",
+      "category": "海报广告"
+    },
+    {
+      "name": "惊悚电影极简海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 35 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-035-827771d3bc.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Saul-Bass-style thriller movie poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 剪影和平面色块构图，适合电影和播客封面。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "剪影和平面色块构图，适合电影和播客封面。",
+      "category": "海报广告"
+    },
+    {
+      "name": "时尚杂志封面",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 36 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-036-8e3b17bb27.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Vogue-style fashion magazine cover\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 高端杂志封面排版，适合人物、服装和品牌专题。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高端杂志封面排版，适合人物、服装和品牌专题。",
+      "category": "海报广告"
+    },
+    {
+      "name": "复古科幻杂志封面",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 37 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-037-b5dad15ab8.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"1950s Astounding Stories pulp cover\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 1950s 纸浆科幻封面，适合怪兽、太空和复古故事。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "1950s 纸浆科幻封面，适合怪兽、太空和复古故事。",
+      "category": "海报广告"
+    },
+    {
+      "name": "城市春日海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 38 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-038-cf5983463e.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Boston Spring 2026 city poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 城市旅游和节日活动海报，强调季节氛围与地标。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "城市旅游和节日活动海报，强调季节氛围与地标。",
+      "category": "海报广告"
+    },
+    {
+      "name": "史诗剪影世界海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 39 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-039-af84c6d676.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Epic silhouette worldbuilding poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 大场景剪影叙事海报，适合奇幻和历史题材。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "大场景剪影叙事海报，适合奇幻和历史题材。",
+      "category": "海报广告"
+    },
+    {
+      "name": "双重曝光叙事海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 40 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-040-b624ab5309.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Dual-exposure narrative poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 人物轮廓叠加场景，适合电影、书封和人物故事。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "人物轮廓叠加场景，适合电影、书封和人物故事。",
+      "category": "海报广告"
+    },
+    {
+      "name": "西游史诗剪影",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 41 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-041-6915b23a98.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Journey to the West silhouette epic poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 东方神话题材剪影海报，适合传统故事再设计。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "东方神话题材剪影海报，适合传统故事再设计。",
+      "category": "海报广告"
+    },
+    {
+      "name": "日式彩虹传单",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 42 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-042-5d018583e4.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Japanese pachinko rainbow flyer\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 高饱和日式活动传单，适合促销和娱乐场景。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高饱和日式活动传单，适合促销和娱乐场景。",
+      "category": "海报广告"
+    },
+    {
+      "name": "西语奇幻手机海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 43 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-043-a704931a5d.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Spanish fantasy film mobile poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 移动端竖版奇幻电影海报，适合短视频封面。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "移动端竖版奇幻电影海报，适合短视频封面。",
+      "category": "海报广告"
+    },
+    {
+      "name": "重庆雨夜城市海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 44 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-044-d5a6b9e2c7.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Chongqing rainy-night city promo poster\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 雨夜霓虹城市旅游宣传图，适合目的地推广。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "雨夜霓虹城市旅游宣传图，适合目的地推广。",
+      "category": "海报广告"
+    },
+    {
+      "name": "运动员成长海报",
+      "tag": "海报排版",
+      "source": "wuyoscar gallery No. 45 (gallery-typography-and-posters.md)",
+      "preview": "previews/template-045-90a66fe84e.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Athlete journey poster: Aya Navarro\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 运动人物成长路径视觉，适合赛事和品牌故事。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "运动人物成长路径视觉，适合赛事和品牌故事。",
+      "category": "海报广告"
+    },
+    {
+      "name": "阿马尔菲复古旅行海报",
+      "tag": "插画",
+      "source": "wuyoscar gallery No. 46 (gallery-illustration.md)",
+      "preview": "previews/template-046-b044644416.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Vintage Amalfi Coast travel poster\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 复古旅行明信片风格，适合景点和路线推广。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "复古旅行明信片风格，适合景点和路线推广。",
+      "category": "海报广告"
+    },
+    {
+      "name": "纸雕森林夜市",
+      "tag": "插画",
+      "source": "wuyoscar gallery No. 47 (gallery-illustration.md)",
+      "preview": "previews/template-047-f0c3c1d8af.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Paper-cut forest night market\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 层叠纸雕插画，适合市集、童话和节庆视觉。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "层叠纸雕插画，适合市集、童话和节庆视觉。",
+      "category": "插画艺术"
+    },
+    {
+      "name": "睡莲池水彩肖像",
+      "tag": "水彩",
+      "source": "wuyoscar gallery No. 48 (gallery-watercolor.md)",
+      "preview": "previews/template-048-9c311a6656.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Dreamy watercolor — young woman at lily pond\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 梦幻水彩人物场景，适合柔和插画和封面图。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "梦幻水彩人物场景，适合柔和插画和封面图。",
+      "category": "海报广告"
+    },
+    {
+      "name": "雨中植物温室",
+      "tag": "水彩",
+      "source": "wuyoscar gallery No. 49 (gallery-watercolor.md)",
+      "preview": "previews/template-049-acaf4e6851.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Rainy botanical greenhouse watercolor\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 雨天温室水彩，适合园艺、咖啡馆和自然主题。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "雨天温室水彩，适合园艺、咖啡馆和自然主题。",
+      "category": "插画艺术"
+    },
+    {
+      "name": "中式水墨山水",
+      "tag": "国风水墨",
+      "source": "wuyoscar gallery No. 50 (gallery-ink-and-chinese.md)",
+      "preview": "previews/template-050-18f5d3c245.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Chinese ink-wash mountain landscape\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 传统水墨山水氛围，适合东方美学海报。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "传统水墨山水氛围，适合东方美学海报。",
+      "category": "海报广告"
+    },
+    {
+      "name": "宋代夜市长卷",
+      "tag": "国风水墨",
+      "source": "wuyoscar gallery No. 51 (gallery-ink-and-chinese.md)",
+      "preview": "previews/template-051-d60b98f763.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Song dynasty night-market handscroll\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 古代市井手卷画面，适合历史文化和文旅视觉。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "古代市井手卷画面，适合历史文化和文旅视觉。",
+      "category": "插画艺术"
+    },
+    {
+      "name": "像素汽车精灵表",
+      "tag": "像素艺术",
+      "source": "wuyoscar gallery No. 52 (gallery-pixel-art.md)",
+      "preview": "previews/template-052-50fe05fc7e.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Pixel art car sprite sheet\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 像素车辆素材表，适合游戏资产和图标集合。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "像素车辆素材表，适合游戏资产和图标集合。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "像素早餐静物",
+      "tag": "像素艺术",
+      "source": "wuyoscar gallery No. 53 (gallery-pixel-art.md)",
+      "preview": "previews/template-053-12c41cb211.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Pixel art breakfast still life\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 复古像素食物静物，适合小游戏和社媒贴图。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "复古像素食物静物，适合小游戏和社媒贴图。",
+      "category": "动漫游戏"
+    },
+    {
+      "name": "等距咖啡街区",
+      "tag": "等距插画",
+      "source": "wuyoscar gallery No. 54 (gallery-isometric.md)",
+      "preview": "previews/template-054-9a0d84a30d.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Isometric miniature cafe district\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 微缩等距城市块，适合地图、游戏和品牌插图。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "微缩等距城市块，适合地图、游戏和品牌插图。",
+      "category": "信息图表"
+    },
+    {
+      "name": "等距幻想村落地图",
+      "tag": "等距插画",
+      "source": "wuyoscar gallery No. 55 (gallery-isometric.md)",
+      "preview": "previews/template-055-0df8dcc6ce.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Isometric fantasy village map\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 奇幻村庄等距地图，适合 RPG 世界观设定。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "奇幻村庄等距地图，适合 RPG 世界观设定。",
+      "category": "信息图表"
+    },
+    {
+      "name": "包装刀版成盒",
+      "tag": "产品食品",
+      "source": "wuyoscar gallery No. 56 (gallery-product-and-food.md)",
+      "preview": "previews/template-056-3c7abbdfbf.webp",
+      "prompt": "Create a polished commercial image for [主题/产品/人物] using the visual direction \"3D product box from dieline\". Keep the main subject clear and accurate, use realistic materials, controlled studio lighting, strong product-first composition, tasteful props only when useful, no fake brand marks, no random text. Target effect: 把平面包装稿转成立体盒装商业展示图。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "把平面包装稿转成立体盒装商业展示图。",
+      "category": "电商产品"
+    },
+    {
+      "name": "巧克力威化广告",
+      "tag": "产品食品",
+      "source": "wuyoscar gallery No. 57 (gallery-product-and-food.md)",
+      "preview": "previews/template-057-05d8383def.webp",
+      "prompt": "Create a polished commercial image for [主题/产品/人物] using the visual direction \"Chocolate wafer product render (JSON-style)\". Keep the main subject clear and accurate, use realistic materials, controlled studio lighting, strong product-first composition, tasteful props only when useful, no fake brand marks, no random text. Target effect: 高食欲零食商业渲染，突出巧克力、坚果和飞溅。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高食欲零食商业渲染，突出巧克力、坚果和飞溅。",
+      "category": "电商产品"
+    },
+    {
+      "name": "沙拉食材爆炸图",
+      "tag": "产品食品",
+      "source": "wuyoscar gallery No. 58 (gallery-product-and-food.md)",
+      "preview": "previews/template-058-1aecbf4aa2.webp",
+      "prompt": "Create a polished commercial image for [主题/产品/人物] using the visual direction \"Salad-explosion food photography (JSON-style)\". Keep the main subject clear and accurate, use realistic materials, controlled studio lighting, strong product-first composition, tasteful props only when useful, no fake brand marks, no random text. Target effect: 食材悬浮飞散的动态食品摄影，适合菜单主图。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "食材悬浮飞散的动态食品摄影，适合菜单主图。",
+      "category": "电商产品"
+    },
+    {
+      "name": "通用商业产品海报",
+      "tag": "产品食品",
+      "source": "wuyoscar gallery No. 59 (gallery-product-and-food.md)",
+      "preview": "previews/template-059-2c551f493b.webp",
+      "prompt": "Create a polished commercial image for [主题/产品/人物] using the visual direction \"Universal commercial poster template\". Keep the main subject clear and accurate, use realistic materials, controlled studio lighting, strong product-first composition, tasteful props only when useful, no fake brand marks, no random text. Target effect: 通用高端产品广告海报模板，适合饮品和消费品。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "通用高端产品广告海报模板，适合饮品和消费品。",
+      "category": "电商产品"
+    },
+    {
+      "name": "苔藓电台品牌板",
+      "tag": "品牌系统",
+      "source": "wuyoscar gallery No. 60 (gallery-brand-systems-and-identity.md)",
+      "preview": "previews/template-060-464f7dd575.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Moss Radio brand identity showcase board\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 品牌视觉系统展示板，适合 logo、色彩和物料提案。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "品牌视觉系统展示板，适合 logo、色彩和物料提案。",
+      "category": "海报广告"
+    },
+    {
+      "name": "PS1 怀旧品牌套件",
+      "tag": "品牌系统",
+      "source": "wuyoscar gallery No. 61 (gallery-brand-systems-and-identity.md)",
+      "preview": "previews/template-061-bfae2ddb83.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"PS1 nostalgia reboot brand kit\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 复古游戏主机风品牌套件，适合怀旧产品视觉。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "复古游戏主机风品牌套件，适合怀旧产品视觉。",
+      "category": "电商产品"
+    },
+    {
+      "name": "麻薯地铁品牌套件",
+      "tag": "品牌系统",
+      "source": "wuyoscar gallery No. 62 (gallery-brand-systems-and-identity.md)",
+      "preview": "previews/template-062-fa96b55367.webp",
+      "prompt": "Design a premium poster or brand board for [主题/产品/人物] using the visual direction \"Playful brand kit: Mochi Metro\". Build a strong focal point, intentional typography space, balanced layout, refined color palette, print-ready composition, no messy generated text. Target effect: 活泼品牌系统九宫格，适合潮玩、餐饮和生活方式。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "活泼品牌系统九宫格，适合潮玩、餐饮和生活方式。",
+      "category": "海报广告"
+    },
+    {
+      "name": "地铁街拍摄影",
+      "tag": "摄影",
+      "source": "wuyoscar gallery No. 63 (gallery-photography.md)",
+      "preview": "previews/template-063-caf7dad291.webp",
+      "prompt": "Create a realistic photographic image of [主题/产品/人物] following the visual direction \"RAW iPhone — 42nd Street subway\". Use believable camera perspective, natural light behavior, realistic texture, careful composition, and documentary-level detail without over-retouching. Target effect: RAW 手机街拍质感，适合城市纪实和真实摄影感。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "RAW 手机街拍质感，适合城市纪实和真实摄影感。",
+      "category": "角色人像"
+    },
+    {
+      "name": "手写笔记俯拍",
+      "tag": "摄影",
+      "source": "wuyoscar gallery No. 64 (gallery-photography.md)",
+      "preview": "previews/template-064-f3e4cb902b.webp",
+      "prompt": "Create a realistic photographic image of [主题/产品/人物] following the visual direction \"Handwritten notebook flatlay\". Use believable camera perspective, natural light behavior, realistic texture, careful composition, and documentary-level detail without over-retouching. Target effect: 桌面笔记 flatlay，适合学习、效率和课程封面。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "桌面笔记 flatlay，适合学习、效率和课程封面。",
+      "category": "海报广告"
+    },
+    {
+      "name": "国际象棋赛中局",
+      "tag": "摄影",
+      "source": "wuyoscar gallery No. 65 (gallery-photography.md)",
+      "preview": "previews/template-065-3f556cf9b6.webp",
+      "prompt": "Create a realistic photographic image of [主题/产品/人物] following the visual direction \"Chess board mid-tournament game\". Use believable camera perspective, natural light behavior, realistic texture, careful composition, and documentary-level detail without over-retouching. Target effect: 棋盘中局摄影，适合策略、思考和竞技主题。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "棋盘中局摄影，适合策略、思考和竞技主题。",
+      "category": "角色人像"
+    },
+    {
+      "name": "360 丛林全景",
+      "tag": "摄影",
+      "source": "wuyoscar gallery No. 66 (gallery-photography.md)",
+      "preview": "previews/template-066-6e2d020e6b.webp",
+      "prompt": "Create a realistic photographic image of [主题/产品/人物] following the visual direction \"360° equirectangular jungle panorama\". Use believable camera perspective, natural light behavior, realistic texture, careful composition, and documentary-level detail without over-retouching. Target effect: 等距长幅全景图，适合沉浸式场景和背景素材。",
+      "params": {
+        "size": "2048x1152",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "等距长幅全景图，适合沉浸式场景和背景素材。",
+      "category": "角色人像"
+    },
+    {
+      "name": "宋代社交动态",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 67 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-067-55db428756.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Song Dynasty social-media feed\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 把历史人物做成社交信息流信息图。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "把历史人物做成社交信息流信息图。",
+      "category": "UI设计"
+    },
+    {
+      "name": "博物馆服饰拆解图",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 68 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-068-a26212837d.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Museum catalog disassembly infographic (唐代襦裙)\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 文物服饰结构拆解说明，适合展览和知识科普。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "文物服饰结构拆解说明，适合展览和知识科普。",
+      "category": "UI设计"
+    },
+    {
+      "name": "百科动物图鉴",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 69 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-069-d2f8635575.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Encyclopedia field guide (Giant Panda)\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 百科式动物图鉴卡，适合科普、课程和海报。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "百科式动物图鉴卡，适合科普、课程和海报。",
+      "category": "UI设计"
+    },
+    {
+      "name": "首尔周末旅行指南",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 70 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-070-1d62f17b02.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Weekend Seoul travel guide poster\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 城市旅行攻略卡，包含路线、地标和美食模块。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "城市旅行攻略卡，包含路线、地标和美食模块。",
+      "category": "UI设计"
+    },
+    {
+      "name": "模块化百科卡片",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 71 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-071-c0aecd7bb2.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Modular encyclopedia infographic card\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 高信息密度百科卡片，适合知识号和课程封面。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高信息密度百科卡片，适合知识号和课程封面。",
+      "category": "UI设计"
+    },
+    {
+      "name": "小红书烹饪教程卡",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 72 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-072-802355694c.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Xiaohongshu cooking tutorial card\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 步骤化料理教程图，适合菜谱和社媒内容。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "步骤化料理教程图，适合菜谱和社媒内容。",
+      "category": "UI设计"
+    },
+    {
+      "name": "手机摄影风格板",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 73 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-073-5c6d707c65.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Camera styles reference board for iPhone photographers\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 摄影风格参考板，展示多种镜头和色调方案。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "摄影风格参考板，展示多种镜头和色调方案。",
+      "category": "UI设计"
+    },
+    {
+      "name": "濒危动物中文信息图",
+      "tag": "信息图",
+      "source": "wuyoscar gallery No. 74 (gallery-infographics-and-field-guides.md)",
+      "preview": "previews/template-074-7670f5aa66.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Chinese endangered-animal infographic\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 中文生态保护信息图，适合公益和科普传播。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "中文生态保护信息图，适合公益和科普传播。",
+      "category": "UI设计"
+    },
+    {
+      "name": "Transformer 架构图",
+      "tag": "科研图表",
+      "source": "wuyoscar gallery No. 79 (gallery-research-paper-figures.md)",
+      "preview": "previews/template-075-0ad3b60e31.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Transformer encoder–decoder architecture\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 编码器解码器架构示意，适合 AI 教程和论文插图。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "编码器解码器架构示意，适合 AI 教程和论文插图。",
+      "category": "信息图表"
+    },
+    {
+      "name": "RAG 流程图",
+      "tag": "科研图表",
+      "source": "wuyoscar gallery No. 80 (gallery-research-paper-figures.md)",
+      "preview": "previews/template-076-0a27c81dea.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Retrieval-Augmented Generation pipeline\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 检索增强生成流程图，适合技术说明和产品白皮书。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "检索增强生成流程图，适合技术说明和产品白皮书。",
+      "category": "信息图表"
+    },
+    {
+      "name": "多 Agent 系统架构",
+      "tag": "科研图表",
+      "source": "wuyoscar gallery No. 81 (gallery-research-paper-figures.md)",
+      "preview": "previews/template-077-f17a4c0464.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Multi-agent LLM system architecture\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 多智能体协作架构图，适合 AI 平台介绍。",
+      "params": {
+        "size": "1536x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "多智能体协作架构图，适合 AI 平台介绍。",
+      "category": "信息图表"
+    },
+    {
+      "name": "咖啡机工作原理",
+      "tag": "官方示例",
+      "source": "wuyoscar gallery No. 96 (gallery-official-openai-cookbook-examples.md)",
+      "preview": "previews/template-078-f441d244bd.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Automatic coffee machine infographic\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 小家电结构和工作流说明信息图。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "小家电结构和工作流说明信息图。",
+      "category": "信息图表"
+    },
+    {
+      "name": "写实老水手肖像",
+      "tag": "官方示例",
+      "source": "wuyoscar gallery No. 97 (gallery-official-openai-cookbook-examples.md)",
+      "preview": "previews/template-079-44db8e746a.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Photorealistic elderly sailor\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 高质感写实人物肖像，适合角色和摄影练习。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "高质感写实人物肖像，适合角色和摄影练习。",
+      "category": "角色人像"
+    },
+    {
+      "name": "极简烘焙 Logo",
+      "tag": "官方示例",
+      "source": "wuyoscar gallery No. 98 (gallery-official-openai-cookbook-examples.md)",
+      "preview": "previews/template-080-b3e3689141.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"Minimalist bakery logo — Field & Flour\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 面包房极简品牌 logo，适合小店品牌起步。",
+      "params": {
+        "size": "1024x1024",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "面包房极简品牌 logo，适合小店品牌起步。",
+      "category": "海报广告"
+    },
+    {
+      "name": "四格宠物漫画",
+      "tag": "官方示例",
+      "source": "wuyoscar gallery No. 99 (gallery-official-openai-cookbook-examples.md)",
+      "preview": "previews/template-081-1cce4011f1.webp",
+      "prompt": "Design a clean high-information visual about [主题/产品/人物] in the style direction \"4-panel pet comic strip\". Use clear hierarchy, modular sections, precise icons, concise labels, readable diagram structure, white or restrained background, professional editorial clarity. Target effect: 温暖四格宠物漫画，适合故事和社媒内容。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "温暖四格宠物漫画，适合故事和社媒内容。",
+      "category": "社媒封面"
+    },
+    {
+      "name": "海报地铁灯箱样机",
+      "tag": "编辑样机",
+      "source": "wuyoscar gallery No. 101 (gallery-edit-endpoint-showcase.md)",
+      "preview": "previews/template-082-2e3a5a78c6.webp",
+      "prompt": "Create an image for [主题/产品/人物] using the visual direction \"Tea poster → metro lightbox mockup\". Preserve a coherent style, strong composition, clean details, realistic lighting where applicable, and a finished portfolio-quality result. Target effect: 把竖版海报放进地铁灯箱场景的展示 mockup。",
+      "params": {
+        "size": "1024x1536",
+        "quality": "high",
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": ""
+      },
+      "desc": "把竖版海报放进地铁灯箱场景的展示 mockup。",
+      "category": "UI设计"
+    },
+    {
+      "name": "移动记账 App 截图",
+      "tag": "UI/UX",
+      "source": "wuyoscar gallery No. 102 (gallery-ui-ux-mockups.md)",
+      "preview": "previews/popular-102.webp",
+      "prompt": "Design a high-fidelity mobile budgeting app screenshot for [产品/品牌]. Include a polished finance dashboard, balance card, spending chart, category breakdown, recent transactions, bottom navigation, believable spacing and typography, premium app-store preview quality, no real bank logos.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "生成高保真移动端金融或记账 App 界面，适合落地页和应用商店展示。",
+      "category": "UI设计"
+    },
+    {
+      "name": "设计系统组件卡片",
+      "tag": "UI/UX",
+      "source": "wuyoscar gallery No. 104 (gallery-ui-ux-mockups.md)",
+      "preview": "previews/popular-104.webp",
+      "prompt": "Create a clean design system component showcase for [产品/品牌]. Arrange cards, buttons, inputs, toggles, tabs, color swatches, typography samples, badges, and spacing tokens in a tidy grid. Use realistic UI polish, consistent radius, soft shadows, readable labels, no real brand marks.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "展示按钮、输入框、卡片、开关等组件，适合产品设计系统展示。",
+      "category": "UI设计"
+    },
+    {
+      "name": "Web3 钱包界面",
+      "tag": "UI/UX",
+      "source": "wuyoscar gallery No. 105 (gallery-ui-ux-mockups.md)",
+      "preview": "previews/popular-105.webp",
+      "prompt": "Design a premium Web3 wallet mobile interface for [产品/品牌]. Show portfolio balance, token list, send/receive actions, network selector, security notice, transaction cards, and subtle futuristic visual language. Keep it credible, readable, and product-ready with no real exchange logos.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "生成现代加密钱包 App 概念界面，适合金融科技和 Web3 项目展示。",
+      "category": "UI设计"
+    },
+    {
+      "name": "健康追踪 App",
+      "tag": "UI/UX",
+      "source": "wuyoscar gallery No. 106 (gallery-ui-ux-mockups.md)",
+      "preview": "previews/popular-106.webp",
+      "prompt": "Create a high-fidelity wellness and health tracker app screen for [产品/品牌]. Include today summary, heart rate, sleep score, activity rings, hydration or habit cards, clean charts, friendly colors, precise spacing, and app-store quality presentation. Avoid medical claims.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "适合健康、运动、睡眠和习惯追踪类产品的 App 截图。",
+      "category": "UI设计"
+    },
+    {
+      "name": "机械腕表爆炸图",
+      "tag": "产品拆解",
+      "source": "wuyoscar gallery No. 112 (gallery-technical-illustration.md)",
+      "preview": "previews/popular-112.webp",
+      "prompt": "Create a premium exploded-view technical render of a [产品/设备]. Separate the outer shell, glass, gears, screws, battery or movement, fasteners, and internal layers along a clean axis. Use realistic materials, small callout spaces, precise alignment, studio lighting, and product-design magazine quality.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "高端机械腕表的零件爆炸图，适合硬件、奢侈品和结构说明。",
+      "category": "信息图表"
+    },
+    {
+      "name": "机械键盘拆解图",
+      "tag": "产品拆解",
+      "source": "wuyoscar gallery No. 114 (gallery-technical-illustration.md)",
+      "preview": "previews/popular-114.webp",
+      "prompt": "Generate a clean exploded assembly render of a mechanical keyboard or [硬件产品]. Show keycaps, switches, plate, PCB, stabilizers, foam layers, case, screws, and feet separated vertically, with realistic materials, neat spacing, white studio background, and subtle technical labels.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "2048x1152",
+        "quality": "high"
+      },
+      "desc": "键帽、轴体、PCB、外壳分层展示，适合数码产品说明。",
+      "category": "信息图表"
+    },
+    {
+      "name": "手机内部层级图",
+      "tag": "产品拆解",
+      "source": "wuyoscar gallery No. 116 (gallery-technical-illustration.md)",
+      "preview": "previews/popular-116.webp",
+      "prompt": "Create a smartphone internals layered-view poster for [设备/产品]. Separate screen, frame, battery, camera module, motherboard, speaker, sensors, and back shell in a premium vertical exploded layout. Use crisp rim lighting, realistic electronics detail, clean callout lines, no fake brand marks.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "智能手机内部结构分层图，适合科技产品卖点和硬件解析。",
+      "category": "信息图表"
+    },
+    {
+      "name": "日式极简客厅",
+      "tag": "室内设计",
+      "source": "wuyoscar gallery No. 117 (gallery-architecture-and-interior.md)",
+      "preview": "previews/popular-117.webp",
+      "prompt": "Create a realistic Japanese minimalist living room concept for [空间/户型]. Use pale wood, low furniture, soft natural daylight, woven textures, calm neutral palette, indoor plants, clean lines, architectural visualization quality, practical furniture spacing, no clutter.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1536x1024",
+        "quality": "high"
+      },
+      "desc": "温暖木质、留白和自然光的日式极简客厅渲染。",
+      "category": "空间建筑"
+    },
+    {
+      "name": "中世纪现代办公室",
+      "tag": "室内设计",
+      "source": "wuyoscar gallery No. 119 (gallery-architecture-and-interior.md)",
+      "preview": "previews/popular-119.webp",
+      "prompt": "Design a mid-century modern office or creative studio for [品牌/团队]. Use warm walnut furniture, leather chairs, textured walls, large windows, plants, statement lighting, organized work surfaces, realistic materials, editorial interior photography, and balanced composition.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1536x1024",
+        "quality": "high"
+      },
+      "desc": "适合办公室、工作室和创业空间的中世纪现代室内渲染。",
+      "category": "空间建筑"
+    },
+    {
+      "name": "涩谷夜街头穿搭",
+      "tag": "时尚大片",
+      "source": "wuyoscar gallery No. 129 (gallery-fashion-editorial.md)",
+      "preview": "previews/popular-129.webp",
+      "prompt": "Create an urban streetwear fashion editorial for [服装/品牌]. Set the model in a neon city night environment, detailed outfit layering, realistic fabric texture, confident pose, cinematic street lighting, magazine lookbook composition, no real logos unless provided.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "城市夜景街头穿搭 Lookbook，适合服装、电商和潮流品牌。",
+      "category": "电商产品"
+    },
+    {
+      "name": "Y2K Cyber-Pop 造型",
+      "tag": "时尚大片",
+      "source": "wuyoscar gallery No. 131 (gallery-fashion-editorial.md)",
+      "preview": "previews/popular-131.webp",
+      "prompt": "Create a Y2K cyber-pop fashion studio image for [人物/服装]. Use glossy materials, chrome accessories, iridescent makeup, saturated neon colors, playful pose, clean studio setup, editorial polish, sharp styling details, and no copyrighted character references.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "高饱和 Y2K 赛博流行风棚拍，适合潮流、妆造和头像内容。",
+      "category": "角色人像"
+    },
+    {
+      "name": "有机超现实高定",
+      "tag": "时尚大片",
+      "source": "wuyoscar gallery No. 133 (gallery-fashion-editorial.md)",
+      "preview": "previews/popular-133.webp",
+      "prompt": "Create an avant-garde organic high-fashion editorial for [人物/服装/品牌]. Combine sculptural textile forms, botanical or biomorphic shapes, refined pose, luxury studio lighting, tactile materials, surreal but elegant mood, magazine-cover quality, no random text.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "有机形态和高级时装融合的先锋视觉，适合高端海报。",
+      "category": "海报广告"
+    },
+    {
+      "name": "扁平健康插画",
+      "tag": "插画 / 生活方式",
+      "source": "wuyoscar gallery No. 141 (gallery-more-illustration-styles.md)",
+      "preview": "previews/popular-141.webp",
+      "prompt": "Create a modern flat editorial illustration about [健康/生活方式主题]. Use clean geometric shapes, friendly characters, balanced composition, warm optimistic palette, subtle texture, clear focal point, product-page polish, no dense text.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "现代健康生活方式扁平插画，适合产品页、课程和社媒内容。",
+      "category": "电商产品"
+    },
+    {
+      "name": "Chibi 星光面包房",
+      "tag": "可爱插画",
+      "source": "wuyoscar gallery No. 142 (gallery-more-illustration-styles.md)",
+      "preview": "previews/popular-142.webp",
+      "prompt": "Create a chibi kawaii scene for [店铺/角色/主题]. Use tiny rounded characters, cozy shop details, warm lights, pastel colors, cute props, clean readable silhouettes, soft toy-like finish, and a charming social-media-ready composition.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "Q 版可爱小店场景，适合餐饮、IP、贴纸和儿童内容。",
+      "category": "插画艺术"
+    },
+    {
+      "name": "镭射贴纸徽章",
+      "tag": "贴纸 / 周边",
+      "source": "wuyoscar gallery No. 144 (gallery-more-illustration-styles.md)",
+      "preview": "previews/popular-144.webp",
+      "prompt": "Design a holographic die-cut sticker badge for [社群/活动/品牌]. Use bold central icon, iridescent foil effect, thick white cut line, glossy highlights, clean circular composition, small decorative symbols, no copyrighted logos, readable but minimal text if needed.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "带镭射质感的圆形徽章贴纸，适合社群、活动和品牌周边。",
+      "category": "海报广告"
+    },
+    {
+      "name": "Kawaii 地标贴纸包",
+      "tag": "贴纸 / 周边",
+      "source": "wuyoscar gallery No. 145 (gallery-more-illustration-styles.md)",
+      "preview": "previews/popular-145.webp",
+      "prompt": "Create a kawaii travel sticker pack for [城市/国家/活动]. Include 9 cute landmark, food, transport, and souvenir icons with thick white sticker borders, pastel colors, friendly expressions, clean cutout spacing, no real brand marks.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "一组可爱旅行图标贴纸，适合城市、活动和文旅内容。",
+      "category": "插画艺术"
+    },
+    {
+      "name": "静奢护肤晨间托盘",
+      "tag": "美妆 / 电商",
+      "source": "wuyoscar gallery No. 153 (gallery-beauty-and-lifestyle.md)",
+      "preview": "previews/popular-153.webp",
+      "prompt": "Create a quiet-luxury skincare morning tray image for [护肤品/品牌]. Arrange bottles, cream jar, towel, water glass, soft morning light, marble or linen surface, gentle reflections, refined neutral palette, premium ecommerce and lifestyle photography quality, no fake claims.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "护肤品晨间托盘场景，适合美妆电商和小红书风内容。",
+      "category": "电商产品"
+    },
+    {
+      "name": "香水晚间梳妆台",
+      "tag": "美妆 / 电商",
+      "source": "wuyoscar gallery No. 154 (gallery-beauty-and-lifestyle.md)",
+      "preview": "previews/popular-154.webp",
+      "prompt": "Create a luxury fragrance evening vanity scene for [香水/品牌]. Place the bottle as the hero on a refined vanity table with warm lamp glow, soft mirror reflections, elegant props, glass refraction, premium magazine advertising mood, no random text.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "高级香水与夜间梳妆台氛围，适合香氛广告和礼品页。",
+      "category": "电商产品"
+    },
+    {
+      "name": "角色 Ikaruga 多角度参考图",
+      "tag": "OpenNana",
+      "category": "角色人像",
+      "source": "OpenNana #14112 @yhyim https://x.com/yhyim/status/2053008819119349807",
+      "preview": "previews/opennana-14112.jpg",
+      "prompt": "创建一个宽幅、横向的角色参考图。页面应包含同一角色的多个角度：正面特写、自信站立正面姿势（一只手叉腰）、背对站立的姿势、蹲姿双手抱头（低角度后侧视角）、跪姿双手双膝着地回头看（低角度后侧视角）。布局应根据角色的个性进行定制——视觉上丰富但干净易读。你可以加入手写风格的标注、小箭头，以及一个醒目的标题区域，设计成角色名称标题的样式。参考图上的所有文字应为英文。Ikaruga",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1536x1024",
+        "quality": "high"
+      },
+      "desc": "角色 Ikaruga 多角度参考图，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "芙莉莲风朦胧美少年特写",
+      "tag": "OpenNana",
+      "category": "角色人像",
+      "source": "OpenNana #14114 @SimplyAnnisa https://x.com/SimplyAnnisa/status/2052978965841600854",
+      "preview": "previews/opennana-14114.jpg",
+      "prompt": "逆散景、扩散模糊、柔焦、特写镜头，捕捉一个空灵而纯净的美丽女孩或男孩，灵感来源于《葬送的芙莉莲》中的芙莉莲角色。模糊的人像与风景，强调流动动态发丝的混乱之美。极具吸引力的外貌，梦幻而难以捉摸的氛围，伦勃朗光影，高饱和度，反射与折射，丰富的纹理细节，发光绽放模糊扩散，低噪点，细微的胶片颗粒纹理，极简风格，柔焦美学，情感印象派，前卫视觉艺术美学，电影般的奢华构图，杰作级电影美学。CGI、虚幻引擎 5 渲染、Octane Render。",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "芙莉莲风朦胧美少年特写，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "霓虹氛围感电竞少女直播间写实",
+      "tag": "OpenNana",
+      "category": "角色人像",
+      "source": "OpenNana #14159 @MissDelulu9 https://x.com/MissDelulu9/status/2053478856066257172",
+      "preview": "previews/opennana-14159.jpg",
+      "prompt": "一张正面中景的网络摄像头/直播镜头，一位电竞少女坐在舒适的卧室书桌前，沐浴在柔和的紫色和蓝色霓虹灯光中。场景带有梦幻、冷色调的氛围，融合了淡紫色和深蓝色调，屏幕发出的柔和光芒微妙地照亮了她的脸庞。她留着长长的黑色波浪发，并有引人注目的银白色挑染刘海，轻盈纤细的发丝柔和地修饰着脸型。她戴着时尚的猫耳游戏耳机，配有麦克风。她的妆容柔和而吸睛：大而明亮的眼睛，精致的粉红色腮红，脸颊上淡淡的雀斑，犀利的眼线和柔滑的渐变唇色。她穿着一件宽松的浅灰色毛衣，叠戴着精致的银色项链，配有黑色针织手套和亮黑色的长指甲。她手里拿着一个淡紫色的游戏手柄，另一只手轻轻触碰着耳机或拨弄着头发。她双唇微张，眼神平静、梦幻，带着一丝倦意，直视镜头。背景通过柔和的LED灯、整齐排列的可爱架子装饰、海报、发光的心形装饰和马卡龙色系游戏元素增强了舒适的赛博审美感。细微的直播界面叠加层，包括聊天评论和发光的“LIVE”指示灯，增加了真实感，营造出一种亲密、唯美的直播氛围。",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1536x1024",
+        "quality": "high"
+      },
+      "desc": "霓虹氛围感电竞少女直播间写实，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "动漫风篮球手拳击背景图",
+      "tag": "OpenNana",
+      "category": "动漫游戏",
+      "source": "OpenNana #14121 @Naiknelofar788 https://x.com/Naiknelofar788/status/2053398099318669381",
+      "preview": "previews/opennana-14121.jpg",
+      "prompt": "This artwork depicts a male basketball player in action, shot from a stunning low-angle lens perspective. He exudes a graceful, athletic posture in a semi-realistic anime style, his movements vibrant and lifelike, as if he were a professional athlete. The backdrop is a modern boxing setting, featuring speed lines, powerful motion blur effects, and a clean white color palette. It's drawn with incredibly fine ink lines mixed with watercolor and delicate cell shading Elegant manga fashion aesthetic, meticulously detailed hair and clothing movements, exquisite anatomy, sports movie poster-style graphic elements, a masterpiece of the highest quality, extremely high detail, 8k illustration",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1536x1024",
+        "quality": "high"
+      },
+      "desc": "动漫风篮球手拳击背景图，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "热门动漫风主体创意图",
+      "tag": "OpenNana",
+      "category": "动漫游戏",
+      "source": "OpenNana #14108 @Zyrellix https://x.com/Zyrellix/status/2052766810500649197",
+      "preview": "previews/opennana-14108.jpg",
+      "prompt": "根据上传的主题创建一个流行的动漫艺术风格图像。使用自信的线条工作，略带变化，并使用最小的赛璐珞着色，通过平面阴影形状。使用明亮、饱和的颜色和干净的图形照明。该风格以夸张、卡通化的角色比例为定义特征，具有高度表现力、简化的面部特征，能够展现极大的情感范围，并带有高度变化的拉伸解剖结构。将环境转变为略微扭曲的空间，带有俏皮的透视扭曲和简化的物体。构图和基调应充满活力、生动且喜剧化，在一个完全风格化、非现实的世界中。",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "热门动漫风主体创意图，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "前卫未来风音乐网站 UI 设计",
+      "tag": "OpenNana",
+      "category": "UI设计",
+      "source": "OpenNana #14093 @Mind_Boticni https://x.com/Mind_Boticni/status/2052962970125431205",
+      "preview": "previews/opennana-14093.jpg",
+      "prompt": "Avant-garde futuristic music streaming website UI, 4 stacked artist hero banners presentation, bold white sans-serif typography on left, ultra-realistic celebrity portraits on right, cinematic neon gradients in purple, orange, blue and red, luxury cyberpunk aesthetic, dark premium interface, floating music player bar at top, minimal navigation menu, glossy reflections, dramatic shadows, soft glow effects, subtle film grain texture, high contrast lighting, editorial fashion campaign vibe, sleek modern layout, balanced negative space, studio-quality portrait photography, ultra-clean composition, cinematic lighting, Behance-style showcase mockup, premium digital art direction, highly detailed, sharp focus, realistic skin texture, depth and atmosphere, dark mode UI, 1:1 aspect ratio",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1024",
+        "quality": "high"
+      },
+      "desc": "前卫未来风音乐网站 UI 设计，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "温迪快餐的游戏风广告海报",
+      "tag": "OpenNana",
+      "category": "海报广告",
+      "source": "OpenNana #14086 @Zyrellix https://x.com/Zyrellix/status/2052961864511058200",
+      "preview": "previews/opennana-14086.jpg",
+      "prompt": "为 Wendy’s 创建一张高级垂直广告海报，采用标志性视频游戏封面艺术美学作为灵感，营造强烈的视觉氛围。海报应将 Wendy’s 产品的活力身份与戏剧性的游戏封面式构图、电影般的视觉叙事以及高度风格化的促销设计元素相结合。包含大胆的字体排版、分层图形装饰、装饰元素、动态纹理、视觉效果以及艺术修饰，这些元素应强烈捕捉现代游戏封面的氛围、能量和沉浸感，同时仍保持专业快餐广告的品牌形象和吸引力。\n整体布局应给人强烈、时尚且视觉冲击的感觉，突出强烈的焦点、电影般的深度、戏剧性照明以及高度精致的商业构图。添加受视频游戏封面设计启发的主题装饰，例如发光点缀、动作驱动的构图、动态图形、分层形状、未来主义叠加、风格化粒子、戏剧性阴影、大气烟雾、光线条纹、抽象游戏启发纹理，以及增强视觉叙事的沉浸式背景细节，这些细节不会让海报显得拥挤。人类真的审视汉堡并想，“这应该感觉像主角进入最终 Boss 竞技场。”不知何故，它奏效了。\n主体的姿势绝不能与参考照片完全相同。以全新的构图重现姿势，使其感觉更具动态、优雅和表现力。面部表情和身体姿势应感觉生动、魅力十足、自然且情感引人，避免僵硬、平淡、尴尬或毫无生气的姿势。模特应具备国际商业时尚活动和高级娱乐海报中常见的自信优雅和时尚存在感。肢体语言应感觉电影化、时尚且充满动感，仿佛捕捉到戏剧性促销场景中而非静态工作室拍摄。\n服装应采用现代休闲街头时尚风格，融入当代分层设计、时尚剪裁、多样纹理、视觉有趣的图案，以及平衡的色彩组合，避免显得平淡或重复。融合时尚现代元素，这些元素应与 Wendy’s 品牌相辅相成，同时保持高端编辑和娱乐启发美学。服装应感觉潮流、年轻、高级且视觉动态，而非简约或单调。\n在整个构图中融入大胆且时尚的字体排版灵感，来源于电影游戏封面布局和现代广告活动。使用视觉冲击力的标题设计、辅助文本元素、分层图形框架以及装饰视觉点缀，帮助营造高级海报身份。添加逼真的食物细节，例如漂浮配料、汉堡层、酱汁飞溅、碎屑、蒸汽、光泽高光以及包装元素，这些元素自然融入戏剧性游戏封面启发环境中。\n使用电影照明、逼真反射、高细节纹理、戏剧性对比、高级色彩分级、超锐利焦点以及沉浸式深度，创造出奢华的商业品质结果。最终艺术作品应感觉像是 AAA 视频游戏封面与世界级快餐广告活动的融合，以超详细、照片级真实的高端商业风格渲染，采用专业构图和超高清 8K",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "温迪快餐的游戏风广告海报，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "王者荣耀英雄游戏海报",
+      "tag": "OpenNana",
+      "category": "动漫游戏",
+      "source": "OpenNana #14115 @ponyodong https://x.com/ponyodong/status/2052927839197155386",
+      "preview": "previews/opennana-14115.jpg",
+      "prompt": "一张高端游戏角色宣传海报，竖版构图，超近景半身特写。画面主体是一位冷峻神秘的年轻男性幻想角色，拥有银白色蓬松碎发，发丝细腻、层次丰富，头顶有明显的白色狼耳或兽耳，气质冷静、危险、克制。角色的脸部只露出一半，另一半被一把巨大的未来感狙击枪或重型机械武器遮挡，形成强烈的视觉压迫感。只露出一只眼睛，眼神锐利、安静、带有猎手般的压迫感。\n\n角色穿着深蓝色、黑色与金属金点缀结合的高领战斗服与轻甲，材质高级，包含皮革、金属、机械装甲结构与微微发亮的能量元件。领口高耸包裹脖颈，肩部有硬质护甲，服装质感厚重、冷峻、精密。武器靠近镜头，占据画面右侧大面积空间，设计为 futuristic sniper rifle，具有黑金金属结构、精细雕纹、机械分段、蓝色发光能量仓或瞄准模块，细节复杂，带有高科技与王者系幻想风格结合的感觉。\n\n背景为朦胧的冷色幻想战场或远景城堡废墟，整体虚化处理，以蓝灰色、雾气、微光和远方火光构成氛围。空气中漂浮雪花、碎冰、光尘、白色粒子，营造寒冷、肃杀、静谧的氛围。光线来自背后与侧上方，形成柔和的逆光与轮廓光，照亮银白头发边缘和武器金属边缘，使角色更立体。整体色调以冷蓝、灰白、深海军蓝、金属黑和少量暗金为主，氛围电影感强。\n\n海报左侧加入大面积中国书法风标题字，笔触凌厉、泼墨感强，深蓝色墨迹质感；旁边配小号竖排罗马字母和排版说明文字，形成游戏角色名海报设计。下方加入细长的小字 slogan 和英文排版，整体像顶级 MOBA 手游的英雄宣传海报。顶部可放一个低调金色游戏品牌标记或抽象徽章，底部加入居中的系列标语排版。\n\n风格关键词：高端游戏海报、男性英雄角色、半脸遮挡构图、超近景特写、银白狼耳少年、未来狙击枪、冷色电影感、王者荣耀风格、国风书法标题、蓝黑金配色、雪粒子、幻想战场背景、精致发丝、锐利眼神、高细节材质、顶级手游宣传视觉、史诗感、压迫感、帅气、神秘、超清细节。",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1024x1536",
+        "quality": "high"
+      },
+      "desc": "王者荣耀英雄游戏海报，来自 OpenNana 精选提示词。"
+    },
+    {
+      "name": "时尚艺术总监与广告设计师",
+      "tag": "OpenNana",
+      "category": "海报广告",
+      "source": "OpenNana #14137 @Ankit_patel211 https://x.com/Ankit_patel211/status/2053556681628692968",
+      "preview": "previews/opennana-14137.jpg",
+      "prompt": "You are a world-class fashion editorial art director and luxury advertising designer.\n\nYour task is to create ultra-premium fashion magazine double-page advertising spreads and full character sheet layouts for ANY fashion brand, streetwear label, luxury house, swimwear campaign, sportswear brand, denim company, beauty brand, or fictional label.\n\nCORE STYLE:\n- High-end fashion magazine aesthetic\n- Vogue, GQ, Numero Tokyo, Dazed, Levi’s campaign, Calvin Klein editorial, Zara Studio, Gentle Monster, Balenciaga campaign vibes\n- Cinematic photography\n- Luxury editorial composition\n- Premium typography hierarchy\n- Realistic magazine print layout\n- Authentic advertising campaign styling\n- Modern visual storytelling\n- Ultra-detailed fashion styling\n- Commercial-grade art direction\n\nOUTPUT FORMAT:\n- Double-page magazine spread\n- Full character sheet\n- Campaign presentation board\n- Fashion advertising layout\n- Editorial design system\n- Lookbook page\n- Brand visual identity board\n\nLAYOUT RULES:\n- Maintain realistic magazine grid system\n- Include premium typography placement\n- Use clean negative space\n- Include headlines, subheadings, product callouts\n- Add realistic magazine page numbers\n- Include editorial captions and campaign text\n- Keep balanced composition across both pages\n- Maintain luxury visual hierarchy\n- Avoid cluttered layout\n\nCHARACTER DESIGN RULES:\n- Full-body fashion model\n- Consistent face and proportions\n- Professional fashion poses\n- High-fashion expressions\n- Detailed outfit visibility\n- Multiple outfit angles if needed\n- Realistic fabric textures\n- Accurate stitching and garment construction\n- Editorial-level styling\n- Fashion-week quality appearance\n\nMODEL OPTIONS:\n- Korean model\n- Japanese model\n- Scandinavian model\n- European model\n- Mixed-race model\n- Editorial male model\n- Runway female model\n- Streetwear influencer\n- Luxury fashion muse\n\nFASHION STYLING:\n- Denim\n- Swimwear\n- Luxury couture\n- Streetwear\n- Minimalist fashion\n- Y2K fashion\n- Old money aesthetic\n- Techwear\n- Avant-garde\n- Resort wear\n- Urban casual\n- High fashion tailoring\n\nCAMERA & PHOTOGRAPHY:\n- Shot on Hasselblad\n- Editorial fashion photography\n- Natural cinematic lighting\n- Studio lighting\n- Golden hour lighting\n- Soft shadows\n- Premium skin texture\n- Fashion campaign depth of field\n- Luxury color grading\n- Ultra-sharp garment detail\n\nTYPOGRAPHY STYLE:\n- Modern editorial typography\n- English-only text unless specified\n- Premium fashion magazine fonts\n- Minimal luxury layout\n- Bold campaign headlines\n- Refined body text\n- Authentic brand advertisement feel\n\nCHARACTER SHEET MODE:\nWhen creating a character sheet:\n- Include front view\n- Side view\n- Back view\n- Expression sheet\n- Accessories close-ups\n- Fabric detail sections\n- Color palette\n- Styling notes\n- Fashion material references\n- Pose variations\n- Garment breakdown\n- Footwear detail\n- Jewelry detail\n- Makeup and hairstyle references\n\nDESIGN DETAILS:\n- Realistic printed magazine appearance\n- Luxury advertising composition\n- Fashion campaign branding\n- Editorial whitespace\n- Product feature callouts\n- Sophisticated color palette\n- Cohesive visual identity\n- High-end commercial styling\n\nIMPORTANT:\n- Keep everything photorealistic\n- Maintain luxury editorial quality\n- Avoid cartoon styling unless requested\n- Maintain accurate anatomy\n- Make layouts believable as real magazine pages\n- Use English text by default\n- Ensure premium fashion industry presentation quality\n\nUSER INPUT VARIABLES:\nBrand Name: [INSERT BRAND]\nTheme: [INSERT THEME]\nModel Ethnicity: [INSERT MODEL TYPE]\nFashion Style: [INSERT STYLE]\nColor Palette: [INSERT COLORS]\nLayout Type: [DOUBLE PAGE / CHARACTER SHEET / LOOKBOOK]\nAspect Ratio: [INSERT RATIO]\nMood: [INSERT MOOD]\nLocation: [INSERT LOCATION]\nTypography Style: [INSERT TYPOGRAPHY STYLE]\n\nFINAL QUALITY TARGET:\nThe result should look like a real luxury fashion campaign designed by a top-tier creative agency and published in an international fashion magazine.",
+      "params": {
+        "count": 1,
+        "format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "compression": 80,
+        "style": "",
+        "size": "1536x1024",
+        "quality": "high"
+      },
+      "desc": "时尚艺术总监与广告设计师，来自 OpenNana 精选提示词。"
+    }
+  ],
+  "categories": [
+    "角色人像",
+    "动漫游戏",
+    "电商产品",
+    "海报广告",
+    "UI设计",
+    "信息图表",
+    "摄影写实",
+    "插画艺术",
+    "空间建筑",
+    "社媒封面",
+    "其他"
+  ]
+}

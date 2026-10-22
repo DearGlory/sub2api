@@ -132,4 +132,7 @@ func registerRoutes(
 	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, auditLog, settingService, panelRateLimiter, redisClient)
 
 	handler.RegisterPageRoutes(v1, cfg.Pricing.DataDir, gin.HandlerFunc(jwtAuth), gin.HandlerFunc(adminAuth), settingService)
+
+	// 生图广场模板库：从数据目录直读，运维在服务器上增删模板无需重打二进制
+	handler.RegisterImageGenAssetRoutes(v1, cfg.Pricing.DataDir)
 }

@@ -186,6 +186,17 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'modelPlaza.title'
     }
   },
+  {
+    path: '/image-studio',
+    alias: ['/imagegen'],
+    name: 'ImageGen',
+    component: () => import('@/views/ImageGenView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Image Studio',
+      titleKey: 'imagegen.title'
+    }
+  },
 
   // ==================== User Routes ====================
   {
