@@ -831,14 +831,25 @@ func (s *OpenAIGatewayService) calculateOpenAIVideoCost(
 	resolution := NormalizeVideoBillingResolutionOrDefault(result.VideoResolution)
 	durationSeconds := NormalizeVideoBillingDurationSecondsOrDefault(result.VideoDurationSeconds)
 	resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey)
-	if resolved != nil && resolved.Source == PricingSourceGroup && resolved.Mode == BillingModeVideo {
+	// 分组价卡的计费口径必须被尊重：
+	//   - video：管理员为每个分辨率配了按秒价，用量 = 次数 × 时长；
+	//   - per_request / image：管理员配的是按次价，用量 = 次数，不乘时长。
+	// 早期版本只接受 video，导致 per_request 卡被静默跳过、落到下面的
+	// CalculateVideoCost（分组 video_model_prices 或代码默认按秒价），
+	// 表现为「价卡按次 0.2 却按秒扣费」。
+	if resolved != nil && resolved.Source == PricingSourceGroup &&
+		(resolved.Mode == BillingModeVideo || resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage) {
 		gid := apiKey.Group.ID
-		cost, err := s.billingService.CalculateCostUnified(CostInput{
+		input := CostInput{
 			Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
-			UsageUnits: float64(videoCount * durationSeconds), SizeTier: resolution,
+			RequestCount: videoCount, SizeTier: resolution,
 			RateMultiplier: multiplier, Resolver: s.resolver, Resolved: resolved,
 			ReasoningEffort: optionalStringValue(result.ReasoningEffort),
-		})
+		}
+		if resolved.Mode == BillingModeVideo {
+			input.UsageUnits = float64(videoCount * durationSeconds)
+		}
+		cost, err := s.billingService.CalculateCostUnified(input)
 		if err == nil {
 			return cost
 		}
