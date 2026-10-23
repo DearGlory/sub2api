@@ -484,52 +484,16 @@ func TestChannelMonitorV2CatalogFilterClearsMultiSelectDimensions(t *testing.T) 
 	require.Equal(t, []int64{3}, configuredChannelMonitorV2GroupIDs(filter, cfg))
 }
 
-func TestRetainObservableGroupsKeepsMonitoredAndTrafficked(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	repo := &channelMonitorV2Repository{db: db}
+func TestConfiguredGroupIDsDriveMatrixSeedUnconditionally(t *testing.T) {
+	// The board shows exactly what the operator put in group_ids. A group with no
+	// monitor and no traffic must still seed a row — that is the "I enabled this
+	// group, why is it missing" case.
+	catalog := service.ChannelMonitorV2Filter{}
+	cfg := service.ChannelMonitorV2Config{GroupIDs: []int64{17, 129}}
+	require.Equal(t, []int64{17, 129}, configuredChannelMonitorV2GroupIDs(catalog, cfg))
 
-	// Groups 17 and 20 have an enabled monitor.
-	mock.ExpectQuery("JOIN channel_monitors").
-		WithArgs(sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(17)).AddRow(int64(20)))
-
-	// Group 129 has traffic but no monitor yet — a freshly enabled group.
-	// Group 30 has neither, so it is the only one dropped.
-	facts := []channelMonitorV2Fact{
-		{GroupID: 17, Platform: "grok"},
-		{GroupID: 129, Platform: "anthropic"},
-	}
-	got, err := repo.retainObservableGroups(context.Background(), []int64{17, 20, 30, 129}, facts)
-	require.NoError(t, err)
-	// Order follows the input so the board keeps a stable row order.
-	require.Equal(t, []int64{17, 20, 129}, got)
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-// A group created and enabled but not yet monitored must still appear: V2 already
-// measured its traffic, and dropping it reads as "the group I just added is
-// missing".
-func TestRetainObservableGroupsKeepsTrafficOnlyGroup(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	repo := &channelMonitorV2Repository{db: db}
-
-	mock.ExpectQuery("JOIN channel_monitors").
-		WithArgs(sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}))
-
-	facts := []channelMonitorV2Fact{{GroupID: 129, Platform: "anthropic"}}
-	got, err := repo.retainObservableGroups(context.Background(), []int64{129}, facts)
-	require.NoError(t, err)
-	require.Equal(t, []int64{129}, got)
-}
-
-func TestRetainObservableGroupsKeepsEmptyInput(t *testing.T) {
-	repo := &channelMonitorV2Repository{}
-	got, err := repo.retainObservableGroups(context.Background(), nil, nil)
-	require.NoError(t, err)
-	require.Empty(t, got)
+	// A multi-select filter narrows it, but never re-adds or drops on coverage.
+	cfg.GroupIDs = []int64{17, 20, 30, 129}
+	filter := service.ChannelMonitorV2Filter{GroupIDs: []int64{129}}
+	require.Equal(t, []int64{129}, configuredChannelMonitorV2GroupIDs(filter, cfg))
 }

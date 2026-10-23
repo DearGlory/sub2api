@@ -399,19 +399,14 @@ func (r *channelMonitorV2Repository) GetMatrix(ctx context.Context, filter servi
 		}
 		seedGroupIDs = allIDs
 	}
-	// A group belongs on the board if it can be measured at all: either it has an
-	// enabled monitor (so V3 can probe it) or it has real traffic in the window (so
-	// V2 already measured it). Dropping a group because it has no monitor hid
-	// freshly configured groups that were live but not yet monitored, which reads
-	// as "the group I just added never appears".
+	// A group configured in group_ids belongs on the board — the operator put it
+	// there. Do not second-guess that with monitor or traffic coverage: a group
+	// freshly enabled and not yet probed or trafficked is exactly the case where
+	// filtering hides the row and reads as "the group I just added never appears".
+	// (An earlier version filtered to groups with a monitor or traffic; it hid
+	// newly configured groups and was wrong.)
 	groupScoped := groupBy == service.ChannelMonitorV2GroupByPlatformGroup ||
 		groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel
-	if groupScoped {
-		seedGroupIDs, err = r.retainObservableGroups(ctx, seedGroupIDs, facts)
-		if err != nil {
-			return nil, err
-		}
-	}
 	observableIDs := make(map[int64]struct{}, len(seedGroupIDs))
 	for _, id := range seedGroupIDs {
 		observableIDs[id] = struct{}{}
@@ -678,53 +673,6 @@ func channelMonitorV2CatalogFilter(filter service.ChannelMonitorV2Filter) servic
 	catalog.GroupIDs = nil
 	catalog.Models = nil
 	return catalog
-}
-
-// retainObservableGroups keeps groups the board can actually say something about:
-// groups with an enabled monitor (probed by V3) plus groups that already have
-// traffic in the queried window (measured by V2).
-//
-// Filtering on monitors alone is wrong. A group created and enabled a minute ago
-// has live traffic but no monitor yet, so a monitor-only filter drops it and the
-// board looks like the group was never added. Traffic is the stronger signal — if
-// V2 recorded requests, there is something to draw.
-func (r *channelMonitorV2Repository) retainObservableGroups(ctx context.Context, groupIDs []int64, facts []channelMonitorV2Fact) ([]int64, error) {
-	if len(groupIDs) == 0 {
-		return groupIDs, nil
-	}
-	keep := make(map[int64]struct{}, len(groupIDs))
-
-	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT g.id FROM groups g JOIN channel_monitors m ON m.group_name = g.name AND m.enabled WHERE g.id = ANY($1)`, pq.Array(groupIDs))
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			_ = rows.Close()
-			return nil, err
-		}
-		keep[id] = struct{}{}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return nil, err
-	}
-	_ = rows.Close()
-
-	for _, fact := range facts {
-		if fact.GroupID > 0 {
-			keep[fact.GroupID] = struct{}{}
-		}
-	}
-
-	out := make([]int64, 0, len(keep))
-	for _, id := range groupIDs {
-		if _, ok := keep[id]; ok {
-			out = append(out, id)
-		}
-	}
-	return out, nil
 }
 
 func configuredChannelMonitorV2GroupIDs(filter service.ChannelMonitorV2Filter, cfg service.ChannelMonitorV2Config) []int64 {
