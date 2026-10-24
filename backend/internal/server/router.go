@@ -80,6 +80,13 @@ func SetupRouter(
 		log.Printf("Warning: failed to load poison guard settings: %v", err)
 	}
 	poison.SetStore(poisonStore)
+	// 启动时明确记录一次生效配置。守卫的命中日志只在真的拦到投毒时才出现，
+	// 没有这一行就无法区分「开着但没命中」和「根本没开」，排查时只能靠猜。
+	if snap := poison.CurrentSnapshot(); snap != nil {
+		veto, strong, weak, threshold := snap.Detector.Summary()
+		log.Printf("[poison] config loaded enabled=%v upstream_prefixes=%d veto=%d strong=%d weak=%d threshold=%d head_buffer=%d rotate_max=%d",
+			snap.Enabled, snap.Scope.Count(), veto, strong, weak, threshold, snap.Detector.HeadRunes(), snap.RotateMax)
+	}
 	r.Use(poison.Middleware())
 
 	// Serve embedded frontend with settings injection if available

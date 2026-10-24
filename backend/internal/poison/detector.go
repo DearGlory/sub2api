@@ -128,6 +128,25 @@ func (d *Detector) indexOfLower(lower string) int {
 // MaxKeywordRunes 返回最长关键词的字符数，流式回退保留长度据此计算。
 func (d *Detector) MaxKeywordRunes() int { return d.maxRunes }
 
+// Summary 汇总当前判定器规模，仅用于启动日志：让「开了但没命中」和「根本没开」
+// 在日志里能区分开。
+func (d *Detector) Summary() (veto, strong, weak, threshold int) {
+	if d == nil {
+		return 0, 0, 0, 0
+	}
+	for _, w := range d.words {
+		switch w.level {
+		case LevelVeto:
+			veto++
+		case LevelStrong:
+			strong++
+		case LevelWeak:
+			weak++
+		}
+	}
+	return veto, strong, weak, d.threshold
+}
+
 // Release 在确认放行后交出全部保留内容。
 //
 // 只有在逐字核对策略允许提前放出时才可用；常规收尾应调用 Flush，由它先做一次

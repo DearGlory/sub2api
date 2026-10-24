@@ -32,6 +32,14 @@ func NewScope(prefixes []string, enabled bool) *Scope {
 // Enabled 报告准入判定是否具备生效条件。
 func (s *Scope) Enabled() bool { return s != nil && s.enabled }
 
+// Count 返回已配置的上游前缀数量，仅用于启动日志。
+func (s *Scope) Count() int {
+	if s == nil {
+		return 0
+	}
+	return len(s.prefixes)
+}
+
 // Match 判断账号是否进入检测：必须同时命中上游前缀且有代理。
 //
 // baseURL 需要匹配 host 与端口前缀，允许 openai 协议带 /v1 后缀，因此按字符串前缀
