@@ -185,16 +185,47 @@ func TestWriterAccounting(t *testing.T) {
 	c, rec := newGuardContext(t, activeSnapshot(), "https://kedaya.ai", true)
 	gw := StatusGuard(c)
 
-	// 写一段远超保留长度的正常内容。
-	if _, err := c.Writer.Write([]byte("普通回复内容，这段足够长可以越过保留窗口正常释放给客户端。")); err != nil {
+	// 写一段远超开头扣留窗口的正常内容，确保越过窗口后有字节真正放出。
+	long := strings.Repeat("普通回复内容，", 60)
+	if _, err := c.Writer.Write([]byte(long)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	committedAfterClean := gw.Committed()
 	if committedAfterClean == 0 {
-		t.Fatal("clean prefix should be committed")
+		t.Fatal("clean content past the head window should be committed")
 	}
 	if rec.Body.Len() != committedAfterClean {
 		t.Fatalf("recorder len=%d committed=%d", rec.Body.Len(), committedAfterClean)
+	}
+	// 未写出的部分应恰好是开头扣留窗口内的字符。
+	committedRunes := len([]rune(string([]byte(long)[:committedAfterClean])))
+	heldRunes := len([]rune(long)) - committedRunes
+	if heldRunes != activeSnapshot().Detector.HeadRunes() {
+		t.Fatalf("held runes=%d want head window %d", heldRunes, activeSnapshot().Detector.HeadRunes())
+	}
+}
+
+// TestWriterHoldsHeadWindow 验证开头窗口内的内容一律不写给客户端，
+// 这样命中投毒时响应头尚未提交，仍能返回错误状态码。
+func TestWriterHoldsHeadWindow(t *testing.T) {
+	c, rec := newGuardContext(t, activeSnapshot(), "https://kedaya.ai", true)
+	gw := StatusGuard(c)
+
+	if _, err := c.Writer.Write([]byte("短回复")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := gw.Committed(); got != 0 {
+		t.Fatalf("content inside head window must not be committed, got %d", got)
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("client must see nothing yet, got %q", rec.Body.String())
+	}
+	// 正常收尾时释放，内容完整送达。
+	if gw.Finish() {
+		t.Fatal("clean content must not be blocked on finish")
+	}
+	if got := rec.Body.String(); got != "短回复" {
+		t.Fatalf("finish must release held content, got %q", got)
 	}
 }
 

@@ -16,12 +16,18 @@ func attachPoisonGuard(c *gin.Context, account *service.Account) {
 	if c == nil || account == nil {
 		return
 	}
-	poison.AttachFromAccount(c, poison.AccountInfo{
+	info := poison.AccountInfo{
 		BaseURL:   account.GetCredential("base_url"),
 		HasProxy:  account.ProxyID != nil,
 		AccountID: account.ID,
 		ProxyID:   account.ProxyID,
-	})
+	}
+	// 代理详情已内联在账号上时直接取用，出口 IP 判定要用到 host/port。
+	if account.Proxy != nil {
+		info.ProxyHost = account.Proxy.Host
+		info.ProxyPort = account.Proxy.Port
+	}
+	poison.AttachFromAccount(c, info)
 }
 
 // poisonGuardBlocked 报告当前请求是否已被判定为投毒。

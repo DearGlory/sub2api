@@ -19,6 +19,7 @@ const (
 	SettingRotateMax        = "poison_guard_rotate_max"
 	SettingEgressProbe      = "poison_guard_egress_probe"
 	SettingBlockMessage     = "poison_guard_block_message"
+	SettingHeadBuffer       = "poison_guard_head_buffer"
 )
 
 // AllSettings 是本功能读取的全部配置键，删除功能时按此清单清理。
@@ -33,8 +34,17 @@ func AllSettings() []string {
 		SettingRotateMax,
 		SettingEgressProbe,
 		SettingBlockMessage,
+		SettingHeadBuffer,
 	}
 }
+
+// DefaultHeadBufferRunes 是流式响应开头默认扣留的字符数。
+//
+// 投毒文案固定在回复开头，扣住开头约一句话的长度就能让判定在任何字节发出之前
+// 完成；此时响应头尚未提交，命中后仍可返回完整错误状态码。取值需覆盖最短投毒
+// 文案（「您好，这里是 https://kedaya.ai 中转站，您正在使用一个被盗取的key」
+// 的前半段），96 个字符足够覆盖其中文与 URL 混合的形态。
+const DefaultHeadBufferRunes = 96
 
 // DefaultBlockMessage 与现有上游错误文案保持一致，不暴露投毒事实。
 const DefaultBlockMessage = "Upstream request failed"
@@ -49,9 +59,11 @@ func DefaultUpstreamPrefixes() []string {
 	}
 }
 
-func DefaultVetoKeywords() []string   { return []string{"kedaya", "kedaya.ai"} }
-func DefaultStrongKeywords() []string { return []string{"盗取", "盗用", "偷取", "窃取"} }
-func DefaultWeakKeywords() []string   { return []string{"Key", "密钥"} }
+func DefaultVetoKeywords() []string { return []string{"kedaya", "kedaya.ai"} }
+func DefaultStrongKeywords() []string {
+	return []string{"盗取", "盗用", "偷取", "窃取", "这里是"}
+}
+func DefaultWeakKeywords() []string { return []string{"Key", "密钥", "您好"} }
 
 // SettingsFetcher 返回当前生效的配置快照。由接线层注入，避免本包依赖 service。
 type SettingsFetcher func() (map[string]string, error)
@@ -134,11 +146,14 @@ func parse(values map[string]string) *Snapshot {
 	weak := parseList(get, SettingKeywordsWeak, DefaultWeakKeywords)
 	threshold := parseInt(get, SettingThreshold, 3)
 
+	headBuffer := parseInt(get, SettingHeadBuffer, DefaultHeadBufferRunes)
+
 	snap.Detector = NewDetector(Config{
-		Veto:      veto,
-		Strong:    strong,
-		Weak:      weak,
-		Threshold: threshold,
+		Veto:            veto,
+		Strong:          strong,
+		Weak:            weak,
+		Threshold:       threshold,
+		HeadBufferRunes: headBuffer,
 	})
 	snap.Scope = NewScope(parseList(get, SettingUpstreamPrefixes, DefaultUpstreamPrefixes), true)
 

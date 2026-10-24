@@ -9,7 +9,7 @@ import (
 
 // AccountInfo 是接线层从账号对象提取的最小信息集合。
 //
-// 刻意只保留两个字段，避免本包依赖 service 包的具体类型；接线处负责填充。
+// 刻意只保留必要字段，避免本包依赖 service 包的具体类型；接线处负责填充。
 type AccountInfo struct {
 	// BaseURL 是账号上游地址原文，来自 credentials.base_url。
 	BaseURL string
@@ -19,6 +19,10 @@ type AccountInfo struct {
 	AccountID int64
 	// ProxyID 为 nil 表示未配置代理；仅用于日志与轮换。
 	ProxyID *int64
+	// ProxyHost / ProxyPort 用于判定出口 IP：静态代理的 host 就是出口 IP，
+	// 域名形式的代理需要探测。缺省时跳过出口 IP 记录。
+	ProxyHost string
+	ProxyPort int
 }
 
 // 包级默认 Store：由路由初始化时注入，供各 handler 在账号确定后读取当前配置。
@@ -70,6 +74,12 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	if info.ProxyID != nil {
 		c.Set(ContextKeyProxyID, *info.ProxyID)
 	}
+	if info.ProxyHost != "" {
+		c.Set(ContextKeyProxyHost, info.ProxyHost)
+	}
+	if info.ProxyPort > 0 {
+		c.Set(ContextKeyProxyPort, info.ProxyPort)
+	}
 	return true
 }
 
@@ -77,6 +87,8 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 const (
 	ContextKeyAccountID = "poison_guard_account_id"
 	ContextKeyProxyID   = "poison_guard_proxy_id"
+	ContextKeyProxyHost = "poison_guard_proxy_host"
+	ContextKeyProxyPort = "poison_guard_proxy_port"
 )
 
 // NormalizeBaseURL 去掉结尾斜杠，便于前缀比较。

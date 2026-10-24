@@ -55,6 +55,13 @@ type Detector struct {
 	maxRunes int
 	// threshold 是 strong+weak 去重后触发判定的词数下限。
 	threshold int
+	// headRunes 是流式响应开头必须扣留、不写给客户端的字符数。
+	//
+	// 投毒文案固定在开头，扣住开头意味着判定可以在任何字节发出之前完成：
+	// 一旦命中，响应头尚未提交，仍能改成完整的错误状态码，客户端看不到任何
+	// 投毒内容。超过该窗口后不再能回滚状态码，只能靠 holdback 保证关键词
+	// 本身不泄露。
+	headRunes int
 }
 
 // Config 是构造 Detector 的输入。
@@ -67,13 +74,18 @@ type Config struct {
 	Weak []string
 	// Threshold 为 strong+weak 去重命中数达到即判定；小于 1 时取 3。
 	Threshold int
+	// HeadBufferRunes 是开头扣留字符数；小于 1 时取默认值。
+	HeadBufferRunes int
 }
 
 // NewDetector 构造判定器。空关键词会被忽略，同一词出现在多级时以更高一级为准。
 func NewDetector(cfg Config) *Detector {
-	d := &Detector{threshold: cfg.Threshold}
+	d := &Detector{threshold: cfg.Threshold, headRunes: cfg.HeadBufferRunes}
 	if d.threshold < 1 {
 		d.threshold = 3
+	}
+	if d.headRunes < 1 {
+		d.headRunes = DefaultHeadBufferRunes
 	}
 
 	add := func(list []string, level Level) {
@@ -116,6 +128,20 @@ func (d *Detector) indexOfLower(lower string) int {
 // MaxKeywordRunes 返回最长关键词的字符数，流式回退保留长度据此计算。
 func (d *Detector) MaxKeywordRunes() int { return d.maxRunes }
 
+// Release 在确认放行后交出全部保留内容。
+//
+// 只有在逐字核对策略允许提前放出时才可用；常规收尾应调用 Flush，由它先做一次
+// 整体复核。该方法与 Flush 的区别是不再判定，用于上游已确认干净的场景。
+func (g *StreamGuard) Release() string {
+	if g == nil || g.blocked || len(g.buf) == 0 {
+		return ""
+	}
+	out := string(g.buf)
+	g.released += len(g.buf)
+	g.buf = nil
+	return out
+}
+
 // HoldBackRunes 是流式下必须始终留在缓冲区、尚未写给客户端的字符数。
 //
 // 取最长关键词长度减一：任何起始于已释放位置之后的关键词，其最后一段字符必然
@@ -125,6 +151,14 @@ func (d *Detector) HoldBackRunes() int {
 		return 0
 	}
 	return d.maxRunes - 1
+}
+
+// HeadRunes 返回开头扣留窗口的字符数。
+func (d *Detector) HeadRunes() int {
+	if d == nil || d.headRunes < 0 {
+		return 0
+	}
+	return d.headRunes
 }
 
 // Inspect 对完整文本做一次判定，用于非流式响应与错误正文。
@@ -169,8 +203,10 @@ func (d *Detector) Inspect(text string) Result {
 // 使用方式是每次拿到上游的一段文本就 Feed；只有在 Feed 返回 VerdictPass 时才可
 // 把给出的文本写回客户端。返回 VerdictBlock 时必须丢弃缓冲区并把响应改成错误。
 type StreamGuard struct {
-	d        *Detector
-	buf      []rune
+	d   *Detector
+	buf []rune
+	// pending 保存上游分片尾部尚未闭合的 UTF-8 字节，等下一段补齐再判定。
+	pending  []byte
 	released int
 	seen     map[int]struct{}
 	counted  int
@@ -192,6 +228,10 @@ func (d *Detector) NewStreamGuard() *StreamGuard {
 //
 // 返回的字符串一定是缓冲区中「不可能再构成任何关键词」的前缀，因此调用方直接
 // 写出即可，不存在关键词先于判定泄露的窗口。
+//
+// chunk 按字节喂入即可：上游分片可能把一个多字节字符切成两半，因此未闭合的
+// 尾部字节会被留在缓冲区等下一段补齐；直接 []rune(chunk) 会把半截 UTF-8 变成
+// 替换字符，使中文关键词永久失配。
 func (g *StreamGuard) Feed(chunk string) (string, Verdict) {
 	if g == nil || g.d == nil || len(g.d.words) == 0 {
 		return chunk, VerdictPass
@@ -200,15 +240,41 @@ func (g *StreamGuard) Feed(chunk string) (string, Verdict) {
 		return "", VerdictBlock
 	}
 	if chunk != "" {
-		g.buf = append(g.buf, []rune(chunk)...)
+		g.pending = append(g.pending, chunk...)
+		// 只把完整的 UTF-8 序列并入缓冲区，剩余不完整字节等下一段。
+		complete := completeRunePrefix(g.pending)
+		if complete > 0 {
+			g.buf = append(g.buf, []rune(string(g.pending[:complete]))...)
+			g.pending = append(g.pending[:0], g.pending[complete:]...)
+		}
 	}
 	if res := g.scanBuffer(); res.Poisoned {
 		g.blocked = true
 		g.reason = res.Reason
 		g.buf = nil
+		g.pending = nil
 		return "", VerdictBlock
 	}
 	return g.drain(), VerdictPass
+}
+
+// completeRunePrefix 返回 b 中可作为完整 UTF-8 序列处理的前缀长度。
+func completeRunePrefix(b []byte) int {
+	n := len(b)
+	if n == 0 {
+		return 0
+	}
+	// 从末尾回退，最多 3 个字节即可确定最后一个 rune 是否完整。
+	for back := 1; back <= 4 && back <= n; back++ {
+		i := n - back
+		if utf8.RuneStart(b[i]) {
+			if utf8.FullRune(b[i:]) {
+				return n
+			}
+			return i
+		}
+	}
+	return n
 }
 
 // Flush 在上游结束时调用，释放剩余保留内容。上游正常收尾时缓冲区不可能还含有
@@ -220,8 +286,13 @@ func (g *StreamGuard) Flush() (string, Verdict) {
 	if g.blocked {
 		return "", VerdictBlock
 	}
-	if len(g.buf) == 0 {
+	if len(g.buf) == 0 && len(g.pending) == 0 {
 		return "", VerdictPass
+	}
+	// 上游结束时剩下的不完整字节一并按替换字符处理，避免静默丢弃内容。
+	if len(g.pending) > 0 {
+		g.buf = append(g.buf, []rune(string(g.pending))...)
+		g.pending = nil
 	}
 	if res := g.scanBuffer(); res.Poisoned {
 		g.blocked = true
@@ -286,9 +357,17 @@ func (g *StreamGuard) scanBuffer() Result {
 	return Result{Matched: g.matched}
 }
 
-// drain 交出不可能再构成关键词的前缀，保留末尾 HoldBackRunes 个字符。
+// drain 交出不可能再构成关键词的前缀。
+//
+// 保留长度取 max(开头扣留窗口 - 已交出字符数, 最长关键词长度 - 1)：
+//   - 开头窗口保证判定在第一个字节写出之前完成，使响应头仍可改成错误状态码；
+//   - 关键词回退保证任何关键词都不会先于判定被写出。
 func (g *StreamGuard) drain() string {
 	hold := g.d.HoldBackRunes()
+	// 开头窗口：还没交出够 headRunes 个字符时，剩余部分全部扣留。
+	if remain := g.d.headRunes - g.released; remain > hold {
+		hold = remain
+	}
 	if hold >= len(g.buf) {
 		return ""
 	}

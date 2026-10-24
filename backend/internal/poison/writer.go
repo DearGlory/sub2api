@@ -166,14 +166,19 @@ func (w *GuardWriter) WriteString(data string) (int, error) {
 }
 
 // Flush 在未判定时透传，命中后不再刷出任何内容。
+//
+// 只有在已经真正写出内容后才向下刷：否则 gin 的 Flush 会顺带提交 200 状态行，
+// 一旦随后判定为投毒，就再也发不出错误状态码，客户端会看到「200 + 空响应」。
+// 尚未写出内容时保持头部未提交，命中后仍能改成完整错误响应。
 func (w *GuardWriter) Flush() {
 	if w == nil {
 		return
 	}
 	w.mu.Lock()
 	blocked := w.blocked
+	committed := w.committed
 	w.mu.Unlock()
-	if blocked {
+	if blocked || committed == 0 {
 		return
 	}
 	w.ResponseWriter.Flush()
@@ -285,6 +290,19 @@ func quoteJSON(s string) string {
 	}
 	b = append(b, '"')
 	return string(b)
+}
+
+// Reason 返回判定原因，未判定时为空。
+func (w *GuardWriter) Reason() string {
+	if w == nil {
+		return ""
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if be, ok := w.blockErr.(*BlockedError); ok && be != nil {
+		return be.Reason
+	}
+	return ""
 }
 
 // StatusGuard 返回本请求的 GuardWriter，未启用检测时返回 nil。

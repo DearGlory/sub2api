@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"log/slog"
 	"net/http"
@@ -42,6 +43,9 @@ func ProvideRouter(
 	settingService *service.SettingService,
 	compositeResolver *service.CompositeRouteResolver,
 	redisClient *redis.Client,
+	db *sql.DB,
+	accountService *service.AccountService,
+	proxyService *service.ProxyService,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -50,6 +54,10 @@ func ProvideRouter(
 	r := gin.New()
 	r.Use(middleware2.Recovery())
 	configureTrustedProxies(r, cfg.Server)
+
+	// 投毒检测命中后的处置：拉黑出口 IP、轮换代理、必要时停用账号。
+	// 未启用检测时这些回调不会被触发；删除本功能时同时删掉这一行。
+	handler.SetupPoisonGuard(db, proxyService, accountService)
 
 	// Wire up websearch Manager builder so it initializes on startup and rebuilds on config save.
 	settingService.SetWebSearchManagerBuilder(context.Background(), func(cfg *service.WebSearchEmulationConfig, proxyURLs map[int64]string) {

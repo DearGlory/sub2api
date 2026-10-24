@@ -134,6 +134,7 @@ func TestAllSettingsListsEveryKey(t *testing.T) {
 		SettingRotateMax:        true,
 		SettingEgressProbe:      true,
 		SettingBlockMessage:     true,
+		SettingHeadBuffer:       true,
 	}
 	if len(keys) != len(want) {
 		t.Fatalf("AllSettings len=%d want %d", len(keys), len(want))

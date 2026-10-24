@@ -38,5 +38,9 @@ func Middleware() gin.HandlerFunc {
 			message = snap.BlockMsg
 		}
 		gw.WriteError(DefaultBlockStatus, message)
+
+		// 命中后的副作用：拉黑出口 IP、轮换代理、必要时停用账号。
+		// 在响应收尾之后异步执行，不影响客户已经拿到的错误。
+		Dispatch(c, gw.Reason())
 	}
 }
