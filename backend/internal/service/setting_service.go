@@ -379,10 +379,36 @@ func (s *SettingService) GetAllSettings(ctx context.Context) (*SystemSettings, e
 	return s.parseSettings(settings), nil
 }
 
+// GetRawSettings 按 key 读取原始字符串值，供不进入 SystemSettings 的
+// 独立功能读取自身配置。缺失的 key 不会出现在返回的 map 中。
+func (s *SettingService) GetRawSettings(ctx context.Context, keys []string) (map[string]string, error) {
+	if len(keys) == 0 {
+		return map[string]string{}, nil
+	}
+	return s.settingRepo.GetMultiple(ctx, keys)
+}
+
 // SetOnUpdateCallback sets a callback function to be called when settings are updated
 // This is used for cache invalidation (e.g., HTML cache in frontend server)
 func (s *SettingService) SetOnUpdateCallback(callback func()) {
 	s.onUpdate = callback
+}
+
+// AddOnUpdateCallback 在已有回调之后追加一个监听者，不覆盖先前注册的回调。
+// 供需要响应设置变更的独立功能使用，避免与前端缓存失效等既有回调互相覆盖。
+func (s *SettingService) AddOnUpdateCallback(callback func()) {
+	if callback == nil {
+		return
+	}
+	prev := s.onUpdate
+	if prev == nil {
+		s.onUpdate = callback
+		return
+	}
+	s.onUpdate = func() {
+		prev()
+		callback()
+	}
 }
 
 // SubscribeChannelMonitorRuntime registers a listener that is invoked after

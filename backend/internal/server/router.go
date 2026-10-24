@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/poison"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -70,6 +71,17 @@ func SetupRouter(
 	}))
 	r.Use(middleware2.ServerTiming(cfg.Server.EnableServerTiming))
 
+	// 投毒检测：读取配置、支持热更新，并在请求收尾时统一处置。
+	// 该中间件负责释放保留尾部与改写命中后的响应；是否真正检测由账号准入决定。
+	poisonStore := poison.NewStore(func() (map[string]string, error) {
+		return settingService.GetRawSettings(context.Background(), poison.AllSettings())
+	})
+	if err := poisonStore.Reload(); err != nil {
+		log.Printf("Warning: failed to load poison guard settings: %v", err)
+	}
+	poison.SetStore(poisonStore)
+	r.Use(poison.Middleware())
+
 	// Serve embedded frontend with settings injection if available
 	if web.HasEmbeddedFrontend() {
 		frontendServer, err := web.NewFrontendServer(settingService) //nolint:staticcheck // SA4023: the !embed stub always errors; embed builds can return nil
@@ -88,6 +100,13 @@ func SetupRouter(
 	} else {
 		settingService.SetOnUpdateCallback(refreshFrameOrigins)
 	}
+
+	// 投毒检测配置热更新：追加监听，不覆盖前端缓存失效等既有回调。
+	settingService.AddOnUpdateCallback(func() {
+		if err := poisonStore.Reload(); err != nil {
+			log.Printf("Warning: failed to reload poison guard settings: %v", err)
+		}
+	})
 
 	// 注册路由
 	registerRoutes(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg, redisClient)
