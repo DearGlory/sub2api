@@ -1,6 +1,10 @@
 package poison
 
-import "github.com/gin-gonic/gin"
+import (
+	"log"
+
+	"github.com/gin-gonic/gin"
+)
 
 // Middleware 在请求结束后统一收尾，负责两件事：
 //
@@ -38,6 +42,12 @@ func Middleware() gin.HandlerFunc {
 			message = snap.BlockMsg
 		}
 		gw.WriteError(DefaultBlockStatus, message)
+
+		// 命中留痕：这是唯一能证明检测真的在工作、也便于事后追查哪条账号/路径
+		// 触发的记录。不记录被丢弃的正文内容，避免把投毒文本再抄一遍进日志。
+		accountID, _ := c.Get(ContextKeyAccountID)
+		log.Printf("[poison] blocked path=%s status=%d reason=%s account=%v",
+			c.Request.URL.Path, DefaultBlockStatus, gw.Reason(), accountID)
 
 		// 命中后的副作用：拉黑出口 IP、轮换代理、必要时停用账号。
 		// 在响应收尾之后异步执行，不影响客户已经拿到的错误。
