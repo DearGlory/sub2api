@@ -41,13 +41,24 @@ func Middleware() gin.HandlerFunc {
 		if snap != nil && snap.BlockMsg != "" {
 			message = snap.BlockMsg
 		}
-		gw.WriteError(DefaultBlockStatus, message)
+
+		// 已经写出过字节时无法回滚：此时写错误体只会拼在残片后面，客户端解析
+		// 得到的是「unexpected end of JSON input」这类假的上游故障。这种情况下
+		// 主动切断连接，让客户端拿到明确的传输层错误。未写出字节时仍写完整错误。
+		truncated := gw.Committed() > 0
+		aborted := false
+		if truncated {
+			aborted = gw.AbortConnection()
+		}
+		if !aborted {
+			gw.WriteError(DefaultBlockStatus, message)
+		}
 
 		// 命中留痕：这是唯一能证明检测真的在工作、也便于事后追查哪条账号/路径
 		// 触发的记录。不记录被丢弃的正文内容，避免把投毒文本再抄一遍进日志。
 		accountID, _ := c.Get(ContextKeyAccountID)
-		log.Printf("[poison] blocked path=%s status=%d reason=%s account=%v",
-			c.Request.URL.Path, DefaultBlockStatus, gw.Reason(), accountID)
+		log.Printf("[poison] blocked path=%s status=%d reason=%s account=%v truncated=%v aborted=%v",
+			c.Request.URL.Path, DefaultBlockStatus, gw.Reason(), accountID, truncated, aborted)
 
 		// 命中后的副作用：拉黑出口 IP、轮换代理、必要时停用账号。
 		// 在响应收尾之后异步执行，不影响客户已经拿到的错误。

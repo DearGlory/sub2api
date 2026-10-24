@@ -234,12 +234,15 @@ func TestWriteErrorSkipsWhenAlreadyCommitted(t *testing.T) {
 	c, rec := newGuardContext(t, activeSnapshot(), "https://kedaya.ai", true)
 	gw := StatusGuard(c)
 
-	if _, err := c.Writer.Write([]byte("已发出的正常开头内容足够长到被释放")); err != nil {
+	// 必须超过 head_buffer（默认 96 字符），否则前缀一直不释放，committed 恒为 0，
+	// 这条测试就会永远跳过、实际什么也没验证。
+	long := strings.Repeat("已发出的正常开头内容", 20)
+	if _, err := c.Writer.Write([]byte(long)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	before := rec.Body.Len()
 	if gw.Committed() == 0 {
-		t.Skip("prefix not released yet; nothing to assert")
+		t.Fatalf("prefix was not released; filler of %d runes should exceed head buffer", len([]rune(long)))
 	}
 	gw.WriteError(DefaultBlockStatus, DefaultBlockMessage)
 	if rec.Body.Len() != before {

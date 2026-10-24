@@ -29,6 +29,15 @@ type Rotator struct {
 	Blocked func(ctx context.Context) (map[int64]struct{}, error)
 	// IsEgressBlocked 报告某个出口 IP 是否在黑名单中。
 	IsEgressBlocked func(ctx context.Context, ip string) (bool, error)
+	// InUse 返回已被其他账号占用的代理出口集合。
+	//
+	// 键是 endpoint（host:port）而不是代理行 ID：proxies 表里同一个出口地址存在
+	// 多行记录（线上 12 个 IP 各有 3 行重复），只按行 ID 排除仍会挑到同一个出口，
+	// 换号等于没换。
+	//
+	// 复用别人正在用的出口会把两个账号绑在同一个 IP 上：一旦这个出口后续被判定
+	// 投毒，两个号一起遭殃。因此轮换目标必须是没有其他账号在用的出口。
+	InUse func(ctx context.Context) (map[string]struct{}, error)
 	// Prober 用于确认真实出口 IP。
 	Prober *EgressProber
 }
@@ -50,10 +59,19 @@ func (r *Rotator) Next(ctx context.Context, skip map[int64]struct{}) (*RotationC
 			blocked = b
 		}
 	}
+	inUse := map[string]struct{}{}
+	if r.InUse != nil {
+		if u, err := r.InUse(ctx); err == nil {
+			inUse = u
+		}
+	}
 
 	for i := range candidates {
 		c := &candidates[i]
 		if _, bad := blocked[c.ID]; bad {
+			continue
+		}
+		if _, taken := inUse[c.endpoint()]; taken {
 			continue
 		}
 		if skip != nil {
@@ -83,6 +101,15 @@ func isStaticHost(host string) bool {
 		return false
 	}
 	return net.ParseIP(host) != nil
+}
+
+// endpoint 返回代理出口的规范化标识 host:port，用于判断两个代理行是否指向
+// 同一个实际出口。proxies 表存在同一 host:port 多行记录的情况。
+func (c *RotationCandidate) endpoint() string {
+	if c == nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.ToLower(c.Host)) + ":" + itoa(c.Port)
 }
 
 // ProxyURL 拼出可直接用于 HTTP 客户端的代理地址。

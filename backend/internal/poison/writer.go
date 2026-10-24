@@ -245,6 +245,41 @@ func (w *GuardWriter) WriteHeaderNow() {
 	w.ResponseWriter.WriteHeaderNow()
 }
 
+// AbortConnection 在已经向客户端写出字节、却又判定为投毒时切断连接。
+//
+// 为什么必须切断：流式响应一旦吐出字节就无法回收，此时无论继续写还是写错误体，
+// 客户端拿到的都是一段残缺的内容。SDK 解析这种残片会抛出「unexpected end of
+// JSON input」这类错误，把拦截伪装成上游故障，而且看起来像 500。
+//
+// 直接关闭 TCP 连接能让客户端得到明确的传输层错误（连接被重置/意外关闭），
+// 语义上就是「这次请求没能完成」，比残缺 JSON 诚实得多。
+//
+// 返回 true 表示连接已切断；false 表示无法 hijack（例如 HTTP/2 或 response
+// recorder），调用方应退回到写错误体的原有路径。
+//
+// 注意：gin 的 Hijack 内部是裸类型断言，底层不支持时会 panic 而不是返回错误，
+// 因此这里必须 recover，否则命中投毒反而会在 Recovery 里变成 500。
+func (w *GuardWriter) AbortConnection() (ok bool) {
+	if w == nil {
+		return false
+	}
+	if _, capable := w.ResponseWriter.(http.Hijacker); !capable {
+		return false
+	}
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	conn, _, err := w.ResponseWriter.(http.Hijacker).Hijack()
+	if err != nil {
+		return false
+	}
+	// 直接关闭；客户端会据此得到「连接被意外关闭 / 响应被截断」的传输层错误。
+	_ = conn.Close()
+	return true
+}
+
 // WriteError 在命中投毒后写出统一错误响应。
 //
 // 文案沿用现有上游错误，不暴露投毒事实。已写出过内容时无法回滚，只能中断。

@@ -51,6 +51,9 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 		IsEgressBlocked: func(ctx context.Context, ip string) (bool, error) {
 			return egress.IsBlocked(ctx, ip)
 		},
+		InUse: func(ctx context.Context) (map[string]struct{}, error) {
+			return inUseEndpoints(ctx, db)
+		},
 		Prober: prober,
 	}
 
@@ -75,4 +78,34 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 			return err
 		},
 	})
+}
+
+// inUseEndpoints 返回当前被活跃账号占用的代理出口集合（host:port）。
+//
+// 用 host:port 而不是代理行 ID：proxies 表里同一出口存在多行记录，按 ID 排除
+// 会挑到同一个出口，轮换就白做了：线上 12 个 IP 各有 3 行重复。
+//
+// 只统计未删除、状态为 active 的账号：停用/删除账号留下的 proxy_id 不该继续
+// 占着候选位置，否则可用出口会随着账号停用而永久减少。
+func inUseEndpoints(ctx context.Context, db *sql.DB) (map[string]struct{}, error) {
+	out := map[string]struct{}{}
+	rows, err := db.QueryContext(ctx, `
+		SELECT DISTINCT lower(p.host) || ':' || p.port
+		FROM accounts a
+		JOIN proxies p ON p.id = a.proxy_id
+		WHERE a.proxy_id IS NOT NULL
+		  AND a.deleted_at IS NULL
+		  AND a.status = 'active'`)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ep string
+		if err := rows.Scan(&ep); err != nil {
+			return out, err
+		}
+		out[ep] = struct{}{}
+	}
+	return out, rows.Err()
 }
