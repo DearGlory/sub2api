@@ -10,6 +10,7 @@ package poison
 
 import (
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -45,6 +46,8 @@ type Result struct {
 type word struct {
 	text  string
 	lower string
+	// runes 是 lower 的 rune 切片，用于流式前缀回退判定，避免每次比较都重新转换。
+	runes []rune
 	level Level
 }
 
@@ -99,7 +102,7 @@ func NewDetector(cfg Config) *Detector {
 				continue
 			}
 			idx := len(d.words)
-			d.words = append(d.words, word{text: text, lower: lower, level: level})
+			d.words = append(d.words, word{text: text, lower: lower, runes: []rune(lower), level: level})
 			if level == LevelVeto {
 				d.vetoIdx = append(d.vetoIdx, idx)
 			}
@@ -376,28 +379,100 @@ func (g *StreamGuard) scanBuffer() Result {
 	return Result{Matched: g.matched}
 }
 
-// drain 交出不可能再构成关键词的前缀。
+// drain 交出已确认不可能再构成关键词的前缀。
 //
-// 保留长度取 max(开头扣留窗口 - 已交出字符数, 最长关键词长度 - 1)：
-//   - 开头窗口保证判定在第一个字节写出之前完成，使响应头仍可改成错误状态码；
-//   - 关键词回退保证任何关键词都不会先于判定被写出。
+// 只有同时满足两个条件才放行一段前缀：
+//  1. 已交出字符数达到开头扣留窗口 headRunes —— 保证「投毒文案固定在回复开头」
+//     这一前提下的判定发生在任何字节写出之前，此响应头尚未提交，命中后仍能返回
+//     完整错误状态码；
+//  2. 前缀不可能成为任何关键词的开头 —— 用「前缀是否构成某关键词的前缀」判定，
+//     而不是简单回退「最长关键词 - 1」个字符。
+//
+// 条件 2 是修复 SSE 泄漏的关键：流式正文被 event:/data: 协议外壳包裹时，开头
+// 扣留窗口会被外壳消耗掉，若只按最长关键词回退，投毒句的首字会在判定之前写出。
+// 按「是否为关键词前缀」判定可以精确到下一位：只要已放行内容的末尾能够接上某个
+// 关键词的开头，就继续扣留。
 func (g *StreamGuard) drain() string {
-	hold := g.d.HoldBackRunes()
-	// 开头窗口：还没交出够 headRunes 个字符时，剩余部分全部扣留。
-	if remain := g.d.headRunes - g.released; remain > hold {
-		hold = remain
+	// 开头扣留窗口优先：还没交出够 headRunes 个字符时全扣。
+	if remain := g.d.headRunes - g.released; remain > 0 {
+		if remain >= len(g.buf) {
+			return ""
+		}
+		// 窗口内也不能贸然放行窗口外部分：先按窗口截断，再做前缀检查。
+		return g.drainPrefix(len(g.buf) - remain)
 	}
-	if hold >= len(g.buf) {
+	return g.drainPrefix(len(g.buf))
+}
+
+// drainPrefix 从最多 keep 个字符里找出可安全交出的最长前缀并交出。
+//
+// 安全含义：交出后剩余缓冲区（含尚未到达的字节）不可能再与已交出内容拼成一个
+// 关键词。逐位回退检查已交出后缀是否是某关键词的真前缀，命中即缩短。
+func (g *StreamGuard) drainPrefix(keep int) string {
+	if keep <= 0 {
 		return ""
 	}
-	cut := len(g.buf) - hold
+	cut := keep
+	// 从后往前缩短，直到剩余部分的末尾不再是任何关键词的前缀。
+	for cut > 0 {
+		// 已交出部分 = buf[:cut]，需要保证 buf[:cut] 的后缀 + 后续字节
+		// 不能拼出关键词，即 buf[:cut] 的任一后缀都不是关键词前缀。
+		if !g.tailIsKeywordPrefix(cut) {
+			break
+		}
+		cut--
+	}
+	if cut <= 0 {
+		return ""
+	}
 	out := string(g.buf[:cut])
 	g.released += cut
-	// 复制剩余部分，避免底层数组被 append 复用后别名到已交出的切片。
 	rest := make([]rune, len(g.buf)-cut)
 	copy(rest, g.buf[cut:])
 	g.buf = rest
 	return out
+}
+
+// tailIsKeywordPrefix 报告 buf[:cut] 的某个后缀是否为某关键词的真前缀。
+//
+// 只检查长度小于关键词长度的后缀：等于整词长度时该词已完整落在已交出区间，
+// scanBuffer 早已判定过，无需再扣。
+func (g *StreamGuard) tailIsKeywordPrefix(cut int) bool {
+	if cut <= 0 {
+		return false
+	}
+	for i := range g.d.words {
+		w := g.d.words[i].runes
+		if len(w) == 0 {
+			continue
+		}
+		maxBack := len(w) - 1
+		if maxBack > cut {
+			maxBack = cut
+		}
+		for back := 1; back <= maxBack; back++ {
+			start := cut - back
+			if runeSliceHasPrefixFold(w, g.buf[start:cut]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// runeSliceHasPrefixFold 报告 lower（已小写）是否与 prefix 的小写形式相同。
+//
+// prefix 来自缓冲区原文，可能含大写；lower 是关键词的小写 rune 切片。
+func runeSliceHasPrefixFold(lower, prefix []rune) bool {
+	if len(prefix) > len(lower) {
+		return false
+	}
+	for i := range prefix {
+		if lower[i] != unicode.ToLower(prefix[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func itoa(v int) string {

@@ -186,7 +186,9 @@ func TestWriterAccounting(t *testing.T) {
 	gw := StatusGuard(c)
 
 	// 写一段远超开头扣留窗口的正常内容，确保越过窗口后有字节真正放出。
-	long := strings.Repeat("普通回复内容，", 60)
+	// 填充量按实际窗口 + 余量生成，避免窗口调整后这条测试失去意义。
+	head := activeSnapshot().Detector.HeadRunes()
+	long := strings.Repeat("普通回复内容，", head/6+40)
 	if _, err := c.Writer.Write([]byte(long)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -234,9 +236,10 @@ func TestWriteErrorSkipsWhenAlreadyCommitted(t *testing.T) {
 	c, rec := newGuardContext(t, activeSnapshot(), "https://kedaya.ai", true)
 	gw := StatusGuard(c)
 
-	// 必须超过 head_buffer（默认 96 字符），否则前缀一直不释放，committed 恒为 0，
-	// 这条测试就会永远跳过、实际什么也没验证。
-	long := strings.Repeat("已发出的正常开头内容", 20)
+	// 必须超过 head_buffer，否则前缀一直不释放，committed 恒为 0，这条测试就会
+	// 永远跳过、实际什么也没验证。填充量按实际窗口 + 余量生成。
+	head := activeSnapshot().Detector.HeadRunes()
+	long := strings.Repeat("已发出的正常开头内容", head/9+20)
 	if _, err := c.Writer.Write([]byte(long)); err != nil {
 		t.Fatalf("write: %v", err)
 	}

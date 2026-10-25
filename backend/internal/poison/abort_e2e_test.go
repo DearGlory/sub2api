@@ -46,15 +46,18 @@ func TestE2EStreamTruncationAbortsConnection(t *testing.T) {
 	body, readErr := io.ReadAll(resp.Body)
 	t.Logf("status=%d bytes=%d readErr=%v", resp.StatusCode, len(body), readErr)
 
-	// 关键断言：客户端必须看到「读取失败」，而不是一个语法上看起来正常结束的 JSON。
-	if readErr == nil {
-		t.Fatalf("expected a transport-level error (truncated response), got clean EOF with %d bytes", len(body))
-	}
-	t.Logf("client correctly saw a transport error instead of a truncated JSON body: %v", readErr)
-
-	// 投毒文案一个字节都不能出现在客户端收到的内容里。
-	if strings.Contains(string(body), "kedaya") {
+	// 关键断言：客户端绝不能收到投毒正文的任何一段。
+	//
+	// 投毒文案整体（含 200 字节干净前缀）都落在开头扣留窗口内，因此判定发生在
+	// 任何字节写出之前，客户端拿到的是完整 502 错误体，既不需要断连也不会出现
+	// 残缺 JSON。窗口若被调小到无法覆盖协议外壳，这里会退化为「已写出部分字节
+	// 后断连」，readErr 变成 unexpected EOF，但绝不泄露投毒文本。
+	_ = readErr
+	if strings.Contains(string(body), "kedaya") || strings.Contains(string(body), "盗取") {
 		t.Fatalf("LEAK: poisoned text reached the client: %q", string(body))
 	}
-	t.Log("no poisoned bytes leaked")
+	if resp.StatusCode == 200 {
+		t.Fatalf("expected an error status, got 200 with %d bytes: %q", len(body), string(body))
+	}
+	t.Logf("client got a complete error body (status=%d) with no poisoned bytes", resp.StatusCode)
 }
