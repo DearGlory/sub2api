@@ -89,10 +89,14 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		v := resp.Header.Get("x-request-id")
 		c.Header("x-request-id", v)
 	}
+	attemptResponseHeadersApplied := false
 	applyAttemptResponseHeaders := func() {
-		if !stageFirstOutput || len(attemptResponseHeaders) == 0 || c.Writer.Written() {
+		if attemptResponseHeadersApplied || !stageFirstOutput || len(attemptResponseHeaders) == 0 || c.Writer.Written() {
 			return
 		}
+		// A downstream guard may buffer many semantic events before Written()
+		// becomes true. Apply this attempt's headers and provenance only once.
+		attemptResponseHeadersApplied = true
 		for key, values := range attemptResponseHeaders {
 			for _, value := range values {
 				c.Writer.Header().Add(key, value)
