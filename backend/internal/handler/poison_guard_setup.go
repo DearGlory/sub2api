@@ -3,7 +3,13 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"log"
+	"strings"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/poison"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -41,6 +47,7 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 					Host:     p.Host,
 					Port:     p.Port,
 					Protocol: p.Protocol,
+					Username: p.Username, Password: p.Password,
 				})
 			}
 			return out, nil
@@ -61,23 +68,178 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 		Egress:  egress,
 		Prober:  prober,
 		Rotator: rotator,
-		DisableAccount: func(ctx context.Context, accountID int64) error {
-			// 状态改 disabled，与后台手动停用的语义一致；调度随即失效。
-			status := service.StatusDisabled
-			_, err := accountService.Update(ctx, accountID, service.UpdateAccountRequest{
-				Status: &status,
-			})
-			return err
+		LookupProxy: func(ctx context.Context, id int64) (*poison.RotationCandidate, error) {
+			if proxyService == nil {
+				return nil, fmt.Errorf("proxy service unavailable")
+			}
+			p, err := proxyService.GetByID(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			return &poison.RotationCandidate{ID: p.ID, Host: p.Host, Port: p.Port, Protocol: p.Protocol, Username: p.Username, Password: p.Password}, nil
 		},
-		RebindProxy: func(ctx context.Context, accountID int64, proxyID int64) error {
-			// 把账号的 proxy_id 换成另一个可用代理。
-			id := proxyID
-			_, err := accountService.Update(ctx, accountID, service.UpdateAccountRequest{
-				ProxyID: &id,
+		DisableIncident: func(ctx context.Context, inc poison.Incident) error {
+			err := disablePoisonIncident(ctx, db, inc, func(txCtx context.Context) error {
+				if accountService == nil {
+					return fmt.Errorf("account service unavailable")
+				}
+				status := service.StatusDisabled
+				_, err := accountService.Update(txCtx, inc.AccountID, service.UpdateAccountRequest{Status: &status})
+				return err
 			})
-			return err
+			if err != nil {
+				return err
+			}
+			if err := accountService.RefreshPoisonGuardSnapshot(ctx, inc.AccountID); err != nil {
+				log.Printf("[poison] account %d snapshot refresh pending: %v", inc.AccountID, err)
+			}
+			return nil
+		},
+		IncidentCurrent: func(ctx context.Context, inc poison.Incident) (bool, error) {
+			return poisonIncidentCurrent(ctx, db, inc, false)
+		},
+		RebindIncident: func(ctx context.Context, inc poison.Incident, proxyID int64) error {
+			accountID := inc.AccountID
+			err := rebindPoisonProxy(ctx, db, accountID, proxyID, func(txCtx context.Context) error {
+				current, err := poisonIncidentCurrent(txCtx, dbent.TxFromContext(txCtx).Client(), inc, true)
+				if err != nil {
+					return err
+				}
+				if !current {
+					return poison.ErrStaleIncident
+				}
+				if accountService == nil {
+					return fmt.Errorf("account service unavailable")
+				}
+				_, err = accountService.Update(txCtx, accountID, service.UpdateAccountRequest{ProxyID: &proxyID})
+				return err
+			})
+			if err != nil {
+				return err
+			}
+			if err := accountService.RefreshPoisonGuardSnapshot(ctx, accountID); err != nil {
+				// The DB assignment is already committed. Do not rotate again only
+				// because Redis is unavailable; the transactional outbox will retry.
+				log.Printf("[poison] account %d snapshot refresh pending: %v", accountID, err)
+			}
+			return nil
 		},
 	})
+}
+
+// poisonIncidentCurrent prevents a late stream from rewriting a newer binding.
+func poisonIncidentCurrent(ctx context.Context, db poisonQueryer, inc poison.Incident, lock bool) (bool, error) {
+	query := "SELECT proxy_id, status, schedulable FROM accounts WHERE id=$1 AND deleted_at IS NULL"
+	if lock {
+		query += " FOR UPDATE"
+	}
+	rows, err := db.QueryContext(ctx, query, inc.AccountID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return false, rows.Err()
+	}
+	var proxy sql.NullInt64
+	var status string
+	var schedulable bool
+	if err := rows.Scan(&proxy, &status, &schedulable); err != nil {
+		return false, err
+	}
+	matches := !proxy.Valid && inc.ProxyID == nil
+	if inc.ProxyID != nil {
+		matches = proxy.Valid && proxy.Int64 == *inc.ProxyID
+	}
+	return matches && status == service.StatusActive && schedulable, rows.Err()
+}
+
+func disablePoisonIncident(ctx context.Context, db *sql.DB, inc poison.Incident, update func(context.Context) error) error {
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	tx, err := client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if _, err := tx.Client().ExecContext(txCtx, "SELECT pg_advisory_xact_lock($1)", poison.RotationLockKey); err != nil {
+		return err
+	}
+	current, err := poisonIncidentCurrent(txCtx, tx.Client(), inc, true)
+	if err != nil {
+		return err
+	}
+	if !current {
+		return poison.ErrStaleIncident
+	}
+	if err := update(txCtx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// rebindPoisonProxy rechecks endpoint occupancy under a cross-instance lock.
+// The account service joins this transaction, preserving its outbox writes.
+func rebindPoisonProxy(ctx context.Context, db *sql.DB, accountID, proxyID int64, update func(context.Context) error) error {
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	tx, err := client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if _, err = tx.Client().ExecContext(txCtx, "SELECT pg_advisory_xact_lock($1)", poison.RotationLockKey); err != nil {
+		return err
+	}
+	// Reload the target after acquiring the lock: different rows can share an endpoint.
+	rows, err := tx.Client().QueryContext(txCtx, `SELECT host, port FROM proxies WHERE id = $1 AND status = 'active' AND deleted_at IS NULL`, proxyID)
+	if err != nil {
+		return err
+	}
+	var host string
+	var port int
+	if !rows.Next() {
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("rotation proxy unavailable")
+	}
+	err = rows.Scan(&host, &port)
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	occupied, err := inUseEndpoints(txCtx, tx.Client())
+	if err != nil {
+		return err
+	}
+	if _, ok := occupied[poison.Endpoint(host, port)]; ok {
+		return fmt.Errorf("rotation endpoint occupied")
+	}
+	blacklistRows, err := tx.Client().QueryContext(txCtx,
+		`SELECT EXISTS (SELECT 1 FROM poison_blocked_egress WHERE outbound_ip=$1 OR (proxy_id=$2 AND is_dynamic=false))`, strings.TrimSpace(host), proxyID)
+	if err != nil {
+		return err
+	}
+	var blocked bool
+	if !blacklistRows.Next() {
+		blacklistRows.Close()
+		return fmt.Errorf("missing blacklist result")
+	}
+	err = blacklistRows.Scan(&blocked)
+	blacklistRows.Close()
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return fmt.Errorf("rotation endpoint blacklisted")
+	}
+	if err = update(txCtx); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // inUseEndpoints 返回当前被活跃账号占用的代理出口集合（host:port）。
@@ -87,10 +249,14 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 //
 // 只统计未删除、状态为 active 的账号：停用/删除账号留下的 proxy_id 不该继续
 // 占着候选位置，否则可用出口会随着账号停用而永久减少。
-func inUseEndpoints(ctx context.Context, db *sql.DB) (map[string]struct{}, error) {
+type poisonQueryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func inUseEndpoints(ctx context.Context, db poisonQueryer) (map[string]struct{}, error) {
 	out := map[string]struct{}{}
 	rows, err := db.QueryContext(ctx, `
-		SELECT DISTINCT lower(p.host) || ':' || p.port
+		SELECT DISTINCT lower(btrim(p.host)) || ':' || p.port
 		FROM accounts a
 		JOIN proxies p ON p.id = a.proxy_id
 		WHERE a.proxy_id IS NOT NULL

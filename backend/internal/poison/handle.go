@@ -2,9 +2,11 @@ package poison
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,13 +27,20 @@ type Incident struct {
 //
 // 所有外部依赖由接线层注入，本包不直接依赖 service；未注入的项为空操作，
 // 因此删除本功能只需要删掉本文件与迁移。
+var ErrStaleIncident = errors.New("poison incident no longer matches account proxy")
+
 type Handler struct {
+	IncidentCurrent func(context.Context, Incident) (bool, error)
+	RebindIncident  func(context.Context, Incident, int64) error
+	DisableIncident func(context.Context, Incident) error
 	// Egress 记录与查询出口 IP 黑名单。
 	Egress *EgressStore
 	// Prober 探测真实出口 IP，未注入时跳过探测。
 	Prober *EgressProber
 	// Rotator 选择轮换目标。
 	Rotator *Rotator
+	// LookupProxy loads the real proxy configuration, including protocol and authentication.
+	LookupProxy func(context.Context, int64) (*RotationCandidate, error)
 	// DisableAccount 停用账号，由接线层注入。
 	DisableAccount func(ctx context.Context, accountID int64) error
 	// RebindProxy 把账号的代理换成另一个，返回是否成功。
@@ -54,15 +63,28 @@ func (h *Handler) Handle(ctx context.Context, inc Incident) {
 		}
 	}
 
+	if h.IncidentCurrent != nil {
+		current, err := h.IncidentCurrent(ctx, inc)
+		if err != nil {
+			log.Printf("[poison] account %d incident state lookup failed: %v", inc.AccountID, err)
+			return
+		}
+		if !current {
+			return
+		}
+	}
 	snap := CurrentSnapshot()
 	rotateMax := 3
 	if snap != nil {
 		rotateMax = snap.RotateMax
 	}
+	if rotateMax > 3 {
+		rotateMax = 3
+	}
 
 	// 2) 尝试轮换代理。次数用尽或没有可用代理时停用账号。
 	rotated := false
-	if h.Rotator != nil && h.RebindProxy != nil && rotateMax > 0 {
+	if h.Rotator != nil && (h.RebindProxy != nil || h.RebindIncident != nil) && rotateMax > 0 {
 		tried := map[int64]struct{}{}
 		if inc.ProxyID != nil {
 			tried[*inc.ProxyID] = struct{}{}
@@ -77,19 +99,41 @@ func (h *Handler) Handle(ctx context.Context, inc Incident) {
 				break
 			}
 			tried[next.ID] = struct{}{}
-			if err := h.RebindProxy(ctx, inc.AccountID, next.ID); err != nil {
+			if err := h.Rotator.ValidateEgress(ctx, next); err != nil {
+				log.Printf("[poison] candidate proxy %d egress validation failed", next.ID)
+				continue
+			}
+			var bindErr error
+			if h.RebindIncident != nil {
+				bindErr = h.RebindIncident(ctx, inc, next.ID)
+			} else {
+				bindErr = h.RebindProxy(ctx, inc.AccountID, next.ID)
+			}
+			if errors.Is(bindErr, ErrStaleIncident) {
+				return
+			}
+			if err := bindErr; err != nil {
 				log.Printf("[poison] rebind account %d to proxy %d failed: %v", inc.AccountID, next.ID, err)
 				continue
 			}
-			log.Printf("[poison] account %d rotated to proxy %d (%s)", inc.AccountID, next.ID, next.Name)
+			log.Printf("[poison] account %d rotated to proxy %d ", inc.AccountID, next.ID)
 			rotated = true
 			break
 		}
 	}
 
 	// 3) 轮换不到干净代理则停用账号，避免继续被投毒。
-	if !rotated && h.DisableAccount != nil {
-		if err := h.DisableAccount(ctx, inc.AccountID); err != nil {
+	if !rotated && (h.DisableAccount != nil || h.DisableIncident != nil) {
+		var err error
+		if h.DisableIncident != nil {
+			err = h.DisableIncident(ctx, inc)
+		} else {
+			err = h.DisableAccount(ctx, inc.AccountID)
+		}
+		if errors.Is(err, ErrStaleIncident) {
+			return
+		}
+		if err != nil {
 			log.Printf("[poison] disable account %d failed: %v", inc.AccountID, err)
 		} else {
 			log.Printf("[poison] account %d disabled after poison hit (%s)", inc.AccountID, inc.Reason)
@@ -102,6 +146,15 @@ func (h *Handler) Handle(ctx context.Context, inc Incident) {
 // 静态代理（host 是 IP）的出口就是 host；域名形式的代理视为动态，需要实际
 // 探测才能知道这次用的是哪个出口 IP。
 func (h *Handler) resolveEgress(ctx context.Context, inc Incident) (string, bool) {
+	if h.LookupProxy != nil && inc.ProxyID != nil {
+		p, err := h.LookupProxy(ctx, *inc.ProxyID)
+		if err != nil || p == nil {
+			log.Printf("[poison] proxy %d metadata lookup failed; egress unknown", *inc.ProxyID)
+			return "", true
+		}
+		inc.ProxyHost = p.Host
+		inc.ProxyPort = p.Port
+	}
 	host := NormalizeBaseURL(inc.ProxyHost)
 	if host == "" {
 		return "", false
@@ -109,19 +162,10 @@ func (h *Handler) resolveEgress(ctx context.Context, inc Incident) (string, bool
 	if net.ParseIP(host) != nil {
 		return host, false
 	}
-	if h.Prober == nil {
-		return host, true
-	}
-	snap := CurrentSnapshot()
-	if snap != nil && !snap.EgressProbe {
-		return host, true
-	}
-	ip, err := h.Prober.Probe(ctx, host+":"+itoa(inc.ProxyPort))
-	if err != nil {
-		log.Printf("[poison] probe egress for %s failed: %v", host, err)
-		return host, true
-	}
-	return ip, true
+	// A fresh probe cannot identify the egress of the original poisoned request.
+	// Until the request transport supplies that identity, retain the incident in logs only.
+	log.Printf("[poison] account %d dynamic egress unknown; reason=%s", inc.AccountID, inc.Reason)
+	return "", true
 }
 
 // AttachHandler 注入处置处理器，由路由初始化时调用一次。
@@ -173,5 +217,9 @@ func Dispatch(c *gin.Context, reason string) {
 		return
 	}
 	// 处置包含网络探测与数据库写入，不能阻塞响应收尾。
-	go h.Handle(context.Background(), inc)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		h.Handle(ctx, inc)
+	}()
 }

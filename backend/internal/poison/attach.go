@@ -62,7 +62,27 @@ func AttachFromAccount(c *gin.Context, info AccountInfo) bool {
 // 这个函数是接线层的唯一入口，三处 handler 各调用一次即可。必须在任何响应字节
 // 写出之前调用，否则已经发出的内容无法回收。
 func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
-	if c == nil || !snap.Active() {
+	if c == nil {
+		return false
+	}
+	if previous := StatusGuard(c); previous != nil {
+		// A response already sent (including rejection) cannot be retried. Keep
+		// its account attribution and writer until the owning handler finishes.
+		if previous.Blocked() || previous.Committed() > 0 {
+			return true
+		}
+		previous.Close()
+		if c.Request != nil && previous.parentContext != nil {
+			c.Request = c.Request.WithContext(previous.parentContext)
+		}
+		c.Writer = previous.ResponseWriter
+		c.Set("poison_guard_writer", nil)
+		c.Set(ContextKeyActive, nil)
+		c.Set(ContextKeyProxyID, nil)
+		c.Set(ContextKeyProxyHost, nil)
+		c.Set(ContextKeyProxyPort, nil)
+	}
+	if !snap.Active() {
 		return false
 	}
 	if !snap.Scope.Match(info.BaseURL, info.HasProxy) {

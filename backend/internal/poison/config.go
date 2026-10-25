@@ -38,19 +38,10 @@ func AllSettings() []string {
 	}
 }
 
-// DefaultHeadBufferRunes 是流式响应开头默认扣留的字符数。
-//
-// 投毒文案固定在回复开头，扣住开头意味着判定在任何字节写出之前完成；此时响应头
-// 尚未提交，命中后仍可返回完整错误状态码。
-//
-// 取值必须同时覆盖两部分，缺一不可：
-//  1. 协议外壳。流式正文被 event:/data:/JSON 包裹，第一个 content delta 的正文
-//     起点在真实响应里约在第 150 个字符，外壳与投毒前缀都会先消耗窗口。
-//  2. 投毒前缀。判定依据是关键词，最早能触发否决的是 kedaya，它出现在
-//     「您好，这里是 https://kedaya.ai…」的第 15 个字符；在这之前的正文不是任何
-//     关键词的前缀，仅靠关键词回退无法拦住，必须由开头窗口整段扣住。
-//
-// 512 对上述两者留出充足余量，同时足够小到不影响首字节延迟（约一个上游分片）。
+// DefaultHeadBufferRunes is the initial decoded-content window per output lane.
+// SSE framing and metadata do not consume it. Short clean content is released
+// at the lane's terminal event; the window adds generation-time waiting until
+// enough content is available, not just the CPU time spent inspecting it.
 const DefaultHeadBufferRunes = 512
 
 // DefaultBlockMessage 与现有上游错误文案保持一致，不暴露投毒事实。
@@ -68,7 +59,7 @@ func DefaultUpstreamPrefixes() []string {
 
 func DefaultVetoKeywords() []string { return []string{"kedaya", "kedaya.ai"} }
 func DefaultStrongKeywords() []string {
-	return []string{"盗取", "盗用", "偷取", "窃取", "这里是"}
+	return []string{"盗", "偷", "窃", "这里是"}
 }
 func DefaultWeakKeywords() []string { return []string{"Key", "密钥", "您好"} }
 

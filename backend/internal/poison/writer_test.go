@@ -40,8 +40,11 @@ func TestWriterDiscardsPoisonAndWritesNothing(t *testing.T) {
 	if !gw.Blocked() {
 		t.Fatal("must be blocked")
 	}
-	if rec.Body.Len() != 0 {
-		t.Fatalf("client must receive nothing, got %q", rec.Body.String())
+	// Detection now sends the complete error immediately. No upstream bytes
+	// may be committed, and later finalization must not append it a second time.
+	errorBody := `{"type":"error","error":{"type":"upstream_error","message":"Upstream request failed"}}`
+	if rec.Code != DefaultBlockStatus || rec.Body.String() != errorBody {
+		t.Fatalf("expected only the immediate error response, got status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if gw.Committed() != 0 {
 		t.Fatalf("committed=%d want 0", gw.Committed())

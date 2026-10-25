@@ -20,6 +20,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
+	"github.com/Wei-Shaw/sub2api/internal/poison"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -789,6 +790,16 @@ func (w *opsCaptureWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	defer finishDelegatedCall(state)
 	return rw.Hijack()
 }
+func (w *opsCaptureWriter) SetWriteDeadline(deadline time.Time) error {
+	state, rw := w.beginDelegatedCall()
+	if state == nil {
+		return errors.New("response writer released")
+	}
+	state.mu.Unlock()
+	defer finishDelegatedCall(state)
+	return http.NewResponseController(rw).SetWriteDeadline(deadline)
+}
+
 func (w *opsCaptureWriter) CloseNotify() <-chan bool {
 	state, rw := w.lockActive()
 	if state == nil {
@@ -1082,13 +1093,15 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		defer func() {
 			// Restore the original writer before returning so outer middlewares
 			// don't observe a pooled wrapper that has been released.
-			if c.Writer == w {
+			if c.Writer == w || poison.StatusGuard(c) != nil {
 				c.Writer = originalWriter
 			}
 			releaseOpsCaptureWriter(w)
 		}()
 		c.Writer = w
 		c.Next()
+		// Complete guard buffering and blocking while this capture lease is alive.
+		poison.Finalize(c)
 		w.finalizeCapture()
 
 		if _, rejected := middleware2.GetIngressRejectReason(c); rejected {

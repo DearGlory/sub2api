@@ -1,8 +1,11 @@
 package poison
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,13 +49,20 @@ func snapshotFromContext(c *gin.Context) *Snapshot {
 // 一旦判定为投毒，后续写入全部丢弃，并由调用方把响应改成错误。
 type GuardWriter struct {
 	gin.ResponseWriter
-	snap  *Snapshot
-	guard *StreamGuard
+	snap          *Snapshot
+	protocol      *responseGuard
+	protocolErr   error
+	cancel        context.CancelFunc
+	parentContext context.Context
+	aborted       bool
 
-	mu        sync.Mutex
-	blocked   bool
-	blockErr  error
-	committed int // 已写给客户端的字节数
+	mu           sync.Mutex
+	finalized    bool
+	closed       bool
+	errorWritten bool
+	blocked      bool
+	blockErr     error
+	committed    int // 已写给客户端的字节数
 	// discarded 记录被扣留后丢弃的字节数，用于日志与断言。
 	discarded int
 }
@@ -71,10 +81,33 @@ func WrapWriter(c *gin.Context) {
 	if _, already := c.Writer.(*GuardWriter); already {
 		return
 	}
-	c.Writer = &GuardWriter{
+	w := &GuardWriter{
 		ResponseWriter: c.Writer,
 		snap:           snap,
-		guard:          snap.Detector.NewStreamGuard(),
+	}
+	if c.Request != nil {
+		w.parentContext = c.Request.Context()
+		ctx, cancel := context.WithCancel(w.parentContext)
+		c.Request = c.Request.WithContext(ctx)
+		w.cancel = cancel
+	}
+	c.Writer = w
+	c.Set("poison_guard_writer", w)
+}
+
+// Close releases retained protocol data on normal, canceled, and panic exits.
+func (w *GuardWriter) Close() {
+	if w == nil {
+		return
+	}
+	w.mu.Lock()
+	w.closed = true
+	if w.protocol != nil {
+		w.protocol.clear()
+	}
+	w.mu.Unlock()
+	if w.cancel != nil {
+		w.cancel()
 	}
 }
 
@@ -129,32 +162,55 @@ func (w *GuardWriter) Write(data []byte) (int, error) {
 		return 0, nil
 	}
 
-	// 整段加锁：StreamGuard 持有可变的判定状态，不能被并发喂入。
+	// Keep protocol state serialized; close a rejected stream before Write returns.
 	w.mu.Lock()
-	defer w.mu.Unlock()
+	defer func() {
+		blocked, committed := w.blocked, w.committed
+		w.mu.Unlock()
+		if blocked {
+			if committed > 0 {
+				w.AbortConnection()
+			} else {
+				message := DefaultBlockMessage
+				if w.snap.BlockMsg != "" {
+					message = w.snap.BlockMsg
+				}
+				w.WriteError(DefaultBlockStatus, message)
+			}
+			if w.cancel != nil {
+				w.cancel()
+			}
+		}
+	}()
 
+	if w.closed {
+		return 0, context.Canceled
+	}
 	if w.blocked {
 		w.discarded += len(data)
 		return len(data), nil
 	}
 
-	safe, verdict := w.guard.Feed(string(data))
-
-	if verdict == VerdictBlock {
+	if w.protocol == nil {
+		w.protocol = newResponseGuard(w.snap.Detector, w.Header().Get("Content-Type"))
+	}
+	safe, blocked, parseErr := w.protocol.feed(data, false)
+	if blocked || parseErr != nil {
 		w.discarded += len(data)
 		w.blocked = true
-		if w.blockErr == nil {
-			w.blockErr = &BlockedError{Reason: w.guard.Reason()}
+		w.protocolErr = parseErr
+		if blocked && w.blockErr == nil {
+			w.blockErr = &BlockedError{Reason: w.protocol.reason}
 		}
 		return len(data), nil
 	}
 
-	if safe == "" {
+	if len(safe) == 0 {
 		w.discarded += len(data)
 		return len(data), nil
 	}
 
-	n, err := w.ResponseWriter.Write([]byte(safe))
+	n, err := w.ResponseWriter.Write(safe)
 	w.committed += n
 	w.discarded += len(data) - n
 	return len(data), err
@@ -196,21 +252,21 @@ func (w *GuardWriter) Finish() bool {
 		w.mu.Unlock()
 		return true
 	}
-	w.mu.Unlock()
-
-	rest, verdict := w.guard.Flush()
-
-	w.mu.Lock()
 	defer w.mu.Unlock()
-	if verdict == VerdictBlock {
+	if w.protocol == nil {
+		w.protocol = newResponseGuard(w.snap.Detector, w.Header().Get("Content-Type"))
+	}
+	rest, blocked, parseErr := w.protocol.feed(nil, true)
+	if blocked || parseErr != nil {
 		w.blocked = true
-		if w.blockErr == nil {
-			w.blockErr = &BlockedError{Reason: w.guard.Reason()}
+		w.protocolErr = parseErr
+		if blocked && w.blockErr == nil {
+			w.blockErr = &BlockedError{Reason: w.protocol.reason}
 		}
 		return true
 	}
-	if rest != "" {
-		n, _ := w.ResponseWriter.Write([]byte(rest))
+	if len(rest) != 0 {
+		n, _ := w.ResponseWriter.Write(rest)
 		w.committed += n
 	}
 	w.ResponseWriter.Flush()
@@ -239,7 +295,7 @@ func (w *GuardWriter) WriteHeaderNow() {
 	w.mu.Lock()
 	blocked := w.blocked
 	w.mu.Unlock()
-	if blocked {
+	if blocked || w.Committed() == 0 {
 		return
 	}
 	w.ResponseWriter.WriteHeaderNow()
@@ -263,19 +319,34 @@ func (w *GuardWriter) AbortConnection() (ok bool) {
 	if w == nil {
 		return false
 	}
-	if _, capable := w.ResponseWriter.(http.Hijacker); !capable {
-		return false
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.aborted {
+		return true
 	}
+	// HTTP/1 supports Hijack. HTTP/2 resets this response stream when the
+	// write deadline expires; it must not close other multiplexed requests.
+	if tryHijackClose(w.ResponseWriter) {
+		w.aborted = true
+		return true
+	}
+	if err := http.NewResponseController(w.ResponseWriter).SetWriteDeadline(time.Now().Add(-time.Second)); err == nil {
+		w.aborted = true
+		return true
+	}
+	return false
+}
+
+func tryHijackClose(writer http.ResponseWriter) (ok bool) {
 	defer func() {
 		if recover() != nil {
 			ok = false
 		}
 	}()
-	conn, _, err := w.ResponseWriter.(http.Hijacker).Hijack()
-	if err != nil {
+	conn, _, err := http.NewResponseController(writer).Hijack()
+	if err != nil || conn == nil {
 		return false
 	}
-	// 直接关闭；客户端会据此得到「连接被意外关闭 / 响应被截断」的传输层错误。
 	_ = conn.Close()
 	return true
 }
@@ -288,15 +359,16 @@ func (w *GuardWriter) WriteError(status int, message string) {
 		return
 	}
 	w.mu.Lock()
-	committed := w.committed
+	defer w.mu.Unlock()
 	w.blocked = true
-	w.mu.Unlock()
-
-	if committed > 0 {
+	if w.committed > 0 || w.errorWritten {
 		return
 	}
+	w.errorWritten = true
 	body := []byte(`{"type":"error","error":{"type":"upstream_error","message":` + quoteJSON(message) + `}}`)
 	h := w.ResponseWriter.Header()
+	h.Del("Transfer-Encoding")
+	h.Del("Content-Encoding")
 	h.Set("Content-Type", "application/json; charset=utf-8")
 	h.Set("Content-Length", itoa(len(body)))
 	w.ResponseWriter.WriteHeader(status)
@@ -305,25 +377,7 @@ func (w *GuardWriter) WriteError(status int, message string) {
 }
 
 func quoteJSON(s string) string {
-	b := make([]byte, 0, len(s)+2)
-	b = append(b, '"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			b = append(b, '\\', '"')
-		case '\\':
-			b = append(b, '\\', '\\')
-		case '\n':
-			b = append(b, '\\', 'n')
-		case '\r':
-			b = append(b, '\\', 'r')
-		case '\t':
-			b = append(b, '\\', 't')
-		default:
-			b = append(b, string(r)...)
-		}
-	}
-	b = append(b, '"')
+	b, _ := json.Marshal(s)
 	return string(b)
 }
 
@@ -348,7 +402,9 @@ func StatusGuard(c *gin.Context) *GuardWriter {
 	if gw, ok := c.Writer.(*GuardWriter); ok {
 		return gw
 	}
-	return nil
+	value, _ := c.Get("poison_guard_writer")
+	gw, _ := value.(*GuardWriter)
+	return gw
 }
 
 // DefaultBlockStatus 是命中后返回的 HTTP 状态码。

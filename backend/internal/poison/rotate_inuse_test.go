@@ -92,10 +92,8 @@ func TestRotatorReturnsNilWhenAllInUse(t *testing.T) {
 	}
 }
 
-// InUse 查询失败时不能静默放行所有代理：那会让轮换重新回到"占用别人代理"的
-// 老路上。当前语义是失败即当作空集合，因此这条测试锁定「失败不 panic 且仍返回
-// 候选」，提醒维护者这是已知的降级路径。
-func TestRotatorInUseErrorDegradesToAllCandidates(t *testing.T) {
+// InUse 查询失败时必须 fail closed，不能把未知状态当作空占用集合。
+func TestRotatorInUseErrorFailsClosed(t *testing.T) {
 	r := &Rotator{
 		ActiveProxies: func(ctx context.Context) ([]RotationCandidate, error) {
 			return []RotationCandidate{{ID: 10, Host: "1.1.1.1", Port: 1080}}, nil
@@ -105,10 +103,10 @@ func TestRotatorInUseErrorDegradesToAllCandidates(t *testing.T) {
 		},
 	}
 	got, err := r.Next(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("Next: %v", err)
+	if err == nil {
+		t.Fatal("expected InUse query error")
 	}
-	if got == nil || got.ID != 10 {
-		t.Fatalf("expected degraded fallback to proxy 10, got %+v", got)
+	if got != nil {
+		t.Fatalf("must not return candidate after InUse error, got %+v", got)
 	}
 }

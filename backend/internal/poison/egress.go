@@ -3,8 +3,13 @@ package poison
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"net"
 	"strings"
 )
+
+// RotationLockKey serializes blacklist publication and proxy assignment.
+const RotationLockKey int64 = 0x706f69736f6e
 
 // BlockedEgress 是黑名单中的一条记录。
 type BlockedEgress struct {
@@ -38,13 +43,21 @@ func (s *EgressStore) Record(ctx context.Context, ip string, proxyID, accountID 
 		return nil
 	}
 	ip = strings.TrimSpace(ip)
-	if ip == "" {
-		return nil
+	if net.ParseIP(ip) == nil {
+		return fmt.Errorf("invalid egress IP")
 	}
 	if len(reason) > 255 {
 		reason = reason[:255]
 	}
-	_, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", RotationLockKey); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO poison_blocked_egress (outbound_ip, proxy_id, account_id, is_dynamic, reason)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (outbound_ip) DO UPDATE SET
@@ -52,7 +65,10 @@ func (s *EgressStore) Record(ctx context.Context, ip string, proxyID, accountID 
 			last_hit_at = NOW(),
 			is_dynamic  = poison_blocked_egress.is_dynamic OR EXCLUDED.is_dynamic
 	`, ip, proxyID, accountID, isDynamic, reason)
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // IsBlocked 报告该出口 IP 是否已在黑名单中。

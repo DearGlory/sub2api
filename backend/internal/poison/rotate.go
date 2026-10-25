@@ -2,7 +2,9 @@ package poison
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"net/url"
 	"strings"
 )
 
@@ -13,6 +15,8 @@ type RotationCandidate struct {
 	Host     string
 	Port     int
 	Protocol string
+	Username string
+	Password string
 }
 
 // Rotator 决定命中投毒后该换哪个代理。
@@ -55,19 +59,32 @@ func (r *Rotator) Next(ctx context.Context, skip map[int64]struct{}) (*RotationC
 	}
 	blocked := map[int64]struct{}{}
 	if r.Blocked != nil {
-		if b, err := r.Blocked(ctx); err == nil {
-			blocked = b
+		b, err := r.Blocked(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("blocked proxies: %w", err)
 		}
+		blocked = b
 	}
 	inUse := map[string]struct{}{}
 	if r.InUse != nil {
-		if u, err := r.InUse(ctx); err == nil {
-			inUse = u
+		u, err := r.InUse(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("occupied endpoints: %w", err)
 		}
+		inUse = u
 	}
 
+	skippedEndpoints := make(map[string]struct{})
+	for i := range candidates {
+		if _, skipped := skip[candidates[i].ID]; skipped {
+			skippedEndpoints[candidates[i].endpoint()] = struct{}{}
+		}
+	}
 	for i := range candidates {
 		c := &candidates[i]
+		if _, skipped := skippedEndpoints[c.endpoint()]; skipped {
+			continue
+		}
 		if _, bad := blocked[c.ID]; bad {
 			continue
 		}
@@ -82,13 +99,46 @@ func (r *Rotator) Next(ctx context.Context, skip map[int64]struct{}) (*RotationC
 		// 静态代理的出口 IP 就是 host，可直接判断是否已知脏 IP，
 		// 避免把请求再送进一个已拉黑的出口白跑一次。
 		if r.IsEgressBlocked != nil && isStaticHost(c.Host) {
-			if dirty, err := r.IsEgressBlocked(ctx, c.Host); err == nil && dirty {
+			dirty, err := r.IsEgressBlocked(ctx, strings.TrimSpace(c.Host))
+			if err != nil {
+				return nil, fmt.Errorf("blocked egress: %w", err)
+			}
+			if dirty {
 				continue
 			}
 		}
 		return c, nil
 	}
 	return nil, nil
+}
+
+// ValidateEgress validates a selected candidate before binding it. The
+// probe uses the exact configured authentication, without inventing a session API.
+func (r *Rotator) ValidateEgress(ctx context.Context, c *RotationCandidate) error {
+	if isStaticHost(c.Host) && r.Prober == nil {
+		return nil
+	}
+	if r.Prober == nil {
+		return fmt.Errorf("dynamic egress probe unavailable")
+	}
+	if snap := CurrentSnapshot(); snap != nil && !snap.EgressProbe {
+		return fmt.Errorf("dynamic egress probe disabled")
+	}
+	ip, err := r.Prober.Probe(ctx, c.ProxyURL())
+	if err != nil {
+		return fmt.Errorf("dynamic egress probe failed")
+	}
+	if r.IsEgressBlocked == nil {
+		return fmt.Errorf("egress lookup unavailable")
+	}
+	dirty, err := r.IsEgressBlocked(ctx, ip)
+	if err != nil {
+		return err
+	}
+	if dirty {
+		return fmt.Errorf("candidate egress is blocked")
+	}
+	return nil
 }
 
 // isStaticHost 判断 host 是否为可直接作为出口 IP 的地址。
@@ -109,7 +159,12 @@ func (c *RotationCandidate) endpoint() string {
 	if c == nil {
 		return ""
 	}
-	return strings.TrimSpace(strings.ToLower(c.Host)) + ":" + itoa(c.Port)
+	return Endpoint(c.Host, c.Port)
+}
+
+// Endpoint is the normalized key used by selection and transactional occupancy checks.
+func Endpoint(host string, port int) string {
+	return strings.TrimSpace(strings.ToLower(host)) + ":" + itoa(port)
 }
 
 // ProxyURL 拼出可直接用于 HTTP 客户端的代理地址。
@@ -121,5 +176,9 @@ func (c *RotationCandidate) ProxyURL() string {
 	if proto == "" {
 		proto = "http"
 	}
-	return proto + "://" + c.Host + ":" + itoa(c.Port)
+	u := &url.URL{Scheme: proto, Host: net.JoinHostPort(strings.TrimSpace(c.Host), itoa(c.Port))}
+	if c.Username != "" && c.Password != "" {
+		u.User = url.UserPassword(c.Username, c.Password)
+	}
+	return u.String()
 }

@@ -36,7 +36,7 @@ func DefaultEgressProber() *EgressProber {
 
 // Probe 通过 proxyURL 探测出口 IP。proxyURL 为空时探测直连出口。
 //
-// 全部端点失败时返回错误，调用方应回退到代理 host 作为出口 IP 的近似值。
+// 全部端点失败时返回错误；未知出口不得以域名替代。
 func (p *EgressProber) Probe(ctx context.Context, proxyURL string) (string, error) {
 	if p == nil {
 		return "", fmt.Errorf("no prober")
@@ -61,6 +61,7 @@ func (p *EgressProber) Probe(ctx context.Context, proxyURL string) (string, erro
 		transport.Proxy = http.ProxyURL(parsed)
 	}
 
+	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: timeout}
 	var lastErr error
 	for _, endpoint := range endpoints {
@@ -82,6 +83,10 @@ func (p *EgressProber) Probe(ctx context.Context, proxyURL string) (string, erro
 		cancel()
 		if readErr != nil {
 			lastErr = readErr
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			lastErr = fmt.Errorf("egress endpoint HTTP status %d", resp.StatusCode)
 			continue
 		}
 		ip := strings.TrimSpace(string(body))
