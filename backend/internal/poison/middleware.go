@@ -22,7 +22,7 @@ func Middleware() gin.HandlerFunc {
 			if gw := StatusGuard(c); gw != nil {
 				gw.Close()
 				if c.Request != nil && gw.parentContext != nil {
-					c.Request = c.Request.WithContext(gw.parentContext)
+					c.Request = c.Request.WithContext(gw.restoreContext(c.Request.Context()))
 				}
 			}
 		}()
@@ -50,7 +50,7 @@ func Finalize(c *gin.Context) {
 			gw.cancel()
 		}
 		if c.Request != nil && gw.parentContext != nil {
-			c.Request = c.Request.WithContext(gw.parentContext)
+			c.Request = c.Request.WithContext(gw.restoreContext(c.Request.Context()))
 		}
 	}()
 

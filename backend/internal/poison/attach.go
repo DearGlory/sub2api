@@ -73,7 +73,7 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 		}
 		previous.Close()
 		if c.Request != nil && previous.parentContext != nil {
-			c.Request = c.Request.WithContext(previous.parentContext)
+			c.Request = c.Request.WithContext(previous.restoreContext(c.Request.Context()))
 		}
 		c.Writer = previous.ResponseWriter
 		c.Set("poison_guard_writer", nil)
