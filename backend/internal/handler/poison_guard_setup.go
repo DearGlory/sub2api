@@ -83,7 +83,7 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 				if accountService == nil {
 					return fmt.Errorf("account service unavailable")
 				}
-				status := service.StatusDisabled
+				status := "inactive"
 				_, err := accountService.Update(txCtx, inc.AccountID, service.UpdateAccountRequest{Status: &status})
 				return err
 			})
