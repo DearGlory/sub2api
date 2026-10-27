@@ -32,6 +32,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
+	"github.com/Wei-Shaw/sub2api/internal/poison"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 )
@@ -305,7 +306,12 @@ func doUpstreamRequest(client *http.Client, req *http.Request) (*http.Response, 
 		cancel()
 		return resp, err
 	}
+	poison.CaptureUpstreamResponse(req.Context(), resp)
+	rawBody := resp.Body
 	decompressResponseBody(resp)
+	if resp.Body != rawBody {
+		poison.CaptureDecodedResponse(req.Context(), resp)
+	}
 	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
 	return resp, nil
 }

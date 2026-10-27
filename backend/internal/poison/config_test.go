@@ -7,6 +7,9 @@ import (
 
 func TestParseDefaultsWhenNoValues(t *testing.T) {
 	snap := parse(nil)
+	if snap.EvidenceEnabled || snap.EvidenceDir != "./data/poison-evidence" {
+		t.Fatal("evidence defaults changed")
+	}
 	if snap.Enabled {
 		t.Fatal("must default to disabled")
 	}
@@ -125,6 +128,7 @@ func TestStoreReloadKeepsOldSnapshotOnError(t *testing.T) {
 func TestAllSettingsListsEveryKey(t *testing.T) {
 	keys := AllSettings()
 	want := map[string]bool{
+		SettingEvidenceEnabled: true, SettingEvidenceDir: true,
 		SettingEnabled:          true,
 		SettingUpstreamPrefixes: true,
 		SettingKeywordsVeto:     true,

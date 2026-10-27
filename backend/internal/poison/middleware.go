@@ -55,6 +55,7 @@ func Finalize(c *gin.Context) {
 	}()
 
 	if !gw.Blocked() && !gw.Finish() {
+		gw.evidence.close()
 		return
 	}
 	message := DefaultBlockMessage
@@ -69,8 +70,13 @@ func Finalize(c *gin.Context) {
 		gw.WriteError(DefaultBlockStatus, message)
 	}
 	if gw.protocolErr != nil {
+		gw.evidence.close()
 		log.Printf("[poison] invalid upstream stream path=%s committed_bytes=%d aborted=%v", c.Request.URL.Path, committed, aborted)
 		return
+	}
+	if id, path := gw.evidence.finalize(); path != "" {
+		c.Set("poison_guard_evidence_id", id)
+		c.Set("poison_guard_evidence_path", path)
 	}
 	accountID, _ := c.Get(ContextKeyAccountID)
 	log.Printf("[poison] blocked path=%s status=%d reason=%s account=%v committed_bytes=%d truncated=%v aborted=%v",

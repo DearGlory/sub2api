@@ -1,9 +1,11 @@
 package poison
 
 import (
+	"context"
 	"strings"
 	"sync"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 )
 
@@ -90,6 +92,16 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	}
 	MarkRequest(c, snap, info.BaseURL, info.HasProxy)
 	WrapWriter(c)
+	if snap.EvidenceEnabled && c.Request != nil {
+		ctx := c.Request.Context()
+		requestID, _ := ctx.Value(ctxkey.RequestID).(string)
+		model, _ := ctx.Value(ctxkey.Model).(string)
+		s := newEvidenceSession(snap.EvidenceDir, requestID, c.Request.URL.Path, model, info)
+		if s != nil {
+			StatusGuard(c).evidence = s
+			c.Request = c.Request.WithContext(context.WithValue(ctx, evidenceContextKey{}, s))
+		}
+	}
 	c.Set(ContextKeyAccountID, info.AccountID)
 	if info.ProxyID != nil {
 		c.Set(ContextKeyProxyID, *info.ProxyID)

@@ -10,6 +10,8 @@ import (
 
 // 配置键统一使用 poison_guard_ 前缀，便于一次性清理。
 const (
+	SettingEvidenceEnabled  = "poison_guard_evidence_enabled"
+	SettingEvidenceDir      = "poison_guard_evidence_dir"
 	SettingEnabled          = "poison_guard_enabled"
 	SettingUpstreamPrefixes = "poison_guard_upstream_prefixes"
 	SettingKeywordsVeto     = "poison_guard_keywords_veto"
@@ -25,6 +27,7 @@ const (
 // AllSettings 是本功能读取的全部配置键，删除功能时按此清单清理。
 func AllSettings() []string {
 	return []string{
+		SettingEvidenceEnabled, SettingEvidenceDir,
 		SettingEnabled,
 		SettingUpstreamPrefixes,
 		SettingKeywordsVeto,
@@ -68,12 +71,14 @@ type SettingsFetcher func() (map[string]string, error)
 
 // Snapshot 是一次配置加载后的不可变视图。
 type Snapshot struct {
-	Enabled     bool
-	Detector    *Detector
-	Scope       *Scope
-	RotateMax   int
-	EgressProbe bool
-	BlockMsg    string
+	EvidenceEnabled bool
+	EvidenceDir     string
+	Enabled         bool
+	Detector        *Detector
+	Scope           *Scope
+	RotateMax       int
+	EgressProbe     bool
+	BlockMsg        string
 }
 
 // Active 报告该快照是否应启用检测。
@@ -166,6 +171,13 @@ func parse(values map[string]string) *Snapshot {
 		snap.BlockMsg = strings.TrimSpace(v)
 	}
 
+	if v, ok := get(SettingEvidenceEnabled); ok {
+		snap.EvidenceEnabled = parseBool(v, false)
+	}
+	snap.EvidenceDir = "./data/poison-evidence"
+	if v, ok := get(SettingEvidenceDir); ok && strings.TrimSpace(v) != "" {
+		snap.EvidenceDir = strings.TrimSpace(v)
+	}
 	return snap
 }
 

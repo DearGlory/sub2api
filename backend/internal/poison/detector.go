@@ -228,13 +228,14 @@ type StreamGuard struct {
 	d   *Detector
 	buf []rune
 	// pending 保存上游分片尾部尚未闭合的 UTF-8 字节，等下一段补齐再判定。
-	pending  []byte
-	released int
-	seen     map[int]struct{}
-	counted  int
-	matched  []string
-	blocked  bool
-	reason   string
+	pending   []byte
+	inspected int
+	released  int
+	seen      map[int]struct{}
+	counted   int
+	matched   []string
+	blocked   bool
+	reason    string
 }
 
 // NewStreamGuard 为一次流式响应创建守卫。Detector 为空时返回的守卫恒放行。
@@ -353,6 +354,7 @@ func (g *StreamGuard) scanBuffer() Result {
 	if len(g.buf) == 0 {
 		return Result{}
 	}
+	g.inspected = g.released + len(g.buf)
 	lower := strings.ToLower(string(g.buf))
 	for i := range g.d.words {
 		w := &g.d.words[i]

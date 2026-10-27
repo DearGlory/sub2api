@@ -47,6 +47,8 @@ type responseGuard struct {
 	lanes        map[string]*responseLane
 	scan         int
 	line         int
+	captureHit   bool
+	hit          HitDetails
 	reason       string
 }
 
@@ -71,13 +73,13 @@ func (g *responseGuard) feed(data []byte, final bool) ([]byte, bool, error) {
 	if g.mode == responseRaw {
 		out, verdict := g.text.Feed(string(data))
 		if verdict == VerdictBlock {
-			g.reason = g.text.Reason()
+			g.recordHit(g.text, "raw")
 			return nil, true, nil
 		}
 		if final {
 			tail, v := g.text.Flush()
 			if v == VerdictBlock {
-				g.reason = g.text.Reason()
+				g.recordHit(g.text, "raw")
 				return nil, true, nil
 			}
 			out += tail
@@ -177,9 +179,9 @@ func (g *responseGuard) feed(data []byte, final bool) ([]byte, bool, error) {
 				return nil, true, nil
 			}
 		}
-		for _, lane := range g.lanes {
+		for key, lane := range g.lanes {
 			if _, verdict := lane.guard.Flush(); verdict == VerdictBlock {
-				g.reason = lane.guard.Reason()
+				g.recordHit(lane.guard, key)
 				g.clear()
 				return nil, true, nil
 			}
@@ -219,6 +221,14 @@ func (g *responseGuard) nextFrame(final bool) int {
 	return 0
 }
 
+func (g *responseGuard) recordHit(s *StreamGuard, lane string) {
+	g.reason = s.Reason()
+	if !g.captureHit {
+		return
+	}
+	g.hit = HitDetails{InspectedRunes: s.inspected, Reason: g.reason, Lane: lane, Matched: append([]string(nil), s.matched...), Counted: s.counted, Threshold: s.d.threshold, Veto: strings.HasPrefix(g.reason, "veto:")}
+}
+
 func (g *responseGuard) clear() {
 	g.pending.close()
 	g.queued.close()
@@ -235,7 +245,7 @@ func (g *responseGuard) inspectParts(parts []responseText) bool {
 			for key, lane := range g.lanes {
 				if key == part.lane || strings.HasPrefix(key, part.lane+"/") {
 					if _, verdict := lane.guard.Flush(); verdict == VerdictBlock {
-						g.reason = lane.guard.Reason()
+						g.recordHit(lane.guard, key)
 						return true
 					}
 				}
@@ -252,7 +262,7 @@ func (g *responseGuard) inspectParts(parts []responseText) bool {
 		}
 		lane.end += utf8.RuneCountInString(part.text)
 		if _, verdict := lane.guard.Feed(part.text); verdict == VerdictBlock {
-			g.reason = lane.guard.Reason()
+			g.recordHit(lane.guard, part.lane)
 			return true
 		}
 	}

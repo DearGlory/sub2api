@@ -49,6 +49,7 @@ func snapshotFromContext(c *gin.Context) *Snapshot {
 // 一旦判定为投毒，后续写入全部丢弃，并由调用方把响应改成错误。
 type GuardWriter struct {
 	gin.ResponseWriter
+	evidence      *evidenceSession
 	snap          *Snapshot
 	protocol      *responseGuard
 	protocolErr   error
@@ -102,6 +103,7 @@ func (w *GuardWriter) Close() {
 	}
 	w.mu.Lock()
 	w.closed = true
+	w.evidence.close()
 	if w.protocol != nil {
 		w.protocol.clear()
 	}
@@ -193,12 +195,16 @@ func (w *GuardWriter) Write(data []byte) (int, error) {
 
 	if w.protocol == nil {
 		w.protocol = newResponseGuard(w.snap.Detector, w.Header().Get("Content-Type"))
+		w.protocol.captureHit = w.evidence != nil
 	}
 	safe, blocked, parseErr := w.protocol.feed(data, false)
 	if blocked || parseErr != nil {
 		w.discarded += len(data)
 		w.blocked = true
 		w.protocolErr = parseErr
+		if blocked && parseErr == nil {
+			w.evidence.markHit(w.protocol.hit, w.committed)
+		}
 		if blocked && w.blockErr == nil {
 			w.blockErr = &BlockedError{Reason: w.protocol.reason}
 		}
@@ -255,11 +261,15 @@ func (w *GuardWriter) Finish() bool {
 	defer w.mu.Unlock()
 	if w.protocol == nil {
 		w.protocol = newResponseGuard(w.snap.Detector, w.Header().Get("Content-Type"))
+		w.protocol.captureHit = w.evidence != nil
 	}
 	rest, blocked, parseErr := w.protocol.feed(nil, true)
 	if blocked || parseErr != nil {
 		w.blocked = true
 		w.protocolErr = parseErr
+		if blocked && parseErr == nil {
+			w.evidence.markHit(w.protocol.hit, w.committed)
+		}
 		if blocked && w.blockErr == nil {
 			w.blockErr = &BlockedError{Reason: w.protocol.reason}
 		}

@@ -1,6 +1,9 @@
 package service
 
-import "net/http"
+import (
+	"github.com/Wei-Shaw/sub2api/internal/poison"
+	"net/http"
+)
 
 func (s *OpenAIGatewayService) SetPluginManager(manager *PluginManager) {
 	s.pluginManager = manager
@@ -12,6 +15,7 @@ func (s *OpenAIGatewayService) doOpenAIUpstream(request *http.Request, proxyURL 
 	if s.pluginManager != nil {
 		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
+			poison.CapturePluginResponse(request.Context(), response)
 			return response, err
 		}
 	}
@@ -29,6 +33,7 @@ func (s *AccountTestService) doOpenAIAccountTestUpstream(
 	if s.pluginManager != nil {
 		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
+			poison.CapturePluginResponse(request.Context(), response)
 			return response, err
 		}
 	}
