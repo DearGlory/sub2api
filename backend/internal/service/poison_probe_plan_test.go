@@ -148,7 +148,7 @@ func TestPoisonProbePlanPostgres(t *testing.T) {
 	seedUsage(t, db, accA, 20, "model-a", "model-a", 1, 0)
 
 	// inactive + unschedulable account must stay in the plan.
-	accB := planAccount{baseURL: "https://shared.example.com", proxyID: planProxy(8), status: "disabled", schedulable: false, extra: "{}"}.seed(t, db)
+	accB := planAccount{baseURL: "https://shared.example.com", proxyID: planProxy(8), status: "inactive", schedulable: false, extra: "{}"}.seed(t, db)
 	seedGroup(t, db, accB, 10)
 	for i := 0; i < 5; i++ {
 		seedUsage(t, db, accB, 10, "shared-model", "shared-model", 1, 0.1)
@@ -184,8 +184,8 @@ func TestPoisonProbePlanPostgres(t *testing.T) {
 	}
 
 	a := byID(t, got, accA)
-	require.Equal(t, "model-a", a.Model)
-	require.Equal(t, int64(4), a.ModelRequests, "merged across groups, count rows not tokens")
+	require.Equal(t, "shared-model", a.Model)
+	require.Equal(t, int64(5), a.ModelRequests, "group population includes other accounts")
 	require.Equal(t, []int64{10, 20}, a.GroupIDs)
 	require.Equal(t, int64(5), a.RestoreEpoch)
 	require.Equal(t, int64(3), a.SharedGeneration)
@@ -197,7 +197,7 @@ func TestPoisonProbePlanPostgres(t *testing.T) {
 	b := byID(t, got, accB)
 	require.Equal(t, "shared-model", b.Model)
 	require.Equal(t, int64(5), b.ModelRequests)
-	require.Equal(t, "disabled", b.Status)
+	require.Equal(t, "inactive", b.Status)
 	require.False(t, b.Schedulable)
 	require.Equal(t, int64(0), b.RestoreEpoch)
 	require.Equal(t, int64(0), b.SharedGeneration)
@@ -216,8 +216,28 @@ func TestPoisonProbePlanPostgres(t *testing.T) {
 
 	e := byID(t, got, accDup)
 	require.Equal(t, []int64{10}, e.GroupIDs, "distinct group ids")
-	require.Equal(t, int64(2), e.ModelRequests, "duplicate account_groups rows do not duplicate counts")
-	require.Equal(t, "dup-model", e.Model)
+	require.Equal(t, int64(5), e.ModelRequests, "duplicate memberships do not multiply group counts")
+	require.Equal(t, "shared-model", e.Model)
+}
+
+func TestPoisonProbePlanUsesWholeGroupPopulation(t *testing.T) {
+	db := planPostgres(t)
+	a := planAccount{baseURL: "https://shared.example.com", proxyID: planProxy(7)}.seed(t, db)
+	b := planAccount{baseURL: "https://shared.example.com", proxyID: planProxy(8)}.seed(t, db)
+	seedGroup(t, db, a, 10)
+	seedGroup(t, db, a, 20)
+	seedGroup(t, db, b, 10)
+	seedUsage(t, db, a, 10, "own-minority", "own-minority", 999999, 0)
+	for i := 0; i < 4; i++ {
+		seedUsage(t, db, b, 10, "group-leader", "group-leader", 1, 0)
+	}
+	seedUsage(t, db, 999, 20, "group-leader", "group-leader", 1, 0)
+	got, err := NewPoisonProbePlanService(db).Plan(context.Background(), planScope())
+	require.NoError(t, err)
+	require.Equal(t, "group-leader", byID(t, got, a).Model, "group statistics must include usage routed through other accounts")
+	require.Equal(t, int64(5), byID(t, got, a).ModelRequests)
+	require.Equal(t, "group-leader", byID(t, got, b).Model)
+	require.Equal(t, int64(4), byID(t, got, b).ModelRequests)
 }
 
 // TestPoisonProbePlanTieBreakPostgres prefers the lexicographically smaller model on a tie.

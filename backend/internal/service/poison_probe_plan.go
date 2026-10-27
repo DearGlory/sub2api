@@ -179,14 +179,19 @@ ORDER BY account_id, group_id`, pq.Array(ids))
 // still happened.
 func (s *PoisonProbePlanService) loadModelCounts(ctx context.Context, ids []int64, into map[int64]*admittedAccount) error {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT ag.account_id,
-       COALESCE(NULLIF(BTRIM(u.requested_model), ''), u.model) AS model_name,
-       COUNT(*) AS requests
-FROM (SELECT DISTINCT account_id, group_id FROM account_groups) ag
-JOIN usage_logs u ON u.account_id = ag.account_id AND u.group_id = ag.group_id
-WHERE ag.account_id = ANY($1::bigint[])
-GROUP BY ag.account_id, model_name
-ORDER BY ag.account_id, model_name`, pq.Array(ids))
+WITH memberships AS (
+ SELECT DISTINCT account_id, group_id FROM account_groups
+ WHERE account_id = ANY($1::bigint[])
+), group_counts AS (
+ SELECT group_id, COALESCE(NULLIF(BTRIM(requested_model), ''), model) AS model_name,
+        COUNT(*) AS requests
+ FROM usage_logs WHERE group_id IN (SELECT DISTINCT group_id FROM memberships)
+ GROUP BY group_id, COALESCE(NULLIF(BTRIM(requested_model), ''), model)
+)
+SELECT m.account_id, g.model_name, SUM(g.requests)::bigint
+FROM memberships m JOIN group_counts g USING(group_id)
+GROUP BY m.account_id, g.model_name
+ORDER BY m.account_id, g.model_name`, pq.Array(ids))
 	if err != nil {
 		return fmt.Errorf("poison probe plan: query usage: %w", err)
 	}
