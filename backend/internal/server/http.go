@@ -24,6 +24,7 @@ import (
 // ProviderSet 提供服务器层的依赖
 var ProviderSet = wire.NewSet(
 	ProvideRouter,
+	ProvidePoisonSharedRuntime,
 	ProvideHTTPServer,
 )
 
@@ -46,6 +47,7 @@ func ProvideRouter(
 	db *sql.DB,
 	accountService *service.AccountService,
 	proxyService *service.ProxyService,
+	sharedRuntime *PoisonSharedRuntime,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -95,7 +97,11 @@ func ProvideRouter(
 		service.SetWebSearchManager(websearch.NewManager(configs, redisClient))
 	})
 
-	return SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg, redisClient)
+	router := SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg, redisClient)
+	if sharedRuntime != nil && handlers != nil && handlers.Admin != nil {
+		sharedRuntime.Bind(settingService, handlers.Admin.Setting)
+	}
+	return router
 }
 
 func configureTrustedProxies(r *gin.Engine, cfg config.ServerConfig) {
