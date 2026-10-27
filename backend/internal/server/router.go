@@ -86,6 +86,7 @@ func SetupRouter(
 		veto, strong, weak, threshold := snap.Detector.Summary()
 		log.Printf("[poison] config loaded enabled=%v upstream_prefixes=%d veto=%d strong=%d weak=%d threshold=%d head_buffer=%d rotate_max=%d",
 			snap.Enabled, snap.Scope.Count(), veto, strong, weak, threshold, snap.Detector.HeadRunes(), snap.RotateMax)
+		log.Printf("[poison-evidence] config loaded enabled=%v directory=%q", snap.EvidenceEnabled, snap.EvidenceDir)
 	}
 	r.Use(poison.Middleware())
 
@@ -112,6 +113,8 @@ func SetupRouter(
 	settingService.AddOnUpdateCallback(func() {
 		if err := poisonStore.Reload(); err != nil {
 			log.Printf("Warning: failed to reload poison guard settings: %v", err)
+		} else if snap := poisonStore.Current(); snap != nil {
+			log.Printf("[poison-evidence] config reloaded enabled=%v directory=%q", snap.EvidenceEnabled, snap.EvidenceDir)
 		}
 	})
 
