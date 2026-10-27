@@ -71,6 +71,7 @@ type SettingsFetcher func() (map[string]string, error)
 
 // Snapshot 是一次配置加载后的不可变视图。
 type Snapshot struct {
+	SharedEnabled   bool
 	EvidenceEnabled bool
 	EvidenceDir     string
 	Enabled         bool

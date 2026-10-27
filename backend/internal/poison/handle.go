@@ -21,6 +21,7 @@ type Incident struct {
 	EvidencePath     string
 	AccountID        int64
 	RestoreEpoch     int64
+	SharedGeneration int64
 	ProxyID          *int64
 	// ProxyHost 是代理主机；静态代理即为出口 IP，域名为动态代理入口。
 	ProxyHost string

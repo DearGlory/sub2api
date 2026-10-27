@@ -21,8 +21,9 @@ type AccountInfo struct {
 	// AccountID 仅用于日志与黑名单记录。
 	AccountID int64
 	// ProxyID 为 nil 表示未配置代理；仅用于日志与轮换。
-	ProxyID      *int64
-	RestoreEpoch int64
+	ProxyID          *int64
+	RestoreEpoch     int64
+	SharedGeneration int64
 	// ProxyHost / ProxyPort 用于判定出口 IP：静态代理的 host 就是出口 IP，
 	// 域名形式的代理需要探测。缺省时跳过出口 IP 记录。
 	ProxyHost string
