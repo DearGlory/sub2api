@@ -250,8 +250,8 @@ func TestSharedDisabledWorkerDoesNotFinalizeRelease(t *testing.T) {
 	f.co.BackoffBase = time.Millisecond
 	last := run.Cells[len(run.Cells)-1].AccountID
 	f.probe.mu.Lock()
-	f.probe.behave = func(call probeCall, _ int) SharedProbeResult {
-		if call.AccountID == last {
+	f.probe.behave = func(call probeCall, nth int) SharedProbeResult {
+		if call.AccountID == last && nth == 1 {
 			// The operator disabled shared mode while this probe was running.
 			f.setSharedEnabled(false)
 		}
@@ -278,6 +278,15 @@ func TestSharedDisabledWorkerDoesNotFinalizeRelease(t *testing.T) {
 	}
 	// Re-enabling resumes the round and completes it.
 	f.setSharedEnabled(true)
+	// Cancellation left the last claim unresolved. Resume after its lease expires.
+	f.h.patchState(func(state *SharedState) {
+		for i := range state.Runs {
+			state.Runs[i].LeaseUntil = time.Now().Add(-time.Second)
+			for j := range state.Runs[i].Cells {
+				state.Runs[i].Cells[j].LeaseUntil = time.Now().Add(-time.Second)
+			}
+		}
+	})
 	done := f.drainTicks(t, 20)
 	if done == nil || done.State != SharedRunReleased {
 		t.Fatalf("resumed state=%v", done)

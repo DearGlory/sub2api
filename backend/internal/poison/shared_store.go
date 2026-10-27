@@ -453,9 +453,9 @@ func captureBeforeImage(ctx context.Context, tx *sql.Tx, ip string) (*SharedBloc
 	}
 	img := &SharedBlockedBeforeImage{}
 	var proxyID, accountID sql.NullInt64
-	err := tx.QueryRowContext(ctx, `SELECT id, outbound_ip, proxy_id, account_id, is_dynamic, reason, hit_count, last_hit_at
+	err := tx.QueryRowContext(ctx, `SELECT id, outbound_ip, proxy_id, account_id, is_dynamic, reason, hit_count, first_hit_at, last_hit_at
 		FROM poison_blocked_egress WHERE outbound_ip=$1`, ip).
-		Scan(&img.ID, &img.OutboundIP, &proxyID, &accountID, &img.IsDynamic, &img.Reason, &img.HitCount, &img.LastHitAt)
+		Scan(&img.ID, &img.OutboundIP, &proxyID, &accountID, &img.IsDynamic, &img.Reason, &img.HitCount, &img.FirstHitAt, &img.LastHitAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

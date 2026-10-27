@@ -205,6 +205,9 @@ func (s *SharedCoordinator) Reconcile(ctx context.Context) error {
 		st.UpdatedAt = time.Now().UTC()
 		return nil
 	})
+	if errors.Is(err, ErrStaleIncident) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -314,6 +317,7 @@ func (s *SharedCoordinator) Handle(ctx context.Context, inc Incident) (Dispositi
 			return nil
 		}
 		before, err := captureBeforeImage(ctx, tx, egress)
+		previous := before
 		if err != nil {
 			return err
 		}
@@ -391,6 +395,9 @@ func (s *SharedCoordinator) Handle(ctx context.Context, inc Incident) (Dispositi
 		}
 		if err := s.freezeRun(ctx, tx, st, inc, old.Candidate, egress, dynamic, before, target, planned); err != nil {
 			return err
+		}
+		if run := st.pendingRunFor(*inc.ProxyID); run != nil && run.Previous == nil {
+			run.Previous = previous
 		}
 		now := time.Now().UTC()
 		st.UpdatedAt = now
@@ -705,7 +712,7 @@ type blockedRow struct {
 }
 
 func loadBlockedRows(ctx context.Context, q sharedQueryer) ([]blockedRow, error) {
-	rows, err := q.QueryContext(ctx, `SELECT id, outbound_ip, proxy_id, account_id, is_dynamic, reason, hit_count, last_hit_at
+	rows, err := q.QueryContext(ctx, `SELECT id, outbound_ip, proxy_id, account_id, is_dynamic, reason, hit_count, first_hit_at, last_hit_at
 		FROM poison_blocked_egress ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -715,7 +722,7 @@ func loadBlockedRows(ctx context.Context, q sharedQueryer) ([]blockedRow, error)
 	for rows.Next() {
 		img := &SharedBlockedBeforeImage{}
 		var proxyID, accountID sql.NullInt64
-		if err := rows.Scan(&img.ID, &img.OutboundIP, &proxyID, &accountID, &img.IsDynamic, &img.Reason, &img.HitCount, &img.LastHitAt); err != nil {
+		if err := rows.Scan(&img.ID, &img.OutboundIP, &proxyID, &accountID, &img.IsDynamic, &img.Reason, &img.HitCount, &img.FirstHitAt, &img.LastHitAt); err != nil {
 			return nil, err
 		}
 		row := blockedRow{OutboundIP: img.OutboundIP, Image: img}
@@ -767,13 +774,18 @@ func sanitizeID(s string) string {
 // Start launches the verification worker. It is idempotent and does nothing when
 // shared mode is off, so the parent can call it unconditionally.
 func (s *SharedCoordinator) Start(ctx context.Context) {
-	if s == nil || s.db == nil {
+	if s == nil || s.db == nil || !s.sharedEnabled() {
 		return
 	}
 	s.mu.Lock()
 	if s.started {
-		s.mu.Unlock()
-		return
+		select {
+		case <-s.done:
+			s.started = false
+		default:
+			s.mu.Unlock()
+			return
+		}
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
@@ -791,9 +803,6 @@ func (s *SharedCoordinator) Stop() {
 	}
 	s.mu.Lock()
 	cancel, done := s.cancel, s.done
-	s.started = false
-	s.cancel = nil
-	s.done = nil
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -801,6 +810,13 @@ func (s *SharedCoordinator) Stop() {
 	if done != nil {
 		<-done
 	}
+	s.mu.Lock()
+	if s.done == done {
+		s.started = false
+		s.cancel = nil
+		s.done = nil
+	}
+	s.mu.Unlock()
 }
 
 func (s *SharedCoordinator) loop(ctx context.Context, done chan struct{}) {
@@ -809,6 +825,7 @@ func (s *SharedCoordinator) loop(ctx context.Context, done chan struct{}) {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
+	nextReconcile := time.Time{}
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	for {
@@ -817,12 +834,91 @@ func (s *SharedCoordinator) loop(ctx context.Context, done chan struct{}) {
 			return
 		case <-timer.C:
 		}
-		if err := s.Tick(ctx); err != nil && ctx.Err() == nil {
-			// Errors are retried on the next tick; nothing is marked clean on failure.
-			_ = err
+		if !s.sharedEnabled() {
+			return
 		}
-		timer.Reset(interval)
+		now := time.Now()
+		if !now.Before(nextReconcile) {
+			op, cancel := context.WithTimeout(ctx, 30*time.Second)
+			err := s.Reconcile(op)
+			cancel()
+			if errors.Is(err, ErrSharedDisabled) {
+				return
+			}
+			nextReconcile = time.Now().Add(interval)
+		}
+		state, err := s.readState(ctx)
+		delay := interval
+		if err == nil {
+			if sharedReadyWork(state, s.owner, time.Now()) {
+				err = s.Tick(ctx)
+				if errors.Is(err, ErrSharedDisabled) {
+					return
+				}
+				if err == nil {
+					timer.Reset(0)
+					continue
+				}
+			} else {
+				delay = sharedNextDelay(state, time.Now(), interval)
+			}
+		}
+		if until := time.Until(nextReconcile); until < delay {
+			delay = until
+		}
+		if delay < 10*time.Millisecond {
+			delay = 10 * time.Millisecond
+		}
+		timer.Reset(delay)
 	}
+}
+func sharedReadyWork(state *SharedState, owner string, now time.Time) bool {
+	for i := range state.Runs {
+		run := &state.Runs[i]
+		if run.Terminal() {
+			continue
+		}
+		if run.LeaseOwner != "" && run.LeaseOwner != owner && run.LeaseUntil.After(now) {
+			continue
+		}
+		if run.FullyObserved() {
+			return true
+		}
+		for _, cell := range run.Cells {
+			if cell.Status == SharedCellDone && (cell.Verdict == SharedCellClean || cell.Verdict == SharedCellPoison) {
+				continue
+			}
+			if cell.Status == SharedCellRunning && cell.LeaseUntil.After(now) {
+				continue
+			}
+			if cell.NextAttemptAt.After(now) {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+func sharedNextDelay(state *SharedState, now time.Time, ceiling time.Duration) time.Duration {
+	delay := ceiling
+	for _, run := range state.Runs {
+		if run.Terminal() {
+			continue
+		}
+		for _, cell := range run.Cells {
+			if cell.Status == SharedCellDone {
+				continue
+			}
+			at := cell.NextAttemptAt
+			if cell.Status == SharedCellRunning {
+				at = cell.LeaseUntil
+			}
+			if d := at.Sub(now); d > 0 && d < delay {
+				delay = d
+			}
+		}
+	}
+	return delay
 }
 
 func sharedHostname() string {

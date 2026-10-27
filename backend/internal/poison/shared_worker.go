@@ -51,7 +51,11 @@ func (s *SharedCoordinator) Tick(ctx context.Context) error {
 		return s.finalize(ctx)
 	}
 	result, probeErr := s.probe(ctx, claim)
-	return s.finish(ctx, claim, result, probeErr)
+	err = s.finish(ctx, claim, result, probeErr)
+	if errors.Is(err, ErrSharedDisabled) {
+		return nil
+	}
+	return err
 }
 
 // finalize commits the transition of runs whose whole frozen round already has a
@@ -494,7 +498,10 @@ func (s *SharedCoordinator) release(ctx context.Context, tx *sql.Tx, st *SharedS
 		return nil, nil
 	}
 	ids := accountIDs(accounts)
-	newGen := st.Generation + 1
+	newGen, err := nextSharedGeneration(st.Generation, accounts)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := writeAccounts(ctx, tx, ids, *run.ProxyID, newGen); err != nil {
 		return nil, err
 	}
@@ -531,7 +538,7 @@ func cutBackDrift(run *SharedRun, accounts []sharedAccount) string {
 		if epoch != acc.RestoreEpoch {
 			return "epoch"
 		}
-		if acc.Generation != run.Generation {
+		if acc.Generation != run.Generation || acc.ProxyID == nil || run.TargetProxyID == nil || *acc.ProxyID != *run.TargetProxyID {
 			return "binding"
 		}
 	}

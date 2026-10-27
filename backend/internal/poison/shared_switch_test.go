@@ -153,8 +153,8 @@ func TestSharedSwitchRewritesEveryEligibleAccount(t *testing.T) {
 	if disp.Outcome != "shared_switched" {
 		t.Fatalf("outcome=%q reason=%q", disp.Outcome, disp.Reason)
 	}
-	if got := f.validated(); len(got) != 1 || got[0] != 2 {
-		t.Fatalf("validated candidates = %v, want [2]", got)
+	if got := f.validated(); len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("validated candidates = %v, want initialization 1 then switch 2", got)
 	}
 	for _, id := range f.eligible {
 		if got := f.h.accountProxy(id); got == nil || *got != 2 {
