@@ -18,6 +18,11 @@ const SettingSharedState = "poison_guard_shared_state"
 // sharedRunRetention bounds the ledger kept in the settings row.
 const sharedRunRetention = 20
 
+// sharedRunRetentionAge drops terminal ledger units older than this even when the
+// retention count is not exceeded, so a long-idle deployment does not accumulate
+// a stale document. Trimming is always unit-based (see trimRuns).
+const sharedRunRetentionAge = 7 * 24 * time.Hour
+
 // Run kinds.
 const (
 	SharedRunAuto     = "auto"
@@ -59,8 +64,11 @@ type SharedState struct {
 	Notes           []string    `json:"notes,omitempty"`
 }
 
-// SharedRunCounts is the per-run progress ledger. Completed counts every cell
-// with a terminal observation, including inconclusive ones.
+// SharedRunCounts is the per-run progress ledger.
+//
+// Completed counts only definitive observations (clean or poison). An
+// inconclusive attempt is recorded in Inconclusive but never as completed: it is
+// re-queued and the round stays open until a real verdict lands.
 type SharedRunCounts struct {
 	Expected     int `json:"expected"`
 	Completed    int `json:"completed"`
@@ -80,6 +88,7 @@ type SharedBlockedBeforeImage struct {
 	IsDynamic  bool      `json:"is_dynamic"`
 	Reason     string    `json:"reason"`
 	HitCount   int       `json:"hit_count"`
+	FirstHitAt time.Time `json:"first_hit_at,omitempty"`
 	LastHitAt  time.Time `json:"last_hit_at"`
 }
 
@@ -122,21 +131,30 @@ type SharedRun struct {
 	Generation int64 `json:"generation"`
 	// CutBack records the intent; the actual cut-back re-checks the generation.
 	CutBack bool `json:"cut_back,omitempty"`
+	// PoisonConfirmed records the verdict (one hit is enough to keep the row)
+	// independently of completion: the run only becomes terminal once every cell
+	// has a definitive observation.
+	PoisonConfirmed bool `json:"poison_confirmed,omitempty"`
 	// TargetProxyID is the proxy the fleet moved to when the run was created.
 	TargetProxyID *int64 `json:"target_proxy_id,omitempty"`
 	// ProxyIDAfterSwitch is the pointer value right after the switch, used as part
 	// of the cut-back CAS.
-	ProxyIDAfterSwitch  int64                     `json:"proxy_id_after_switch,omitempty"`
-	WaitingForCandidate bool                      `json:"waiting_for_candidate,omitempty"`
-	ReleaseReason       string                    `json:"release_reason,omitempty"`
-	BatchID             string                    `json:"batch_id,omitempty"`
-	CreatedAt           time.Time                 `json:"created_at"`
-	UpdatedAt           time.Time                 `json:"updated_at"`
-	LeaseOwner          string                    `json:"lease_owner,omitempty"`
-	LeaseUntil          time.Time                 `json:"lease_until,omitempty"`
-	Before              *SharedBlockedBeforeImage `json:"before_image,omitempty"`
-	Cells               []SharedCell              `json:"cells"`
-	Counts              SharedRunCounts           `json:"counts"`
+	ProxyIDAfterSwitch  int64     `json:"proxy_id_after_switch,omitempty"`
+	WaitingForCandidate bool      `json:"waiting_for_candidate,omitempty"`
+	ReleaseReason       string    `json:"release_reason,omitempty"`
+	BatchID             string    `json:"batch_id,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	LeaseOwner          string    `json:"lease_owner,omitempty"`
+	LeaseUntil          time.Time `json:"lease_until,omitempty"`
+	// Before is the release token: the row as it exists after this run's own hit
+	// upsert, so a later all-clean round deletes exactly this observation.
+	Before *SharedBlockedBeforeImage `json:"before_image,omitempty"`
+	// Previous keeps the pre-upsert row for audit, so a confirmed hit can still
+	// show what was already on record before this run touched it.
+	Previous *SharedBlockedBeforeImage `json:"previous_blacklist,omitempty"`
+	Cells    []SharedCell              `json:"cells"`
+	Counts   SharedRunCounts           `json:"counts"`
 }
 
 // Terminal reports whether the run no longer needs probe work.
@@ -173,16 +191,41 @@ func (r *SharedRun) Recount() {
 			c.Completed++
 		case SharedCellInconclusive:
 			c.Inconclusive++
-			c.Completed++
 		}
 	}
 	r.Counts = c
 }
 
+// FullyObserved reports whether every frozen cell carries a definitive
+// observation (clean or poison) and no retry is outstanding. An empty round is
+// never considered observed: no coverage, no verdict.
+func (r *SharedRun) FullyObserved() bool {
+	if r == nil || len(r.Cells) == 0 {
+		return false
+	}
+	for i := range r.Cells {
+		cell := &r.Cells[i]
+		if cell.Status != SharedCellDone {
+			return false
+		}
+		switch cell.Verdict {
+		case SharedCellClean, SharedCellPoison:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // AllClean reports a fully covered round with no poison and nothing inconclusive.
+// Every cell must be done: an empty or partially observed round never releases.
 func (r *SharedRun) AllClean() bool {
+	if !r.FullyObserved() {
+		return false
+	}
 	r.Recount()
-	return r.Counts.Expected > 0 && r.Counts.Clean == r.Counts.Expected && r.Counts.Poison == 0 && r.Counts.Inconclusive == 0
+	return r.Counts.Expected > 0 && r.Counts.Clean == r.Counts.Expected &&
+		r.Counts.Poison == 0 && r.Counts.Inconclusive == 0 && r.Counts.Pending == 0
 }
 
 // AnyPoison reports a confirmed poisoning observation.
@@ -230,17 +273,95 @@ func (s *SharedState) waitingRun() *SharedRun {
 	return nil
 }
 
-// trimRuns keeps the ledger bounded: unfinished runs are never dropped, finished
-// ones fall off oldest-first.
+// runUnit is one independently trimmable slice of the ledger: a whole historical
+// batch (all runs sharing BatchID) or a single automatic round.
+type runUnit struct {
+	key  string
+	idxs []int
+}
+
+// units groups the ledger into trimmable units, preserving ledger order. A
+// historical batch is one unit so a sweep of 19 proxies stays fully queryable
+// instead of being decimated by the per-run retention count.
+func (s *SharedState) units() []runUnit {
+	order := make([]runUnit, 0, len(s.Runs))
+	index := map[string]int{}
+	for i := range s.Runs {
+		r := &s.Runs[i]
+		if r.BatchID == "" {
+			// Automatic rounds are independent of each other.
+			order = append(order, runUnit{key: "run:" + r.ID, idxs: []int{i}})
+			continue
+		}
+		if at, ok := index["batch:"+r.BatchID]; ok {
+			order[at].idxs = append(order[at].idxs, i)
+			continue
+		}
+		index["batch:"+r.BatchID] = len(order)
+		order = append(order, runUnit{key: "batch:" + r.BatchID, idxs: []int{i}})
+	}
+	return order
+}
+
+// trimRuns keeps the ledger bounded without ever cutting a unit in half.
+//
+// Rules:
+//   - a run that is still open keeps its whole unit (batch) alive;
+//   - a unit is dropped only when every run in it is terminal;
+//   - a historical batch is only ever dropped as a whole, and only once it has
+//     expired (older than sharedRunRetentionAge): an operator must still be able
+//     to audit the full sweep that unblocked 19 proxies;
+//   - automatic rounds expire by age and are otherwise capped at
+//     sharedRunRetention. Automatic rounds are complete or absent: never partial.
 func (s *SharedState) trimRuns() {
-	if len(s.Runs) <= sharedRunRetention {
+	units := s.units()
+	if len(units) == 0 {
 		return
 	}
-	keep := make([]SharedRun, 0, sharedRunRetention)
-	excess := len(s.Runs) - sharedRunRetention
-	for i := range s.Runs {
-		if excess > 0 && s.Runs[i].Terminal() {
+	now := time.Now().UTC()
+	drop := make([]bool, len(s.Runs))
+	autoUnits := 0
+	for _, unit := range units {
+		if !strings.HasPrefix(unit.key, "batch:") {
+			autoUnits++
+		}
+	}
+	excess := autoUnits - sharedRunRetention
+	for _, unit := range units {
+		batch := strings.HasPrefix(unit.key, "batch:")
+		terminal := true
+		newest := time.Time{}
+		for _, idx := range unit.idxs {
+			r := &s.Runs[idx]
+			if !r.Terminal() {
+				terminal = false
+				break
+			}
+			updated := r.UpdatedAt
+			if updated.IsZero() {
+				updated = r.CreatedAt
+			}
+			if updated.After(newest) {
+				newest = updated
+			}
+		}
+		if !terminal {
+			continue
+		}
+		expired := !newest.IsZero() && now.Sub(newest) > sharedRunRetentionAge
+		if !expired && (batch || excess <= 0) {
+			continue
+		}
+		for _, idx := range unit.idxs {
+			drop[idx] = true
+		}
+		if !expired {
 			excess--
+		}
+	}
+	keep := make([]SharedRun, 0, len(s.Runs))
+	for i := range s.Runs {
+		if drop[i] {
 			continue
 		}
 		keep = append(keep, s.Runs[i])

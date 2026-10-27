@@ -36,6 +36,7 @@ func (f *sharedSwitchFixture) switchTo(t *testing.T) *SharedRun {
 func TestSharedAllCleanCutsBackToOldProxy(t *testing.T) {
 	f := newSharedSwitchFixture(t)
 	run := f.switchTo(t)
+	before := f.state(t)
 	if run.ProxyID == nil || *run.ProxyID != 1 {
 		t.Fatalf("run proxy=%v", run.ProxyID)
 	}
@@ -56,15 +57,15 @@ func TestSharedAllCleanCutsBackToOldProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if st.Generation != 3 || st.SharedProxyID == nil || *st.SharedProxyID != 1 {
-		t.Fatalf("gen=%d pointer=%v", st.Generation, st.SharedProxyID)
+	if st.Generation != before.Generation+1 || st.SharedProxyID == nil || *st.SharedProxyID != 1 {
+		t.Fatalf("gen=%d (before %d) pointer=%v", st.Generation, before.Generation, st.SharedProxyID)
 	}
 	for _, id := range f.eligible {
 		if got := f.h.accountProxy(id); got == nil || *got != 1 {
 			t.Fatalf("account %d not cut back: %v", id, got)
 		}
-		if got := f.h.accountGeneration(id); got != 3 {
-			t.Fatalf("account %d generation=%d, want 3", id, got)
+		if got := f.h.accountGeneration(id); got != before.Generation+1 {
+			t.Fatalf("account %d generation=%d, want %d", id, got, before.Generation+1)
 		}
 	}
 	if n := f.h.count(`SELECT count(*) FROM accounts WHERE status='disabled' AND proxy_id=1`); n != 1 {
@@ -93,6 +94,7 @@ func TestSharedAllCleanCutsBackToOldProxy(t *testing.T) {
 func TestSharedAnyPoisonKeepsBlacklist(t *testing.T) {
 	f := newSharedSwitchFixture(t)
 	run := f.switchTo(t)
+	before := f.state(t)
 	victim := run.Cells[2].AccountID
 	f.probe.mu.Lock()
 	f.probe.script = map[string]SharedProbeResult{
@@ -100,7 +102,7 @@ func TestSharedAnyPoisonKeepsBlacklist(t *testing.T) {
 	}
 	f.probe.mu.Unlock()
 	f.co.BackoffBase = time.Millisecond
-	done := f.drainTicks(t, 40)
+	done := f.drainTicks(t, 80)
 	if done == nil || done.State != SharedRunConfirmed {
 		t.Fatalf("run state=%v", done)
 	}
@@ -111,8 +113,8 @@ func TestSharedAnyPoisonKeepsBlacklist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if st.Generation != 2 || st.SharedProxyID == nil || *st.SharedProxyID != 2 {
-		t.Fatalf("confirmed poison must not cut back: gen=%d pointer=%v", st.Generation, st.SharedProxyID)
+	if st.Generation != before.Generation || st.SharedProxyID == nil || *st.SharedProxyID != 2 {
+		t.Fatalf("confirmed poison must not cut back: gen=%d (before %d) pointer=%v", st.Generation, before.Generation, st.SharedProxyID)
 	}
 	if n := f.h.count(`SELECT count(*) FROM accounts WHERE proxy_id=2`); n != len(f.eligible) {
 		t.Fatalf("accounts moved back despite poison: %d", n)
@@ -485,19 +487,22 @@ func TestSharedWaitingRunRecoversWhenCandidateAppears(t *testing.T) {
 }
 
 // TestSharedCutBackRespectsRestoreEpoch: an account an administrator rebound after
-// the run was frozen is not dragged back with the rest of the fleet.
+// the run was frozen is not dragged back with the rest of the fleet — and, since a
+// partial cut-back would split the fleet (Reconcile then rewrites the restored
+// account back onto the shared pointer), the cut-back is skipped for everyone
+// while the proven-clean blacklist row is still removed.
 func TestSharedCutBackRespectsRestoreEpoch(t *testing.T) {
 	f := newSharedSwitchFixture(t)
 	run := f.switchTo(t)
-	ctx := context.Background()
+	before := f.state(t)
 	restored := run.Cells[1].AccountID
 	// Admin restore: epoch bumps and the account is manually put back on proxy 3.
 	f.h.setRestoreEpoch(restored, 1)
 	f.h.exec(`UPDATE accounts SET proxy_id=3 WHERE id=$1`, restored)
 	f.co.BackoffBase = time.Millisecond
-	done := f.drainTicks(t, 40)
-	if done == nil || done.State != SharedRunReleased {
-		t.Fatalf("state=%v", done)
+	done := f.drainTicks(t, 60)
+	if done == nil || done.State != SharedRunReleasedOld {
+		t.Fatalf("state=%v reason=%s, want a release without a cut-back", done, done.ReleaseReason)
 	}
 	if got := f.h.accountProxy(restored); got == nil || *got != 3 {
 		t.Fatalf("admin-restored account was overwritten: %v", got)
@@ -506,14 +511,20 @@ func TestSharedCutBackRespectsRestoreEpoch(t *testing.T) {
 		if id == restored {
 			continue
 		}
-		if got := f.h.accountProxy(id); got == nil || *got != 1 {
-			t.Fatalf("account %d not cut back: %v", id, got)
+		if got := f.h.accountProxy(id); got == nil || *got != 2 {
+			t.Fatalf("account %d was cut back over a drifted fleet: %v", id, got)
 		}
 	}
-	if !strings.Contains(done.ReleaseReason, "epoch_protected") {
+	if !strings.Contains(done.ReleaseReason, "epoch_drift") {
 		t.Fatalf("reason=%q", done.ReleaseReason)
 	}
-	_ = ctx
+	if _, still := f.h.blockedIPs()["10.0.0.1"]; still {
+		t.Fatalf("proven-clean egress was not unblocked: %v", f.h.blockedIPs())
+	}
+	st := f.state(t)
+	if st.Generation != before.Generation || st.SharedProxyID == nil || *st.SharedProxyID != 2 {
+		t.Fatalf("pointer moved over a drifted fleet: gen=%d pointer=%v", st.Generation, st.SharedProxyID)
+	}
 }
 
 // TestSharedDisabledWorkerDoesNothing: with the shared flag off there is no query,
