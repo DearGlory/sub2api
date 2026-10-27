@@ -68,16 +68,6 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	if c == nil {
 		return false
 	}
-	// Keep the first forwarding attempt time across account retries.
-	if c.Request != nil {
-		ctx := c.Request.Context()
-		started, _ := ctx.Value(requestStartedAtKey{}).(time.Time)
-		if started.IsZero() {
-			started = time.Now().UTC()
-			c.Request = c.Request.WithContext(context.WithValue(ctx, requestStartedAtKey{}, started))
-		}
-		c.Set(ContextKeyRequestStartedAt, started)
-	}
 	if previous := StatusGuard(c); previous != nil {
 		// A response already sent (including rejection) cannot be retried. Keep
 		// its account attribution and writer until the owning handler finishes.
@@ -100,6 +90,16 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	}
 	if !snap.Scope.Match(info.BaseURL, info.HasProxy) {
 		return false
+	}
+	// Keep the first admitted forwarding attempt time across account retries.
+	if c.Request != nil {
+		ctx := c.Request.Context()
+		started, _ := ctx.Value(requestStartedAtKey{}).(time.Time)
+		if started.IsZero() {
+			started = time.Now().UTC()
+			c.Request = c.Request.WithContext(context.WithValue(ctx, requestStartedAtKey{}, started))
+		}
+		c.Set(ContextKeyRequestStartedAt, started)
 	}
 	MarkRequest(c, snap, info.BaseURL, info.HasProxy)
 	WrapWriter(c)
