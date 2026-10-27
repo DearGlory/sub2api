@@ -29,20 +29,26 @@ var errLeaseLost = errors.New("shared verification lease lost")
 // Tick performs one worker pass: claim a single (run, account) cell, probe it with
 // the run's proxy, then commit the verdict and any run transition. Returning nil
 // without work is normal.
+//
+// The signature is stable on purpose: the parent drives cadence (a fast next tick
+// while cells are ready, the slow interval otherwise) and calls Reconcile on its
+// own schedule. This lane only owns claim/finish/lease/state.
 func (s *SharedCoordinator) Tick(ctx context.Context) error {
 	if !s.sharedEnabled() {
-		// Off means off: no query, no probe, no lease.
+		// Off means off: no query, no probe, no lease, and never a finalize (a
+		// disabled worker must not release or cut back).
 		return nil
 	}
-	// A round can be fully observed without a transition having been committed:
-	// the feature was switched off mid-probe, or the process died between the
-	// verdict write and the release. Converge those rounds before probing.
-	if err := s.finalize(ctx); err != nil {
+	claim, err := s.claim(ctx)
+	if err != nil {
 		return err
 	}
-	claim, err := s.claim(ctx)
-	if err != nil || claim == nil {
-		return err
+	if claim == nil {
+		// Nothing to probe. A round can still be fully observed without its
+		// transition having been committed (the feature was switched off
+		// mid-probe, or the process died between the verdict and the release):
+		// converge those rounds instead of leaving them open forever.
+		return s.finalize(ctx)
 	}
 	result, probeErr := s.probe(ctx, claim)
 	return s.finish(ctx, claim, result, probeErr)
