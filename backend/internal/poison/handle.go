@@ -8,13 +8,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 )
 
 // Incident 是一次命中投毒后的处置输入。
 type Incident struct {
-	AccountID int64
-	ProxyID   *int64
+	RequestID    string
+	EvidenceID   string
+	EvidencePath string
+	AccountID    int64
+	ProxyID      *int64
 	// ProxyHost 是代理主机；静态代理即为出口 IP，域名为动态代理入口。
 	ProxyHost string
 	// ProxyPort 仅用于日志。
@@ -30,9 +34,10 @@ type Incident struct {
 var ErrStaleIncident = errors.New("poison incident no longer matches account proxy")
 
 type Handler struct {
-	IncidentCurrent func(context.Context, Incident) (bool, error)
-	RebindIncident  func(context.Context, Incident, int64) error
-	DisableIncident func(context.Context, Incident) error
+	ReportDisposition func(Incident, Disposition)
+	IncidentCurrent   func(context.Context, Incident) (bool, error)
+	RebindIncident    func(context.Context, Incident, int64) error
+	DisableIncident   func(context.Context, Incident) error
 	// Egress 记录与查询出口 IP 黑名单。
 	Egress *EgressStore
 	// Prober 探测真实出口 IP，未注入时跳过探测。
@@ -50,94 +55,186 @@ type Handler struct {
 // Handle 执行一次命中后的处置。它不返回错误：任何处置失败都不应影响对客户的
 // 拦截行为，拦截本身已经在上游 writer 完成。
 func (h *Handler) Handle(ctx context.Context, inc Incident) {
+	d := Disposition{AccountID: inc.AccountID, RequestID: inc.RequestID, EvidenceID: inc.EvidenceID, EvidencePath: inc.EvidencePath, Outcome: "deferred", Reason: "deferred_dependency", Blacklist: BlacklistDisposition{Status: "not_attempted"}, Selections: []CandidateSelection{}, Attempts: []RotationAttempt{}}
+	defer func() { h.report(inc, d) }()
 	if h == nil {
 		return
 	}
-
-	egressIP, isDynamic := h.resolveEgress(ctx, inc)
-
-	// 1) 拉黑出口 IP。命中即永久拉黑，不设过期。
-	if h.Egress != nil && egressIP != "" {
-		if err := h.Egress.Record(ctx, egressIP, inc.ProxyID, &inc.AccountID, isDynamic, inc.Reason); err != nil {
-			log.Printf("[poison] record blocked egress %s failed: %v", egressIP, err)
+	canceled := func() bool {
+		if ctx.Err() != nil {
+			d.Reason = "deferred_" + rotationReason(ctx.Err())
+			return true
 		}
+		return false
 	}
-
+	if canceled() {
+		return
+	}
+	egressIP, isDynamic, resolveErr := h.resolveIncidentEgress(ctx, inc)
+	if canceled() {
+		return
+	}
+	if resolveErr != nil {
+		d.Blacklist.Status = "egress_lookup_failed"
+		d.Reason = "deferred_incident_proxy_query"
+		return
+	}
+	if egressIP != "" {
+		if h.Egress == nil || h.Egress.db == nil {
+			d.Blacklist.Status = "unavailable"
+			d.Reason = "deferred_blacklist"
+			return
+		}
+		d.Blacklist.Status = "failed"
+		for retry := 0; retry < 3; retry++ {
+			if canceled() {
+				return
+			}
+			d.Blacklist.Attempts++
+			if err := h.Egress.Record(ctx, egressIP, inc.ProxyID, &inc.AccountID, isDynamic, inc.Reason); err == nil {
+				d.Blacklist.Status = "saved"
+				break
+			}
+		}
+		if d.Blacklist.Status != "saved" {
+			d.Reason = "deferred_blacklist"
+			return
+		}
+	} else {
+		d.Blacklist.Status = "egress_unknown"
+	}
 	if h.IncidentCurrent != nil {
 		current, err := h.IncidentCurrent(ctx, inc)
+		if canceled() {
+			return
+		}
 		if err != nil {
-			log.Printf("[poison] account %d incident state lookup failed: %v", inc.AccountID, err)
+			d.Reason = "deferred_incident_query"
 			return
 		}
 		if !current {
+			d.Outcome = "stale"
+			d.Reason = "incident_changed"
 			return
 		}
 	}
-	snap := CurrentSnapshot()
 	rotateMax := 3
-	if snap != nil {
+	if snap := CurrentSnapshot(); snap != nil {
 		rotateMax = snap.RotateMax
 	}
 	if rotateMax > 3 {
 		rotateMax = 3
 	}
-
-	// 2) 尝试轮换代理。次数用尽或没有可用代理时停用账号。
-	rotated := false
-	if h.Rotator != nil && (h.RebindProxy != nil || h.RebindIncident != nil) && rotateMax > 0 {
-		tried := map[int64]struct{}{}
-		if inc.ProxyID != nil {
-			tried[*inc.ProxyID] = struct{}{}
-		}
-		for attempt := 0; attempt < rotateMax; attempt++ {
-			next, err := h.Rotator.Next(ctx, tried)
-			if err != nil {
-				log.Printf("[poison] pick rotation target failed: %v", err)
-				break
-			}
-			if next == nil {
-				break
-			}
-			tried[next.ID] = struct{}{}
-			if err := h.Rotator.ValidateEgress(ctx, next); err != nil {
-				log.Printf("[poison] candidate proxy %d egress validation failed", next.ID)
-				continue
-			}
-			var bindErr error
-			if h.RebindIncident != nil {
-				bindErr = h.RebindIncident(ctx, inc, next.ID)
-			} else {
-				bindErr = h.RebindProxy(ctx, inc.AccountID, next.ID)
-			}
-			if errors.Is(bindErr, ErrStaleIncident) {
-				return
-			}
-			if err := bindErr; err != nil {
-				log.Printf("[poison] rebind account %d to proxy %d failed: %v", inc.AccountID, next.ID, err)
-				continue
-			}
-			log.Printf("[poison] account %d rotated to proxy %d ", inc.AccountID, next.ID)
-			rotated = true
-			break
-		}
+	if rotateMax <= 0 {
+		d.Reason = "deferred_rotation_disabled"
+		return
 	}
-
-	// 3) 轮换不到干净代理则停用账号，避免继续被投毒。
-	if !rotated && (h.DisableAccount != nil || h.DisableIncident != nil) {
-		var err error
-		if h.DisableIncident != nil {
-			err = h.DisableIncident(ctx, inc)
-		} else {
-			err = h.DisableAccount(ctx, inc.AccountID)
+	if h.Rotator == nil || h.Rotator.ActiveProxies == nil || h.Rotator.Blocked == nil || h.Rotator.InUse == nil || h.Rotator.IsEgressBlocked == nil || (h.RebindProxy == nil && h.RebindIncident == nil) {
+		return
+	}
+	tried := map[int64]struct{}{}
+	if inc.ProxyID != nil {
+		tried[*inc.ProxyID] = struct{}{}
+	}
+	unknown := false
+	for attempt := 0; attempt <= rotateMax; attempt++ {
+		if canceled() {
+			return
 		}
-		if errors.Is(err, ErrStaleIncident) {
+		next, selection, err := h.Rotator.NextWithDisposition(ctx, tried)
+		d.Selections = append(d.Selections, selection)
+		if canceled() {
 			return
 		}
 		if err != nil {
-			log.Printf("[poison] disable account %d failed: %v", inc.AccountID, err)
-		} else {
-			log.Printf("[poison] account %d disabled after poison hit (%s)", inc.AccountID, inc.Reason)
+			d.Reason = "deferred_" + rotationReason(err)
+			return
 		}
+		if next == nil {
+			if unknown {
+				d.Reason = "deferred_unresolved_candidates"
+				return
+			}
+			if h.DisableIncident == nil && h.DisableAccount == nil {
+				return
+			}
+			if canceled() {
+				return
+			}
+			if h.DisableIncident != nil {
+				err = h.DisableIncident(ctx, inc)
+			} else {
+				err = h.DisableAccount(ctx, inc.AccountID)
+			}
+			if errors.Is(err, ErrStaleIncident) {
+				d.Outcome = "stale"
+				d.Reason = "incident_changed"
+				return
+			}
+			if err != nil {
+				d.Reason = "deferred_disable"
+				if canceled() {
+					return
+				}
+				return
+			}
+			d.Outcome = "disabled"
+			d.Reason = "candidates_exhausted"
+			return
+		}
+		// This final scan is read-only: never a fourth probe or binding attempt.
+		if attempt == rotateMax {
+			d.Reason = "deferred_attempt_budget"
+			return
+		}
+		tried[next.ID] = struct{}{}
+		a := RotationAttempt{ProxyID: next.ID}
+		if err := h.Rotator.ValidateEgress(ctx, next); err != nil {
+			a.Reason = rotationReason(err)
+			if errors.Is(err, ErrEgressBlocked) {
+				a.Outcome = "excluded"
+			} else {
+				a.Outcome = "unknown"
+				unknown = true
+			}
+			d.Attempts = append(d.Attempts, a)
+			if canceled() {
+				return
+			}
+			continue
+		}
+		if canceled() {
+			return
+		}
+		if h.RebindIncident != nil {
+			err = h.RebindIncident(ctx, inc, next.ID)
+		} else {
+			err = h.RebindProxy(ctx, inc.AccountID, next.ID)
+		}
+		if errors.Is(err, ErrStaleIncident) {
+			a.Outcome = "stale"
+			a.Reason = "incident_changed"
+			d.Attempts = append(d.Attempts, a)
+			d.Outcome = "stale"
+			d.Reason = a.Reason
+			return
+		}
+		if err != nil {
+			a.Outcome = "unknown"
+			a.Reason = "rebind_failed"
+			unknown = true
+			d.Attempts = append(d.Attempts, a)
+			if canceled() {
+				return
+			}
+			continue
+		}
+		a.Outcome = "rotated"
+		a.Reason = "rebind_succeeded"
+		d.Attempts = append(d.Attempts, a)
+		d.Outcome = "rotated"
+		d.Reason = "rebind_succeeded"
+		return
 	}
 }
 
@@ -146,26 +243,34 @@ func (h *Handler) Handle(ctx context.Context, inc Incident) {
 // 静态代理（host 是 IP）的出口就是 host；域名形式的代理视为动态，需要实际
 // 探测才能知道这次用的是哪个出口 IP。
 func (h *Handler) resolveEgress(ctx context.Context, inc Incident) (string, bool) {
+	ip, dynamic, _ := h.resolveIncidentEgress(ctx, inc)
+	return ip, dynamic
+}
+
+func (h *Handler) resolveIncidentEgress(ctx context.Context, inc Incident) (string, bool, error) {
 	if h.LookupProxy != nil && inc.ProxyID != nil {
 		p, err := h.LookupProxy(ctx, *inc.ProxyID)
 		if err != nil || p == nil {
 			log.Printf("[poison] proxy %d metadata lookup failed; egress unknown", *inc.ProxyID)
-			return "", true
+			if err == nil {
+				err = ErrRotationUnavailable
+			}
+			return "", true, rotationError("incident_proxy_query", err)
 		}
 		inc.ProxyHost = p.Host
 		inc.ProxyPort = p.Port
 	}
 	host := NormalizeBaseURL(inc.ProxyHost)
 	if host == "" {
-		return "", false
+		return "", false, nil
 	}
 	if net.ParseIP(host) != nil {
-		return host, false
+		return host, false, nil
 	}
 	// A fresh probe cannot identify the egress of the original poisoned request.
 	// Until the request transport supplies that identity, retain the incident in logs only.
-	log.Printf("[poison] account %d dynamic egress unknown; reason=%s", inc.AccountID, inc.Reason)
-	return "", true
+	log.Printf("[poison] account %d dynamic egress unknown", inc.AccountID)
+	return "", true, nil
 }
 
 // AttachHandler 注入处置处理器，由路由初始化时调用一次。
@@ -197,6 +302,11 @@ func Dispatch(c *gin.Context, reason string) {
 	proxyID, _ := c.Get(ContextKeyProxyID)
 
 	inc := Incident{Reason: reason}
+	if c.Request != nil {
+		inc.RequestID, _ = c.Request.Context().Value(ctxkey.RequestID).(string)
+	}
+	inc.EvidenceID = c.GetString("poison_guard_evidence_id")
+	inc.EvidencePath = c.GetString("poison_guard_evidence_path")
 	if v, ok := accountID.(int64); ok {
 		inc.AccountID = v
 	}

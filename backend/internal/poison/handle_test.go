@@ -3,6 +3,7 @@ package poison
 import (
 	"context"
 	"errors"
+	"github.com/DATA-DOG/go-sqlmock"
 	"testing"
 )
 
@@ -15,8 +16,23 @@ type fakeHandlerDeps struct {
 	rotateErr error
 }
 
-func newTestHandler(deps *fakeHandlerDeps, proxies []RotationCandidate, blocked map[int64]struct{}) *Handler {
+func newTestHandler(t *testing.T, deps *fakeHandlerDeps, proxies []RotationCandidate, blocked map[int64]struct{}) *Handler {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		defer db.Close()
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Error(err)
+		}
+	})
+	mock.ExpectBegin()
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO poison_blocked_egress").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	rotator := &Rotator{
+		InUse: func(context.Context) (map[string]struct{}, error) { return nil, nil },
 		ActiveProxies: func(ctx context.Context) ([]RotationCandidate, error) {
 			return proxies, nil
 		},
@@ -28,6 +44,7 @@ func newTestHandler(deps *fakeHandlerDeps, proxies []RotationCandidate, blocked 
 		},
 	}
 	return &Handler{
+		Egress:  NewEgressStore(db),
 		Rotator: rotator,
 		DisableAccount: func(ctx context.Context, accountID int64) error {
 			deps.disabled = append(deps.disabled, accountID)
@@ -50,7 +67,7 @@ func TestHandleRotatesToCleanProxy(t *testing.T) {
 		{ID: 1, Host: "1.1.1.1", Port: 1080},
 		{ID: 2, Host: "2.2.2.2", Port: 1080},
 	}
-	h := newTestHandler(deps, proxies, map[int64]struct{}{1: {}})
+	h := newTestHandler(t, deps, proxies, map[int64]struct{}{1: {}})
 
 	current := int64(1)
 	h.Handle(context.Background(), Incident{
@@ -73,7 +90,7 @@ func TestHandleRotatesToCleanProxy(t *testing.T) {
 func TestHandleDisablesWhenNoCleanProxy(t *testing.T) {
 	deps := &fakeHandlerDeps{}
 	proxies := []RotationCandidate{{ID: 1, Host: "1.1.1.1", Port: 1080}}
-	h := newTestHandler(deps, proxies, map[int64]struct{}{1: {}})
+	h := newTestHandler(t, deps, proxies, map[int64]struct{}{1: {}})
 
 	current := int64(1)
 	h.Handle(context.Background(), Incident{
@@ -92,14 +109,14 @@ func TestHandleDisablesWhenNoCleanProxy(t *testing.T) {
 	}
 }
 
-// TestHandleDisablesWhenRebindFails 轮换失败时也应停用账号。
-func TestHandleDisablesWhenRebindFails(t *testing.T) {
+// Temporary binding errors must not establish exhaustion.
+func TestHandleDefersWhenRebindFails(t *testing.T) {
 	deps := &fakeHandlerDeps{rotateErr: errors.New("db down")}
 	proxies := []RotationCandidate{
 		{ID: 1, Host: "1.1.1.1", Port: 1080},
 		{ID: 2, Host: "2.2.2.2", Port: 1080},
 	}
-	h := newTestHandler(deps, proxies, map[int64]struct{}{})
+	h := newTestHandler(t, deps, proxies, map[int64]struct{}{})
 
 	current := int64(1)
 	h.Handle(context.Background(), Incident{
@@ -110,8 +127,8 @@ func TestHandleDisablesWhenRebindFails(t *testing.T) {
 		Reason:    "threshold:3/3",
 	})
 
-	if len(deps.disabled) != 1 || deps.disabled[0] != 7 {
-		t.Fatalf("account must be disabled when rotation fails, got %v", deps.disabled)
+	if len(deps.disabled) != 0 {
+		t.Fatalf("account must stay enabled when rotation fails, got %v", deps.disabled)
 	}
 }
 

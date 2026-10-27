@@ -96,7 +96,7 @@ func TestRotationDynamicCandidateValidation(t *testing.T) {
 	}
 }
 
-func TestRotationThreeFailuresDisableWithoutBinding(t *testing.T) {
+func TestRotationThreeFailuresDeferWithoutBinding(t *testing.T) {
 	defaultStore.mu.RLock()
 	old := defaultStore.st
 	defaultStore.mu.RUnlock()
@@ -119,9 +119,12 @@ func TestRotationThreeFailuresDisableWithoutBinding(t *testing.T) {
 	r := &Rotator{ActiveProxies: func(context.Context) ([]RotationCandidate, error) {
 		return candidates, nil
 	}, Prober: &EgressProber{Endpoints: []string{"http://egress.invalid/ip"}, Timeout: time.Second}}
+	r.Blocked = func(context.Context) (map[int64]struct{}, error) { return nil, nil }
+	r.InUse = func(context.Context) (map[string]struct{}, error) { return nil, nil }
+	r.IsEgressBlocked = func(context.Context, string) (bool, error) { return false, nil }
 	h := &Handler{Rotator: r, RebindProxy: func(context.Context, int64, int64) error { bound++; return nil }, DisableAccount: func(context.Context, int64) error { disabled++; return nil }}
 	h.Handle(context.Background(), Incident{AccountID: 42})
-	if attempts != 3 || bound != 0 || disabled != 1 {
+	if attempts != 3 || bound != 0 || disabled != 0 {
 		t.Fatalf("attempts=%d bound=%d disabled=%d", attempts, bound, disabled)
 	}
 }

@@ -2,7 +2,7 @@ package poison
 
 import (
 	"context"
-	"fmt"
+
 	"net"
 	"net/url"
 	"strings"
@@ -25,7 +25,7 @@ type RotationCandidate struct {
 //   - 只从 proxies 中 status=active 且未进黑名单的代理里挑；
 //   - 动态代理不整行拉黑，只轮换会话，但其历史出口 IP 仍在黑名单中，因此
 //     轮换出来的新出口若命中黑名单要再轮一次；
-//   - 轮换次数上限可配，默认 3；用尽后停用账号。
+//   - 轮换次数上限可配，默认 3；预算耗尽不代表候选穷尽。
 type Rotator struct {
 	// ActiveProxies 返回全部可用代理，由接线层注入。
 	ActiveProxies func(ctx context.Context) ([]RotationCandidate, error)
@@ -46,97 +46,128 @@ type Rotator struct {
 	Prober *EgressProber
 }
 
-// Next 返回下一个可用代理，排除 skip 中已有的 ID。
-//
-// 找不到时返回 nil，调用方应停用账号。
+// Next selects without probing. A nil result alone never proves safe exhaustion.
 func (r *Rotator) Next(ctx context.Context, skip map[int64]struct{}) (*RotationCandidate, error) {
+	c, _, err := r.NextWithDisposition(ctx, skip)
+	return c, err
+}
+
+// NextWithDisposition records the full read-only candidate scan, including empty pools.
+func (r *Rotator) NextWithDisposition(ctx context.Context, skip map[int64]struct{}) (*RotationCandidate, CandidateSelection, error) {
+	audit := CandidateSelection{Excluded: map[string]int{}, Candidates: []CandidateDecision{}}
+	fail := func(kind string, err error) (*RotationCandidate, CandidateSelection, error) {
+		audit.Error = kind
+		return nil, audit, rotationError(kind, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return fail("context", err)
+	}
 	if r == nil || r.ActiveProxies == nil {
-		return nil, nil
+		return fail("active_unavailable", ErrRotationUnavailable)
 	}
 	candidates, err := r.ActiveProxies(ctx)
 	if err != nil {
-		return nil, err
+		return fail("active_query", err)
 	}
+	audit.Total = len(candidates)
 	blocked := map[int64]struct{}{}
 	if r.Blocked != nil {
-		b, err := r.Blocked(ctx)
+		blocked, err = r.Blocked(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("blocked proxies: %w", err)
+			return fail("blocked_query", err)
 		}
-		blocked = b
 	}
 	inUse := map[string]struct{}{}
 	if r.InUse != nil {
-		u, err := r.InUse(ctx)
+		inUse, err = r.InUse(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("occupied endpoints: %w", err)
+			return fail("occupied_query", err)
 		}
-		inUse = u
 	}
-
-	skippedEndpoints := make(map[string]struct{})
+	skippedEndpoints := map[string]struct{}{}
 	for i := range candidates {
-		if _, skipped := skip[candidates[i].ID]; skipped {
+		if _, ok := skip[candidates[i].ID]; ok {
 			skippedEndpoints[candidates[i].endpoint()] = struct{}{}
 		}
 	}
+	var next *RotationCandidate
 	for i := range candidates {
+		if err := ctx.Err(); err != nil {
+			return fail("context", err)
+		}
 		c := &candidates[i]
-		if _, skipped := skippedEndpoints[c.endpoint()]; skipped {
-			continue
-		}
-		if _, bad := blocked[c.ID]; bad {
-			continue
-		}
-		if _, taken := inUse[c.endpoint()]; taken {
-			continue
-		}
-		if skip != nil {
-			if _, used := skip[c.ID]; used {
-				continue
+		reason := "eligible"
+		_, skipped := skip[c.ID]
+		_, sameEndpoint := skippedEndpoints[c.endpoint()]
+		_, bad := blocked[c.ID]
+		_, taken := inUse[c.endpoint()]
+		switch {
+		case skipped || sameEndpoint:
+			reason = "tried_endpoint"
+		case bad:
+			reason = "blocked_proxy"
+		case taken:
+			reason = "occupied_endpoint"
+		default:
+			if r.IsEgressBlocked != nil && isStaticHost(c.Host) {
+				dirty, err := r.IsEgressBlocked(ctx, strings.TrimSpace(c.Host))
+				if err != nil {
+					audit.Candidates = append(audit.Candidates, CandidateDecision{ProxyID: c.ID, Reason: "egress_query_unknown"})
+					return fail("egress_query", err)
+				}
+				if dirty {
+					reason = "blocked_egress"
+				}
 			}
 		}
-		// 静态代理的出口 IP 就是 host，可直接判断是否已知脏 IP，
-		// 避免把请求再送进一个已拉黑的出口白跑一次。
-		if r.IsEgressBlocked != nil && isStaticHost(c.Host) {
-			dirty, err := r.IsEgressBlocked(ctx, strings.TrimSpace(c.Host))
-			if err != nil {
-				return nil, fmt.Errorf("blocked egress: %w", err)
+		audit.Candidates = append(audit.Candidates, CandidateDecision{ProxyID: c.ID, Reason: reason})
+		if reason == "eligible" {
+			audit.Eligible++
+			if next == nil {
+				next = c
 			}
-			if dirty {
-				continue
-			}
+		} else {
+			audit.Excluded[reason]++
 		}
-		return c, nil
 	}
-	return nil, nil
+	if err := ctx.Err(); err != nil {
+		return fail("context", err)
+	}
+	audit.Complete = true
+	return next, audit, nil
 }
 
 // ValidateEgress validates a selected candidate before binding it. The
 // probe uses the exact configured authentication, without inventing a session API.
 func (r *Rotator) ValidateEgress(ctx context.Context, c *RotationCandidate) error {
+	if err := ctx.Err(); err != nil {
+		return rotationError("context", err)
+	}
+	if r == nil || c == nil {
+		return ErrRotationUnavailable
+	}
 	if isStaticHost(c.Host) && r.Prober == nil {
 		return nil
 	}
 	if r.Prober == nil {
-		return fmt.Errorf("dynamic egress probe unavailable")
+		return rotationError("probe_unavailable", ErrRotationUnavailable)
 	}
 	if snap := CurrentSnapshot(); snap != nil && !snap.EgressProbe {
-		return fmt.Errorf("dynamic egress probe disabled")
+		return rotationError("probe_disabled", ErrRotationUnavailable)
 	}
 	ip, err := r.Prober.Probe(ctx, c.ProxyURL())
 	if err != nil {
-		return fmt.Errorf("dynamic egress probe failed")
+		return rotationError("probe_failed", err)
 	}
 	if r.IsEgressBlocked == nil {
-		return fmt.Errorf("egress lookup unavailable")
+		return rotationError("egress_unavailable", ErrRotationUnavailable)
 	}
 	dirty, err := r.IsEgressBlocked(ctx, ip)
 	if err != nil {
-		return err
+		return rotationError("egress_query", err)
 	}
 	if dirty {
-		return fmt.Errorf("candidate egress is blocked")
+		return ErrEgressBlocked
 	}
 	return nil
 }

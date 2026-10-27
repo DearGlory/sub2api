@@ -32,7 +32,7 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 	rotator := &poison.Rotator{
 		ActiveProxies: func(ctx context.Context) ([]poison.RotationCandidate, error) {
 			if proxyService == nil {
-				return nil, nil
+				return nil, poison.ErrRotationUnavailable
 			}
 			proxies, err := proxyService.ListActive(ctx)
 			if err != nil {
