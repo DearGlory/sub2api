@@ -14,11 +14,13 @@ import (
 
 // Incident 是一次命中投毒后的处置输入。
 type Incident struct {
-	RequestID    string
-	EvidenceID   string
-	EvidencePath string
-	AccountID    int64
-	ProxyID      *int64
+	// RequestStartedAt is captured on first Attach, before upstream forwarding.
+	RequestStartedAt time.Time
+	RequestID        string
+	EvidenceID       string
+	EvidencePath     string
+	AccountID        int64
+	ProxyID          *int64
 	// ProxyHost 是代理主机；静态代理即为出口 IP，域名为动态代理入口。
 	ProxyHost string
 	// ProxyPort 仅用于日志。
@@ -308,6 +310,13 @@ func Dispatch(c *gin.Context, reason string) {
 	proxyID, _ := c.Get(ContextKeyProxyID)
 
 	inc := Incident{Reason: reason}
+	if c.Request != nil {
+		inc.RequestStartedAt, _ = c.Request.Context().Value(requestStartedAtKey{}).(time.Time)
+	}
+	if inc.RequestStartedAt.IsZero() {
+		// Dispatch must never bypass restoration checks, even for legacy callers.
+		inc.RequestStartedAt = time.Unix(0, 0).UTC()
+	}
 	if c.Request != nil {
 		inc.RequestID, _ = c.Request.Context().Value(ctxkey.RequestID).(string)
 	}

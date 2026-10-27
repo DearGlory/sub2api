@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
@@ -67,6 +68,16 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	if c == nil {
 		return false
 	}
+	// Keep the first forwarding attempt time across account retries.
+	if c.Request != nil {
+		ctx := c.Request.Context()
+		started, _ := ctx.Value(requestStartedAtKey{}).(time.Time)
+		if started.IsZero() {
+			started = time.Now().UTC()
+			c.Request = c.Request.WithContext(context.WithValue(ctx, requestStartedAtKey{}, started))
+		}
+		c.Set(ContextKeyRequestStartedAt, started)
+	}
 	if previous := StatusGuard(c); previous != nil {
 		// A response already sent (including rejection) cannot be retried. Keep
 		// its account attribution and writer until the owning handler finishes.
@@ -115,12 +126,15 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	return true
 }
 
+type requestStartedAtKey struct{}
+
 // 传给后续处置层的上下文键。
 const (
-	ContextKeyAccountID = "poison_guard_account_id"
-	ContextKeyProxyID   = "poison_guard_proxy_id"
-	ContextKeyProxyHost = "poison_guard_proxy_host"
-	ContextKeyProxyPort = "poison_guard_proxy_port"
+	ContextKeyRequestStartedAt = "poison_guard_request_started_at"
+	ContextKeyAccountID        = "poison_guard_account_id"
+	ContextKeyProxyID          = "poison_guard_proxy_id"
+	ContextKeyProxyHost        = "poison_guard_proxy_host"
+	ContextKeyProxyPort        = "poison_guard_proxy_port"
 )
 
 // NormalizeBaseURL 去掉结尾斜杠，便于前缀比较。
