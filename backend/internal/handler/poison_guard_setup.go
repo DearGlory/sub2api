@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 
 	"entgo.io/ent/dialect"
@@ -134,9 +133,9 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 	})
 }
 
-// poisonIncidentCurrent prevents a late stream from rewriting a newer binding.
+// poisonIncidentCurrent prevents a late stream from rewriting a newer binding or restore.
 func poisonIncidentCurrent(ctx context.Context, db poisonQueryer, inc poison.Incident, lock bool) (bool, error) {
-	query := "SELECT proxy_id, status, schedulable FROM accounts WHERE id=$1 AND deleted_at IS NULL"
+	query := "SELECT proxy_id, status, schedulable, extra->'poison_guard_restore_epoch' FROM accounts WHERE id=$1 AND deleted_at IS NULL"
 	if lock {
 		query += " FOR UPDATE"
 	}
@@ -151,55 +150,35 @@ func poisonIncidentCurrent(ctx context.Context, db poisonQueryer, inc poison.Inc
 	var proxy sql.NullInt64
 	var status string
 	var schedulable bool
-	if err := rows.Scan(&proxy, &status, &schedulable); err != nil {
+	var epochJSON []byte
+	if err := rows.Scan(&proxy, &status, &schedulable, &epochJSON); err != nil {
+		return false, err
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	if err := rows.Close(); err != nil {
 		return false, err
 	}
 	matches := !proxy.Valid && inc.ProxyID == nil
 	if inc.ProxyID != nil {
 		matches = proxy.Valid && proxy.Int64 == *inc.ProxyID
 	}
-	if err := rows.Err(); err != nil {
-		return false, err
-	}
-	// Close before another query: transaction clients share one connection.
-	if err := rows.Close(); err != nil {
-		return false, err
-	}
 	if !matches || status != service.StatusActive || !schedulable {
 		return false, nil
 	}
-	if inc.RequestStartedAt.IsZero() {
-		return true, nil
-	} // Legacy internal callers only.
-	// Audit is persisted asynchronously. This protects already-visible restores;
-	// it cannot serialize an admin write whose audit has not been flushed yet.
-	audit, err := db.QueryContext(ctx, `SELECT action, request_body FROM audit_logs
- WHERE extra->'params'->>'id' = $1 AND created_at > $2
- AND status_code >= 200 AND status_code < 300
- AND action IN ('admin.accounts.update', 'admin.accounts.schedulable.create')`, strconv.FormatInt(inc.AccountID, 10), inc.RequestStartedAt)
-	if err != nil {
-		return false, err
-	}
-	defer audit.Close()
-	for audit.Next() {
-		var action, body string
-		if err := audit.Scan(&action, &body); err != nil {
+	epoch := int64(0)
+	if len(epochJSON) > 0 {
+		var value any
+		if err := json.Unmarshal(epochJSON, &value); err != nil {
 			return false, err
 		}
-		var state struct {
-			Status      string `json:"status"`
-			Schedulable *bool  `json:"schedulable"`
-		}
-		if err := json.Unmarshal([]byte(body), &state); err != nil {
-			// Truncated/omitted audit bodies cannot prove the absence of a restore.
-			return false, fmt.Errorf("poison restoration audit unreadable")
-		}
-		if action == "admin.accounts.update" && state.Status == service.StatusActive ||
-			action == "admin.accounts.schedulable.create" && state.Schedulable != nil && *state.Schedulable {
-			return false, nil
-		}
+		epoch = poison.RestoreEpoch(map[string]any{poison.RestoreEpochKey: value})
 	}
-	return true, audit.Err()
+	if epoch < 0 {
+		return false, fmt.Errorf("invalid poison restore epoch")
+	}
+	return inc.RestoreEpoch >= 0 && epoch == inc.RestoreEpoch, nil
 }
 
 func disablePoisonIncident(ctx context.Context, db *sql.DB, inc poison.Incident, update func(context.Context) error) error {

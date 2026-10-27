@@ -18,6 +18,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/poison"
 )
 
 // Account management implementations
@@ -861,6 +862,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 
+	writeCtx := ctx
+	if input.Status == StatusActive {
+		writeCtx = poison.WithAdminRestore(ctx)
+	}
 	billingSettingsAppliedAtomically := false
 	updater := s.accountBillingRepo
 	if updater == nil {
@@ -871,7 +876,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	if updater != nil {
 		if err := updater.UpdateWithAccountBillingSettings(
-			ctx,
+			writeCtx,
 			account,
 			requestedProbeEnabledUpdate,
 			requestedRateSyncEnabledUpdate,
@@ -882,7 +887,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		billingSettingsAppliedAtomically = true
 	}
 	if !billingSettingsAppliedAtomically {
-		if err := s.accountRepo.Update(ctx, account); err != nil {
+		if err := s.accountRepo.Update(writeCtx, account); err != nil {
 			return nil, err
 		}
 		if (requestedProbeEnabledUpdate != nil || requestedRateSyncEnabledUpdate != nil) &&
@@ -1166,8 +1171,12 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		repoUpdates.Schedulable = input.Schedulable
 	}
 
+	writeCtx := ctx
+	if input.Status == StatusActive || input.Schedulable != nil && *input.Schedulable {
+		writeCtx = poison.WithAdminRestore(ctx)
+	}
 	// Run bulk update for column/jsonb fields first.
-	if _, err := s.accountRepo.BulkUpdate(ctx, input.AccountIDs, repoUpdates); err != nil {
+	if _, err := s.accountRepo.BulkUpdate(writeCtx, input.AccountIDs, repoUpdates); err != nil {
 		return nil, err
 	}
 
@@ -1309,7 +1318,7 @@ func (s *adminServiceImpl) RefreshAccountCredentials(ctx context.Context, id int
 }
 
 func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Account, error) {
-	if err := s.accountRepo.ClearError(ctx, id); err != nil {
+	if err := s.accountRepo.ClearError(poison.WithAdminRestore(ctx), id); err != nil {
 		return nil, err
 	}
 	if err := s.accountRepo.ClearRateLimit(ctx, id); err != nil {
@@ -1335,7 +1344,11 @@ func (s *adminServiceImpl) SetAccountError(ctx context.Context, id int64, errorM
 }
 
 func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error) {
-	if err := s.accountRepo.SetSchedulable(ctx, id, schedulable); err != nil {
+	writeCtx := ctx
+	if schedulable {
+		writeCtx = poison.WithAdminRestore(ctx)
+	}
+	if err := s.accountRepo.SetSchedulable(writeCtx, id, schedulable); err != nil {
 		return nil, err
 	}
 	updated, err := s.accountRepo.GetByID(ctx, id)

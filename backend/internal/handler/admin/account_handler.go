@@ -29,6 +29,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
+	"github.com/Wei-Shaw/sub2api/internal/poison"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -1331,7 +1332,7 @@ func (h *AccountHandler) RecoverState(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.rateLimitService.RecoverAccountState(c.Request.Context(), accountID, service.AccountRecoveryOptions{
+	if _, err := h.rateLimitService.RecoverAccountState(poison.WithAdminRestore(c.Request.Context()), accountID, service.AccountRecoveryOptions{
 		InvalidateToken: true,
 	}); err != nil {
 		response.ErrorFrom(c, err)

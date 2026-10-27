@@ -21,7 +21,8 @@ type AccountInfo struct {
 	// AccountID 仅用于日志与黑名单记录。
 	AccountID int64
 	// ProxyID 为 nil 表示未配置代理；仅用于日志与轮换。
-	ProxyID *int64
+	ProxyID      *int64
+	RestoreEpoch int64
 	// ProxyHost / ProxyPort 用于判定出口 IP：静态代理的 host 就是出口 IP，
 	// 域名形式的代理需要探测。缺省时跳过出口 IP 记录。
 	ProxyHost string
@@ -114,6 +115,7 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 		}
 	}
 	c.Set(ContextKeyAccountID, info.AccountID)
+	c.Set(ContextKeyRestoreEpoch, info.RestoreEpoch)
 	if info.ProxyID != nil {
 		c.Set(ContextKeyProxyID, *info.ProxyID)
 	}
@@ -130,6 +132,7 @@ type requestStartedAtKey struct{}
 
 // 传给后续处置层的上下文键。
 const (
+	ContextKeyRestoreEpoch     = "poison_guard_restore_epoch"
 	ContextKeyRequestStartedAt = "poison_guard_request_started_at"
 	ContextKeyAccountID        = "poison_guard_account_id"
 	ContextKeyProxyID          = "poison_guard_proxy_id"

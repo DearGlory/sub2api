@@ -20,6 +20,7 @@ type Incident struct {
 	EvidenceID       string
 	EvidencePath     string
 	AccountID        int64
+	RestoreEpoch     int64
 	ProxyID          *int64
 	// ProxyHost 是代理主机；静态代理即为出口 IP，域名为动态代理入口。
 	ProxyHost string
@@ -309,12 +310,12 @@ func Dispatch(c *gin.Context, reason string) {
 	accountID, _ := c.Get(ContextKeyAccountID)
 	proxyID, _ := c.Get(ContextKeyProxyID)
 
-	inc := Incident{Reason: reason}
+	inc := Incident{Reason: reason, RestoreEpoch: c.GetInt64(ContextKeyRestoreEpoch)}
 	if c.Request != nil {
 		inc.RequestStartedAt, _ = c.Request.Context().Value(requestStartedAtKey{}).(time.Time)
 	}
 	if inc.RequestStartedAt.IsZero() {
-		// Dispatch must never bypass restoration checks, even for legacy callers.
+		// Keep a diagnostic timestamp for legacy dispatch callers.
 		inc.RequestStartedAt = time.Unix(0, 0).UTC()
 	}
 	if c.Request != nil {

@@ -20,7 +20,7 @@ func TestPoisonDisableRechecksIncidentUnderTransaction(t *testing.T) {
 		if current {
 			actual = 7
 		}
-		mock.ExpectQuery("SELECT proxy_id, status, schedulable.*FOR UPDATE").WithArgs(int64(42)).WillReturnRows(sqlmock.NewRows([]string{"proxy_id", "status", "schedulable"}).AddRow(actual, "active", true))
+		mock.ExpectQuery("SELECT proxy_id, status, schedulable.*FOR UPDATE").WithArgs(int64(42)).WillReturnRows(sqlmock.NewRows([]string{"proxy_id", "status", "schedulable", "restore_epoch"}).AddRow(actual, "active", true, nil))
 		if current {
 			mock.ExpectCommit()
 		} else {

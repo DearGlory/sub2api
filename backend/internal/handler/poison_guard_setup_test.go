@@ -72,7 +72,7 @@ func TestSetupPoisonGuardDisableUsesInactiveAccountStatus(t *testing.T) {
 			mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(poison.RotationLockKey).
 				WillReturnResult(sqlmock.NewResult(0, 1))
 			mock.ExpectQuery("SELECT proxy_id, status, schedulable.*FOR UPDATE").WithArgs(int64(42)).
-				WillReturnRows(sqlmock.NewRows([]string{"proxy_id", "status", "schedulable"}).AddRow(proxyID, "active", true))
+				WillReturnRows(sqlmock.NewRows([]string{"proxy_id", "status", "schedulable", "restore_epoch"}).AddRow(proxyID, "active", true, nil))
 			mock.ExpectCommit()
 
 			SetupPoisonGuard(db, nil, service.NewAccountService(repo, nil))
