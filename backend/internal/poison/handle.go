@@ -91,9 +91,15 @@ func (h *Handler) Handle(ctx context.Context, inc Incident) {
 				return
 			}
 			d.Blacklist.Attempts++
-			if err := h.Egress.Record(ctx, egressIP, inc.ProxyID, &inc.AccountID, isDynamic, inc.Reason); err == nil {
+			err := recordIncidentBlacklist(ctx, h.Egress, egressIP, inc, isDynamic)
+			if err == nil {
 				d.Blacklist.Status = "saved"
 				break
+			}
+			if errors.Is(err, ErrBlacklistCommitUnknown) {
+				d.Blacklist.Status = "commit_unknown"
+				d.Reason = "deferred_blacklist"
+				return
 			}
 		}
 		if d.Blacklist.Status != "saved" {

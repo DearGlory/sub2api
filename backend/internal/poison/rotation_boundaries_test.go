@@ -109,6 +109,27 @@ func TestIncidentLookupFailureDefers(t *testing.T) {
 	h.Handle(context.Background(), Incident{AccountID: 1, ProxyID: &id})
 }
 
+func TestBlacklistCommitUnknownDoesNotReplayHit(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO poison_blocked_egress").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit().WillReturnError(errors.New("commit acknowledgement lost"))
+	var got Disposition
+	h := &Handler{Egress: NewEgressStore(db), ReportDisposition: func(_ Incident, d Disposition) { got = d }}
+	h.Handle(context.Background(), Incident{AccountID: 1, ProxyHost: "192.0.2.1"})
+	if got.Blacklist.Attempts != 1 || got.Reason != "deferred_blacklist" {
+		t.Fatalf("must not replay an ambiguous commit: %+v", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBlacklistRetryStopsAfterCommit(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
