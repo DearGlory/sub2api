@@ -65,6 +65,11 @@ func SetupPoisonGuard(db *sql.DB, proxyService *service.ProxyService, accountSer
 	}
 
 	poison.AttachHandler(&poison.Handler{
+		ReportDisposition: func(inc poison.Incident, disposition poison.Disposition) {
+			if err := poison.WriteEvidenceDisposition(inc.EvidencePath, disposition); err != nil {
+				log.Printf("[poison-evidence] id=%s error=disposition_write", inc.EvidenceID)
+			}
+		},
 		Egress:  egress,
 		Prober:  prober,
 		Rotator: rotator,

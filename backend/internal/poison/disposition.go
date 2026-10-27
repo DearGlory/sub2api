@@ -85,7 +85,14 @@ func (h *Handler) report(inc Incident, d Disposition) {
 	b, _ := json.Marshal(d)
 	log.Printf("[poison] disposition %s", b)
 	if h != nil && h.ReportDisposition != nil {
-		h.ReportDisposition(inc, d)
+		func() {
+			defer func() {
+				if recover() != nil {
+					log.Printf("[poison] disposition evidence_id=%s error=callback_panic", inc.EvidenceID)
+				}
+			}()
+			h.ReportDisposition(inc, d)
+		}()
 	}
 }
 
