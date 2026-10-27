@@ -27,7 +27,7 @@ const (
 // AllSettings 是本功能读取的全部配置键，删除功能时按此清单清理。
 func AllSettings() []string {
 	return []string{
-		SettingEvidenceEnabled, SettingEvidenceDir,
+		SettingEvidenceEnabled, SettingEvidenceDir, SettingSharedEnabled,
 		SettingEnabled,
 		SettingUpstreamPrefixes,
 		SettingKeywordsVeto,
@@ -143,6 +143,9 @@ func parse(values map[string]string) *Snapshot {
 
 	if v, ok := get(SettingEnabled); ok {
 		snap.Enabled = parseBool(v, false)
+	}
+	if v, ok := get(SettingSharedEnabled); ok {
+		snap.SharedEnabled = parseBool(v, false)
 	}
 
 	veto := parseList(get, SettingKeywordsVeto, DefaultVetoKeywords)

@@ -565,6 +565,11 @@ func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 }
 
 func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	shared := admin.Group("/poison/shared")
+	shared.GET("", h.Admin.Setting.GetPoisonShared)
+	shared.PUT("", h.Admin.Setting.UpdatePoisonShared)
+	shared.POST("/reconcile", h.Admin.Setting.ReconcilePoisonShared)
+	shared.POST("/backfill", h.Admin.Setting.BackfillPoisonShared)
 	adminSettings := admin.Group("/settings")
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)

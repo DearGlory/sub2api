@@ -38,6 +38,7 @@ type Incident struct {
 var ErrStaleIncident = errors.New("poison incident no longer matches account proxy")
 
 type Handler struct {
+	SharedHandle      func(context.Context, Incident) (Disposition, error)
 	ReportDisposition func(Incident, Disposition)
 	IncidentCurrent   func(context.Context, Incident) (bool, error)
 	RebindIncident    func(context.Context, Incident, int64) error
@@ -62,6 +63,24 @@ func (h *Handler) Handle(ctx context.Context, inc Incident) {
 	d := Disposition{AccountID: inc.AccountID, RequestID: inc.RequestID, EvidenceID: inc.EvidenceID, EvidencePath: inc.EvidencePath, Outcome: "deferred", Reason: "deferred_dependency", Blacklist: BlacklistDisposition{Status: "not_attempted"}, Selections: []CandidateSelection{}, Attempts: []RotationAttempt{}}
 	defer func() { h.report(inc, d) }()
 	if h == nil {
+		return
+	}
+	if snap := CurrentSnapshot(); snap != nil && snap.Active() && snap.SharedEnabled {
+		if h.SharedHandle == nil {
+			d.Reason = "deferred_shared_unavailable"
+			return
+		}
+		result, err := h.SharedHandle(ctx, inc)
+		if err != nil {
+			d.Reason = "deferred_shared_operation"
+			return
+		}
+		d = result
+		d.AccountID, d.RequestID = inc.AccountID, inc.RequestID
+		d.EvidenceID, d.EvidencePath = inc.EvidenceID, inc.EvidencePath
+		if d.Outcome == "" {
+			d.Outcome, d.Reason = "deferred", "deferred_shared_operation"
+		}
 		return
 	}
 	canceled := func() bool {
@@ -311,7 +330,7 @@ func Dispatch(c *gin.Context, reason string) {
 	accountID, _ := c.Get(ContextKeyAccountID)
 	proxyID, _ := c.Get(ContextKeyProxyID)
 
-	inc := Incident{Reason: reason, RestoreEpoch: c.GetInt64(ContextKeyRestoreEpoch)}
+	inc := Incident{Reason: reason, RestoreEpoch: c.GetInt64(ContextKeyRestoreEpoch), SharedGeneration: c.GetInt64("poison_guard_shared_generation")}
 	if c.Request != nil {
 		inc.RequestStartedAt, _ = c.Request.Context().Value(requestStartedAtKey{}).(time.Time)
 	}

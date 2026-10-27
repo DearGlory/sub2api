@@ -117,6 +117,7 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	}
 	c.Set(ContextKeyAccountID, info.AccountID)
 	c.Set(ContextKeyRestoreEpoch, info.RestoreEpoch)
+	c.Set("poison_guard_shared_generation", info.SharedGeneration)
 	if info.ProxyID != nil {
 		c.Set(ContextKeyProxyID, *info.ProxyID)
 	}

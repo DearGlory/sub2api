@@ -128,7 +128,7 @@ func TestStoreReloadKeepsOldSnapshotOnError(t *testing.T) {
 func TestAllSettingsListsEveryKey(t *testing.T) {
 	keys := AllSettings()
 	want := map[string]bool{
-		SettingEvidenceEnabled: true, SettingEvidenceDir: true,
+		SettingEvidenceEnabled: true, SettingEvidenceDir: true, SettingSharedEnabled: true,
 		SettingEnabled:          true,
 		SettingUpstreamPrefixes: true,
 		SettingKeywordsVeto:     true,
