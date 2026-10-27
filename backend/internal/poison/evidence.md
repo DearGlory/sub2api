@@ -15,7 +15,7 @@
 
 命中由原 detector 给出，Feed/Flush/Finish 先快照去重词、计数、阈值、lane、检测字符进度，再清理协议状态。解析错误不视为关键词命中。命中时冻结捕获；Read 返回与冻结在线性化锁下决定是否纳入。模块不追加 read、不 drain、不改变取消策略。
 
-命中 Finalize 写 body 和 metadata 后同文件系统原子 rename 发布 `<random-id>/`，完成后才设置 gin 的 `poison_guard_evidence_id` 与 `poison_guard_evidence_path`。目录 0700，文件 0600。原文可能含用户内容，只在该受限目录保存；不进入日志或客户端响应。命中目录不自动删除，容量监控/保留策略需显式制定。
+命中 Finalize 写 body 和 metadata 后同文件系统原子 rename 发布 `<random-id>/`，完成后设置 gin 的 `poison_guard_evidence_id` 与 `poison_guard_evidence_path`。已确认命中后若发布失败，仍保留 evidence_id 用于关联错误，path 为空；正常和解析错误请求不生成命中收据。目录 0700，文件 0600。原文可能含用户内容，只在该受限目录保存；不进入日志或客户端响应。命中目录不自动删除，容量监控/保留策略需显式制定。
 
 `WriteEvidenceDisposition(path, value)` 在命中目录内原子发布 `disposition.json`；调用方仅传已经脱敏的处置收据。该模块不引用轮换 lane 的类型。
 
@@ -28,6 +28,6 @@
 
 metadata 含账号/代理 ID、ctxkey.RequestID / Model、入口 URL.Path（无 query）、状态和白名单内容头、层级、SHA256、捕获字节数、EOF/Closed/read error，以及命中快照和下游已提交字节数。`capture_end_offset` 是 Read 返回前缀边界，可能包括 bufio/压缩器预读，**不是命中词最后一个字节的精确 offset**；`inspected_runes` 也不是原始字节 offset。HTTP 仅观测 EOF 且无读取/捕获错误时声明 complete。
 
-I/O 失败只记短类别与随机 evidence ID，丢弃未能可靠发布的暂存，不改变放行/阻断/自动处置。不会打印原始 error 中可能携带的 URL、凭据。进程硬崩溃可能留下 `.pending-*`，不提供自动清扫，以免多进程误删活跃暂存；运维清理必须确认无活动实例持有。
+I/O 失败只记短类别、evidence_id、请求/账号/代理关联及已捕获字节数，丢弃未能可靠发布的暂存，不改变放行/阻断/自动处置。不会打印原始 error 中可能携带的 URL、凭据。进程硬崩溃可能留下 `.pending-*`，不提供自动清扫，以免多进程误删活跃暂存；运维清理必须确认无活动实例持有。已确认命中后发生 panic 时，中间件展开路径先幂等保存证据和触发处置，再清理临时资源，不再触碰已经释放的响应 writer。
 
 现有 WS ingress 直接连接写出不经过 GuardWriter，本模块没有扩展其检测覆盖。GatewayHandler.Responses 两条 ForwardAsResponses 已改用 Attach 后 c.Request.Context()。
