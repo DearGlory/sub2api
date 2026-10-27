@@ -145,7 +145,7 @@ func TestSharedSwitchRewritesEveryEligibleAccount(t *testing.T) {
 	ctx := context.Background()
 
 	oldProxy := int64(1)
-	inc := Incident{AccountID: f.eligible[0], ProxyID: &oldProxy, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", RequestID: "req-1"}
+	inc := Incident{AccountID: f.eligible[0], ProxyID: &oldProxy, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", RequestID: "req-1", SharedGeneration: 1}
 	disp, err := f.co.Handle(ctx, inc)
 	if err != nil {
 		t.Fatalf("handle: %v", err)
@@ -160,8 +160,8 @@ func TestSharedSwitchRewritesEveryEligibleAccount(t *testing.T) {
 		if got := f.h.accountProxy(id); got == nil || *got != 2 {
 			t.Fatalf("account %d proxy=%v, want 2", id, got)
 		}
-		if got := f.h.accountGeneration(id); got != 1 {
-			t.Fatalf("account %d generation=%d, want 1", id, got)
+		if got := f.h.accountGeneration(id); got != 2 {
+			t.Fatalf("account %d generation=%d, want 2", id, got)
 		}
 	}
 	// Business state and unrelated extra keys must survive the switch.
@@ -209,7 +209,7 @@ func TestSharedSwitchRewritesEveryEligibleAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if state.Generation != 1 || state.SharedProxyID == nil || *state.SharedProxyID != 2 {
+	if state.Generation != 2 || state.SharedProxyID == nil || *state.SharedProxyID != 2 {
 		t.Fatalf("state gen=%d pointer=%v", state.Generation, state.SharedProxyID)
 	}
 	if len(state.Runs) != 1 {
@@ -233,7 +233,7 @@ func TestSharedDuplicateIncidentSwitchesOnce(t *testing.T) {
 	f := newSharedSwitchFixture(t)
 	ctx := context.Background()
 	oldProxy := int64(1)
-	inc := Incident{AccountID: f.eligible[0], ProxyID: &oldProxy, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya"}
+	inc := Incident{AccountID: f.eligible[0], ProxyID: &oldProxy, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", SharedGeneration: 1}
 	var wg sync.WaitGroup
 	outcomes := make([]string, 4)
 	for i := 0; i < 4; i++ {
@@ -266,7 +266,7 @@ func TestSharedDuplicateIncidentSwitchesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if state.Generation != 1 || len(state.Runs) != 1 {
+	if state.Generation != 2 || len(state.Runs) != 1 {
 		t.Fatalf("gen=%d runs=%d", state.Generation, len(state.Runs))
 	}
 	if blocked := f.h.blockedIPs(); blocked["10.0.0.1"] != 1 {
@@ -280,7 +280,7 @@ func TestSharedStaleIncidentCannotRelockOrSwitch(t *testing.T) {
 	f := newSharedSwitchFixture(t)
 	ctx := context.Background()
 	oldProxy := int64(1)
-	if _, err := f.co.Handle(ctx, Incident{AccountID: f.eligible[0], ProxyID: &oldProxy, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya"}); err != nil {
+	if _, err := f.co.Handle(ctx, Incident{AccountID: f.eligible[0], ProxyID: &oldProxy, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", SharedGeneration: 1}); err != nil {
 		t.Fatalf("first switch: %v", err)
 	}
 	staleProxy := int64(1)
@@ -295,7 +295,7 @@ func TestSharedStaleIncidentCannotRelockOrSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if state.Generation != 1 || len(state.Runs) != 1 {
+	if state.Generation != 2 || len(state.Runs) != 1 {
 		t.Fatalf("gen=%d runs=%d", state.Generation, len(state.Runs))
 	}
 	if n := f.h.count(`SELECT count(*) FROM poison_blocked_egress`); n != 2 {

@@ -44,8 +44,8 @@ func TestSharedInitialReconcilePicksMostUsedProxy(t *testing.T) {
 	if st.SharedProxyID == nil || *st.SharedProxyID != p1 {
 		t.Fatalf("initial pointer=%v, want the most-used proxy %d", st.SharedProxyID, p1)
 	}
-	if st.Generation != 0 {
-		t.Fatalf("initial bind must not invent a switch generation: %d", st.Generation)
+	if st.Generation != 1 {
+		t.Fatalf("initial bind must invalidate pre-enable requests: %d", st.Generation)
 	}
 	for _, id := range []int64{a1, a2, a3} {
 		if got := h.accountProxy(id); got == nil || *got != p1 {
@@ -87,7 +87,7 @@ func TestSharedConcurrentHitReconcileAndProbe(t *testing.T) {
 	f := newSharedSwitchFixture(t)
 	ctx := context.Background()
 	old := int64(1)
-	inc := Incident{AccountID: f.eligible[0], ProxyID: &old, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya"}
+	inc := Incident{AccountID: f.eligible[0], ProxyID: &old, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", SharedGeneration: 1}
 	f.co.BackoffBase = time.Millisecond
 	f.co.BackoffMax = 2 * time.Millisecond
 
@@ -135,8 +135,8 @@ func TestSharedConcurrentHitReconcileAndProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if st.Generation != 1 {
-		t.Fatalf("generation=%d, want exactly one accepted switch", st.Generation)
+	if st.Generation != 2 {
+		t.Fatalf("generation=%d, want one initialization and one accepted switch", st.Generation)
 	}
 	if len(st.Runs) != 1 {
 		t.Fatalf("runs=%d, want one frozen round", len(st.Runs))

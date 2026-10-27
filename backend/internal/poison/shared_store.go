@@ -48,8 +48,20 @@ func (s *SharedCoordinator) withState(ctx context.Context, fn func(*sql.Tx, *Sha
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if !s.sharedEnabled() {
+		return ErrSharedDisabled
+	}
 	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", RotationLockKey); err != nil {
 		return err
+	}
+	var enabled bool
+	if err := tx.QueryRowContext(ctx, `SELECT
+      COALESCE((SELECT lower(btrim(value)) IN ('true','1') FROM settings WHERE key=$1),false)
+      AND COALESCE((SELECT lower(btrim(value)) IN ('true','1') FROM settings WHERE key=$2),false)`, SettingSharedEnabled, SettingEnabled).Scan(&enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		return ErrSharedDisabled
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO settings(key,value) VALUES($1,'{}') ON CONFLICT (key) DO NOTHING`, SettingSharedState); err != nil {
 		return err
@@ -117,11 +129,15 @@ func (s *SharedCoordinator) eligibleAccounts(ctx context.Context, q sharedQuerye
 		return nil, nil
 	}
 	query := `SELECT id, COALESCE(credentials->>'base_url',''), proxy_id, status, schedulable, extra
-		FROM accounts WHERE deleted_at IS NULL AND proxy_id IS NOT NULL ORDER BY id`
+        FROM accounts WHERE deleted_at IS NULL AND proxy_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM unnest($1::text[]) AS p(prefix)
+          WHERE lower(btrim(credentials->>'base_url'))=p.prefix
+          OR left(lower(btrim(credentials->>'base_url')),length(p.prefix)+1)=p.prefix||'/')
+        ORDER BY id`
 	if lock {
 		query += " FOR UPDATE"
 	}
-	rows, err := q.QueryContext(ctx, query)
+	rows, err := q.QueryContext(ctx, query, pq.Array(snap.Scope.prefixes))
 	if err != nil {
 		return nil, err
 	}
@@ -198,27 +214,7 @@ func lockAccounts(ctx context.Context, tx *sql.Tx, ids []int64) (map[int64]share
 	return out, rows.Err()
 }
 
-func sharedGeneration(extra map[string]any) int64 {
-	value, exists := extra[SharedGenerationKey]
-	if !exists {
-		return -1
-	}
-	switch v := value.(type) {
-	case json.Number:
-		n, err := v.Int64()
-		if err != nil {
-			return -1
-		}
-		return n
-	case float64:
-		return int64(v)
-	case int64:
-		return v
-	case int:
-		return int64(v)
-	}
-	return -1
-}
+func sharedGeneration(extra map[string]any) int64 { return SharedGeneration(extra) }
 
 func accountGroups(ctx context.Context, q sharedQueryer, ids []int64) (map[int64][]int64, error) {
 	out := map[int64][]int64{}

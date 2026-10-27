@@ -82,97 +82,171 @@ func (s *SharedCoordinator) Owner() string {
 // unusable, and makes every admitted account follow the pointer (new accounts
 // included) while leaving their running state untouched.
 func (s *SharedCoordinator) Reconcile(ctx context.Context) error {
-	enabled := s.sharedEnabled()
-	var changed []int64
-	err := s.withState(ctx, func(tx *sql.Tx, st *SharedState) error {
-		st.Enabled = enabled
-		if !enabled {
-			return nil
+	if !s.sharedEnabled() {
+		return ErrSharedDisabled
+	}
+	observed, err := s.readState(ctx)
+	if err != nil {
+		return err
+	}
+	cands, err := s.activeProxies(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	ips, blocked, err := s.blockedSets(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	var chosen *RotationCandidate
+	needTarget := observed.SharedProxyID == nil || !usableProxy(*observed.SharedProxyID, cands, ips, blocked)
+	if needTarget {
+		accounts, err := s.eligibleAccounts(ctx, s.db, false)
+		if err != nil {
+			return err
 		}
-		accounts, err := s.eligibleAccounts(ctx, tx, false)
+		remaining := append([]RotationCandidate(nil), cands...)
+		for attempts := 0; attempts < s.rotationBudget() && len(remaining) > 0; attempts++ {
+			candidate := pickInitial(accounts, remaining, ips, blocked)
+			if candidate == nil {
+				break
+			}
+			if err := s.validate(ctx, *candidate); err == nil {
+				chosen = candidate
+				break
+			} else if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			filtered := remaining[:0]
+			for _, c := range remaining {
+				if c.endpoint() != candidate.endpoint() {
+					filtered = append(filtered, c)
+				}
+			}
+			remaining = filtered
+		}
+	}
+	var changed []int64
+	err = s.withState(ctx, func(tx *sql.Tx, st *SharedState) error {
+		if st.Generation != observed.Generation || !sameSharedProxy(st.SharedProxyID, observed.SharedProxyID) {
+			return ErrStaleIncident
+		}
+		st.Enabled = true
+		accounts, err := s.eligibleAccounts(ctx, tx, true)
 		if err != nil {
 			return err
 		}
 		ids := accountIDs(accounts)
-		if _, err := lockAccounts(ctx, tx, ids); err != nil {
-			return err
+		if len(ids) == 0 {
+			return nil
 		}
-		cands, err := s.activeProxies(ctx, tx)
+		freshCands, err := s.activeProxies(ctx, tx)
 		if err != nil {
 			return err
 		}
-		blockedIPs, blockedProxies, err := s.blockedSets(ctx, tx)
+		freshIPs, freshBlocked, err := s.blockedSets(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if st.SharedProxyID == nil || !usableProxy(*st.SharedProxyID, cands, blockedIPs, blockedProxies) {
-			chosen := pickInitial(accounts, cands, blockedIPs, blockedProxies)
+		if needTarget {
 			if chosen == nil {
-				st.SharedProxyID = nil
 				st.WaitingForProxy = true
+				st.LastReason = "no_verified_candidate"
 				return nil
+			}
+			currentProxy, err := s.loadProxy(ctx, tx, chosen.ID)
+			if err != nil || currentProxy.Deleted || currentProxy.Status != "active" || currentProxy.Candidate != *chosen || !usableProxy(chosen.ID, freshCands, freshIPs, freshBlocked) {
+				return ErrStaleIncident
+			}
+			newGen, err := nextSharedGeneration(st.Generation, accounts)
+			if err != nil {
+				return err
+			}
+			if _, err = writeAccounts(ctx, tx, ids, chosen.ID, newGen); err != nil {
+				return err
+			}
+			if err = enqueueBulkChange(ctx, tx, accounts); err != nil {
+				return err
 			}
 			id := chosen.ID
-			if st.SharedProxyID == nil {
-				// First bind: converge onto the most-used proxy without inventing a switch.
-				st.SharedProxyID = &id
-				st.WaitingForProxy = false
-			} else {
-				// The fleet was waiting for a usable proxy: this is a real switch, so the
-				// generation advances and the waiting round becomes a cut-back candidate.
-				newGen := st.Generation + 1
-				if _, err := writeAccounts(ctx, tx, ids, id, newGen); err != nil {
-					return err
-				}
-				if err := enqueueBulkChange(ctx, tx, accounts); err != nil {
-					return err
-				}
-				st.Generation = newGen
-				st.SharedProxyID = &id
-				st.WaitingForProxy = false
-				if run := st.waitingRun(); run != nil {
-					run.CutBack = true
-					target := id
-					run.TargetProxyID = &target
-					run.ProxyIDAfterSwitch = id
-					run.WaitingForCandidate = false
-					run.Generation = newGen
-					run.UpdatedAt = time.Now().UTC()
-					if run.State == SharedRunPending {
-						run.State = SharedRunRunning
-					}
-				}
-				changed = ids
-				return nil
+			st.SharedProxyID = &id
+			st.Generation = newGen
+			st.WaitingForProxy = false
+			if run := st.waitingRun(); run != nil {
+				run.CutBack = true
+				run.TargetProxyID = &id
+				run.ProxyIDAfterSwitch = id
+				run.WaitingForCandidate = false
+				run.Generation = newGen
+				run.UpdatedAt = time.Now().UTC()
 			}
+			st.UpdatedAt = time.Now().UTC()
+			changed = ids
+			return nil
 		}
-		drift := make([]int64, 0, len(accounts))
-		var driftAccounts []sharedAccount
+		if st.SharedProxyID == nil || !usableProxy(*st.SharedProxyID, freshCands, freshIPs, freshBlocked) {
+			return ErrStaleIncident
+		}
+		var drift []sharedAccount
 		for _, acc := range accounts {
 			if acc.ProxyID == nil || *acc.ProxyID != *st.SharedProxyID || acc.Generation != st.Generation {
-				drift = append(drift, acc.ID)
-				driftAccounts = append(driftAccounts, acc)
+				drift = append(drift, acc)
 			}
 		}
 		if len(drift) == 0 {
 			return nil
 		}
-		if _, err := writeAccounts(ctx, tx, drift, *st.SharedProxyID, st.Generation); err != nil {
+		if _, err = writeAccounts(ctx, tx, accountIDs(drift), *st.SharedProxyID, st.Generation); err != nil {
 			return err
 		}
-		if err := enqueueBulkChange(ctx, tx, driftAccounts); err != nil {
+		if err = enqueueBulkChange(ctx, tx, drift); err != nil {
 			return err
 		}
-		changed = drift
+		changed = accountIDs(drift)
+		st.UpdatedAt = time.Now().UTC()
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	if len(changed) > 0 {
-		s.refresh(ctx, changed)
-	}
+	s.refresh(ctx, changed)
 	return nil
+}
+
+func sameSharedProxy(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+func nextSharedGeneration(current int64, accounts []sharedAccount) (int64, error) {
+	if current < 0 || current >= MaxRestoreEpoch {
+		return 0, errors.New("invalid shared generation")
+	}
+	for _, account := range accounts {
+		if account.Generation < 0 || account.Generation >= MaxRestoreEpoch {
+			return 0, errors.New("invalid account shared generation")
+		}
+		if account.Generation > current {
+			current = account.Generation
+		}
+	}
+	return current + 1, nil
+}
+func (s *SharedCoordinator) rotationBudget() int {
+	snap := s.snapshot()
+	if snap == nil || snap.RotateMax <= 0 {
+		return 0
+	}
+	if snap.RotateMax > 3 {
+		return 3
+	}
+	return snap.RotateMax
+}
+func (s *SharedCoordinator) validate(ctx context.Context, c RotationCandidate) error {
+	if s.opts.ValidateProxy == nil {
+		return nil
+	}
+	return s.opts.ValidateProxy(ctx, c)
 }
 
 // Handle applies one poisoning incident: blacklist the old egress, move the whole
@@ -217,6 +291,21 @@ func (s *SharedCoordinator) Handle(ctx context.Context, inc Incident) (Dispositi
 	var refreshed []int64
 	txErr := s.withState(ctx, func(tx *sql.Tx, st *SharedState) error {
 		st.Enabled = true
+		accounts, err := s.eligibleAccounts(ctx, tx, true)
+		if err != nil {
+			return err
+		}
+		var source *sharedAccount
+		for i := range accounts {
+			if accounts[i].ID == inc.AccountID {
+				source = &accounts[i]
+				break
+			}
+		}
+		if source == nil || inc.SharedGeneration < 0 || inc.RestoreEpoch < 0 || source.Generation != inc.SharedGeneration || st.Generation != inc.SharedGeneration || source.RestoreEpoch != inc.RestoreEpoch || source.ProxyID == nil || *source.ProxyID != *inc.ProxyID || source.Status != "active" || !source.Schedulable {
+			d.Outcome, d.Reason = "stale", "incident_generation_or_restore_changed"
+			return nil
+		}
 		if st.SharedProxyID != nil && *st.SharedProxyID != *inc.ProxyID {
 			// The fleet already moved off this proxy: record the verdict but never
 			// blacklist or switch again from an outdated observation.
@@ -232,13 +321,11 @@ func (s *SharedCoordinator) Handle(ctx context.Context, inc Incident) (Dispositi
 			if err := hitBlacklist(ctx, tx, egress, inc.ProxyID, inc.AccountID, dynamic, inc.Reason); err != nil {
 				return err
 			}
-			if before == nil {
-				// First observation of this egress: the row just created is the exact
-				// record a later all-clean round is allowed to delete.
-				before, err = captureBeforeImage(ctx, tx, egress)
-				if err != nil {
-					return err
-				}
+			// The release token describes our committed hit, including an upsert
+			// onto an older row. A later hit changes this token and prevents release.
+			before, err = captureBeforeImage(ctx, tx, egress)
+			if err != nil {
+				return err
 			}
 			d.Blacklist = BlacklistDisposition{Status: "saved", Attempts: 1}
 		} else {
@@ -254,20 +341,21 @@ func (s *SharedCoordinator) Handle(ctx context.Context, inc Incident) (Dispositi
 			} else if fresh.Candidate.endpoint() == old.Candidate.endpoint() {
 				target = nil
 			} else {
-				c := fresh.Candidate
-				target = &c
+				ips, blocked, err := s.blockedSets(ctx, tx)
+				if err != nil {
+					return err
+				}
+				if fresh.Candidate != *target || !usableProxy(target.ID, []RotationCandidate{fresh.Candidate}, ips, blocked) {
+					target = nil
+				}
 			}
 		}
-		accounts, err := s.eligibleAccounts(ctx, tx, false)
-		if err != nil {
-			return err
-		}
 		ids := accountIDs(accounts)
-		if _, err := lockAccounts(ctx, tx, ids); err != nil {
-			return err
-		}
 		if target != nil {
-			newGen := st.Generation + 1
+			newGen, err := nextSharedGeneration(st.Generation, accounts)
+			if err != nil {
+				return err
+			}
 			if _, err := writeAccounts(ctx, tx, ids, target.ID, newGen); err != nil {
 				return err
 			}
@@ -284,7 +372,20 @@ func (s *SharedCoordinator) Handle(ctx context.Context, inc Incident) (Dispositi
 		} else {
 			// No usable candidate: keep the fleet where it is but accept the event
 			// once (generation bump) so duplicate incidents cannot loop forever.
-			st.Generation++
+			newGen, err := nextSharedGeneration(st.Generation, accounts)
+			if err != nil {
+				return err
+			}
+			if _, err = writeAccounts(ctx, tx, ids, *inc.ProxyID, newGen); err != nil {
+				return err
+			}
+			if err = enqueueBulkChange(ctx, tx, accounts); err != nil {
+				return err
+			}
+			st.Generation = newGen
+			oldID := *inc.ProxyID
+			st.SharedProxyID = &oldID
+			refreshed = ids
 			st.WaitingForProxy = true
 			d.Outcome, d.Reason = "shared_waiting", "no_candidate"
 		}
@@ -438,6 +539,9 @@ func (s *SharedCoordinator) selectTarget(ctx context.Context, current int64, cur
 	audit.Eligible = len(ring)
 	audit.Complete = true
 	for i := range ring {
+		if i >= s.rotationBudget() {
+			return nil, audit, rotationError("attempt_budget", ErrRotationUnavailable)
+		}
 		c := ring[i]
 		if s.opts.ValidateProxy != nil {
 			if err := s.opts.ValidateProxy(ctx, c); err != nil {
@@ -456,7 +560,7 @@ func (s *SharedCoordinator) selectTarget(ctx context.Context, current int64, cur
 }
 
 func errorsIsContext(err error) bool {
-	return err != nil && (err == context.Canceled || err == context.DeadlineExceeded)
+	return err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded))
 }
 
 func usableProxy(id int64, cands []RotationCandidate, blockedIPs map[string]struct{}, blockedProxies map[int64]struct{}) bool {

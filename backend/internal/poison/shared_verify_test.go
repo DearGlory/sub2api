@@ -14,7 +14,7 @@ func (f *sharedSwitchFixture) switchTo(t *testing.T) *SharedRun {
 	t.Helper()
 	old := int64(1)
 	d, err := f.co.Handle(context.Background(), Incident{
-		AccountID: f.eligible[0], ProxyID: &old, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya",
+		AccountID: f.eligible[0], ProxyID: &old, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", SharedGeneration:1,
 	})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
@@ -56,15 +56,15 @@ func TestSharedAllCleanCutsBackToOldProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if st.Generation != 2 || st.SharedProxyID == nil || *st.SharedProxyID != 1 {
+	if st.Generation != 3 || st.SharedProxyID == nil || *st.SharedProxyID != 1 {
 		t.Fatalf("gen=%d pointer=%v", st.Generation, st.SharedProxyID)
 	}
 	for _, id := range f.eligible {
 		if got := f.h.accountProxy(id); got == nil || *got != 1 {
 			t.Fatalf("account %d not cut back: %v", id, got)
 		}
-		if got := f.h.accountGeneration(id); got != 2 {
-			t.Fatalf("account %d generation=%d, want 2", id, got)
+		if got := f.h.accountGeneration(id); got != 3 {
+			t.Fatalf("account %d generation=%d, want 3", id, got)
 		}
 	}
 	if n := f.h.count(`SELECT count(*) FROM accounts WHERE status='disabled' AND proxy_id=1`); n != 1 {
@@ -111,7 +111,7 @@ func TestSharedAnyPoisonKeepsBlacklist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if st.Generation != 1 || st.SharedProxyID == nil || *st.SharedProxyID != 2 {
+	if st.Generation != 2 || st.SharedProxyID == nil || *st.SharedProxyID != 2 {
 		t.Fatalf("confirmed poison must not cut back: gen=%d pointer=%v", st.Generation, st.SharedProxyID)
 	}
 	if n := f.h.count(`SELECT count(*) FROM accounts WHERE proxy_id=2`); n != len(f.eligible) {
@@ -416,7 +416,7 @@ func TestSharedWaitingRunRecoversWhenCandidateAppears(t *testing.T) {
 	p1 := h.addProxy("10.0.0.1", 8080, "active", false)
 	base := "https://kedaya.ai"
 	one := p1
-	changed := false
+	changed := true
 	a1 := h.addAccount(sharedAcct{BaseURL: base, ProxyID: &one})
 	a2 := h.addAccount(sharedAcct{BaseURL: base, ProxyID: &one})
 	probe := &probeScript{script: map[string]SharedProbeResult{}}
@@ -437,7 +437,8 @@ func TestSharedWaitingRunRecoversWhenCandidateAppears(t *testing.T) {
 	if err := co.Reconcile(ctx); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	d, err := co.Handle(ctx, Incident{AccountID: a1, ProxyID: &one, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto"})
+	changed = false
+	d, err := co.Handle(ctx, Incident{AccountID: a1, ProxyID: &one, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto", SharedGeneration:1})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
 	}
@@ -475,8 +476,8 @@ func TestSharedWaitingRunRecoversWhenCandidateAppears(t *testing.T) {
 			t.Fatalf("account %d not switched to the recovered candidate: %v", id, got)
 		}
 	}
-	if st.Generation != 2 {
-		t.Fatalf("generation=%d, want 2 after the deferred switch", st.Generation)
+	if st.Generation != 3 {
+		t.Fatalf("generation=%d, want 3 after the deferred switch", st.Generation)
 	}
 	if !st.Runs[0].CutBack || st.Runs[0].TargetProxyID == nil || *st.Runs[0].TargetProxyID != p3 {
 		t.Fatalf("waiting run did not become a cut-back candidate: %+v", st.Runs[0])
@@ -562,8 +563,8 @@ func TestSharedReconcileNewAccountFollowsPointer(t *testing.T) {
 		if got := f.h.accountProxy(id); got == nil || *got != 2 {
 			t.Fatalf("new account %d not on the shared pointer: %v", id, got)
 		}
-		if got := f.h.accountGeneration(id); got != 1 {
-			t.Fatalf("new account %d generation=%d, want 1", id, got)
+		if got := f.h.accountGeneration(id); got != 2 {
+			t.Fatalf("new account %d generation=%d, want 2", id, got)
 		}
 	}
 	if got := f.h.count(`SELECT count(*) FROM accounts WHERE id=$1 AND schedulable=false`, fresh); got != 1 {

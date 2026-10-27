@@ -17,11 +17,12 @@ func attachPoisonGuard(c *gin.Context, account *service.Account) {
 		return
 	}
 	info := poison.AccountInfo{
-		BaseURL:      account.GetCredential("base_url"),
-		HasProxy:     account.ProxyID != nil,
-		AccountID:    account.ID,
-		ProxyID:      account.ProxyID,
-		RestoreEpoch: poison.RestoreEpoch(account.Extra),
+		BaseURL:          account.GetCredential("base_url"),
+		HasProxy:         account.ProxyID != nil,
+		AccountID:        account.ID,
+		ProxyID:          account.ProxyID,
+		RestoreEpoch:     poison.RestoreEpoch(account.Extra),
+		SharedGeneration: poison.SharedGeneration(account.Extra),
 	}
 	// 代理详情已内联在账号上时直接取用，出口 IP 判定要用到 host/port。
 	if account.Proxy != nil {

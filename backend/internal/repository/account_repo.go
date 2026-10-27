@@ -735,20 +735,7 @@ func lockAndMergeAccountProbeExtra(
 		}
 		extra[poison.RestoreEpochKey] = value
 	}
-	// The shared proxy generation is repository-managed the same way: the whole
-	// extra column is replaced here, so a client object loaded before the
-	// verification round (or a malicious payload, already stripped above) would
-	// otherwise drop the row back to generation 0 and make a poisoned account
-	// look never-verified. Copy the locked row's value verbatim; an invalid
-	// stored value stays invalid (SharedGeneration reports -1) instead of being
-	// rewritten into a fresh, apparently current generation.
-	// The shared proxy generation is repository-managed the same way: the whole
-	// extra column is replaced here, so a client object loaded before the
-	// verification round (or a malicious payload, already stripped above) would
-	// otherwise drop the row back to generation 0 and make a poisoned account
-	// look never-verified. Copy the locked row's value verbatim; an invalid
-	// stored value stays invalid (SharedGeneration reports -1) instead of being
-	// rewritten into a fresh, apparently current generation.
+	// Preserve the locked generation across stale whole-object updates.
 	if len(currentSharedGeneration) > 0 {
 		var value any
 		if err := json.Unmarshal(currentSharedGeneration, &value); err != nil {

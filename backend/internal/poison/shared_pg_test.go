@@ -77,6 +77,7 @@ CREATE TABLE account_groups(account_id bigint not null, group_id bigint not null
 CREATE TABLE scheduler_outbox(id bigserial primary key, event_type text not null, account_id bigint, group_id bigint, payload jsonb, created_at timestamptz default now());
 CREATE TABLE poison_blocked_egress(id bigserial primary key, outbound_ip varchar(64) not null, proxy_id bigint, account_id bigint, is_dynamic boolean not null default false, reason varchar(255) not null default '', hit_count int not null default 1, first_hit_at timestamptz not null default now(), last_hit_at timestamptz not null default now());
 CREATE UNIQUE INDEX ux_blocked_ip ON poison_blocked_egress(outbound_ip);
+INSERT INTO settings(key,value) VALUES('poison_guard_enabled','true'),('poison_guard_shared_enabled','true');
 `)
 	return h
 }
@@ -369,6 +370,7 @@ func sharedTestSnapshot() *Snapshot {
 	return &Snapshot{
 		Enabled:       true,
 		SharedEnabled: true,
+		RotateMax:     3,
 		Scope:         sharedTestScope(),
 		Detector: NewDetector(Config{
 			Veto:      DefaultVetoKeywords(),
