@@ -33,6 +33,7 @@ type HitDetails struct {
 }
 
 type evidenceResponse struct {
+	CaptureIndex    int       `json:"capture_index"`
 	Attempt         int       `json:"response_attempt"`
 	File            string    `json:"file"`
 	Stage           string    `json:"capture_stage"`
@@ -77,6 +78,8 @@ type evidenceSession struct {
 	meta                  evidenceMetadata
 	frozen, closed        bool
 	failed                string
+	attempts              int
+	httpAttempts          map[*http.Response]int
 }
 
 func newEvidenceSession(root, requestID, path, model string, info AccountInfo) *evidenceSession {
@@ -126,7 +129,16 @@ func captureHTTP(ctx context.Context, resp *http.Response, stage string) {
 	if s.frozen || s.closed {
 		return
 	}
-	r := s.newResponse(stage)
+	if s.httpAttempts == nil {
+		s.httpAttempts = make(map[*http.Response]int)
+	}
+	attempt := s.httpAttempts[resp]
+	if attempt == 0 || stage != "decoded_upstream_body" {
+		s.attempts++
+		attempt = s.attempts
+		s.httpAttempts[resp] = attempt
+	}
+	r := s.newResponse(stage, attempt)
 	r.Status = resp.StatusCode
 	r.ContentType = resp.Header.Get("Content-Type")
 	r.ContentEncoding = resp.Header.Get("Content-Encoding")
@@ -134,9 +146,9 @@ func captureHTTP(ctx context.Context, resp *http.Response, stage string) {
 	r.Uncompressed = resp.Uncompressed
 	resp.Body = &evidenceBody{ReadCloser: resp.Body, session: s, response: r}
 }
-func (s *evidenceSession) newResponse(stage string) *evidenceResponse {
+func (s *evidenceSession) newResponse(stage string, attempt int) *evidenceResponse {
 	n := len(s.meta.Responses) + 1
-	r := &evidenceResponse{Attempt: n, File: fmt.Sprintf("response-%d.body", n), Stage: stage, Started: time.Now().UTC(), digest: sha256.New()}
+	r := &evidenceResponse{CaptureIndex: n, Attempt: attempt, File: fmt.Sprintf("response-%d.body", n), Stage: stage, Started: time.Now().UTC(), digest: sha256.New()}
 	s.meta.Responses = append(s.meta.Responses, r)
 	return r
 }
@@ -174,7 +186,15 @@ func (b *evidenceBody) Close() error {
 func (s *evidenceSession) failure(category string) {
 	if s.failed == "" {
 		s.failed = category
-		log.Printf("[poison-evidence] id=%s error=%s", s.meta.ID, category)
+		var proxyID int64
+		if s.meta.ProxyID != nil {
+			proxyID = *s.meta.ProxyID
+		}
+		var captured int64
+		for _, r := range s.meta.Responses {
+			captured += r.Bytes
+		}
+		log.Printf("[poison-evidence] evidence_id=%s request_id=%q account_id=%d proxy_id=%d stage=%s bytes=%d", s.meta.ID, s.meta.RequestID, s.meta.AccountID, proxyID, category, captured)
 	}
 }
 func (s *evidenceSession) directory() error {
@@ -261,33 +281,34 @@ func (s *evidenceSession) finalize() (string, string) {
 	if s.published != "" {
 		return s.meta.ID, s.published
 	}
-	if s.closed {
-		return "", ""
-	}
-	if !s.frozen || s.failed != "" {
+	if !s.frozen {
 		s.cleanup()
 		return "", ""
+	}
+	if s.closed || s.failed != "" {
+		s.cleanup()
+		return s.meta.ID, ""
 	}
 	if err := s.directory(); err != nil {
 		s.failure("directory")
 		s.cleanup()
-		return "", ""
+		return s.meta.ID, ""
 	}
 	for _, r := range s.meta.Responses {
 		if err := s.spill(r); err != nil {
 			s.failure("spool_publish")
 			s.cleanup()
-			return "", ""
+			return s.meta.ID, ""
 		}
 		if err := r.file.Sync(); err != nil {
 			s.failure("body_sync")
 			s.cleanup()
-			return "", ""
+			return s.meta.ID, ""
 		}
 		if err := r.file.Close(); err != nil {
 			s.failure("body_close")
 			s.cleanup()
-			return "", ""
+			return s.meta.ID, ""
 		}
 		r.file = nil
 		r.SHA256 = hex.EncodeToString(r.digest.Sum(nil))
@@ -300,20 +321,22 @@ func (s *evidenceSession) finalize() (string, string) {
 	if err != nil {
 		s.failure("metadata")
 		s.cleanup()
-		return "", ""
+		return s.meta.ID, ""
 	}
 	target := filepath.Join(s.root, s.meta.ID)
 	if err = os.Rename(s.temp, target); err != nil {
 		s.failure("publish")
 		s.cleanup()
-		return "", ""
+		return s.meta.ID, ""
 	}
 	s.temp = ""
 	s.published = target
+	s.httpAttempts = nil
 	s.closed = true
 	return s.meta.ID, target
 }
 func (s *evidenceSession) cleanup() {
+	s.httpAttempts = nil
 	for _, r := range s.meta.Responses {
 		if r.file != nil {
 			_ = r.file.Close()
@@ -356,7 +379,8 @@ func NewWebSocketCapture(ctx context.Context) *WebSocketCapture {
 	if s.closed || s.frozen {
 		return nil
 	}
-	return &WebSocketCapture{session: s, payload: s.newResponse("websocket_message_payload"), lengths: s.newResponse("websocket_message_lengths_uint64be")}
+	s.attempts++
+	return &WebSocketCapture{session: s, payload: s.newResponse("websocket_message_payload", s.attempts), lengths: s.newResponse("websocket_message_lengths_uint64be", s.attempts)}
 }
 func (w *WebSocketCapture) Capture(payload []byte) {
 	if w == nil {

@@ -20,7 +20,12 @@ func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if gw := StatusGuard(c); gw != nil {
-				gw.Close()
+				defer gw.Close()
+				// Only an already confirmed keyword hit is eligible on unwind.
+				// Inner middleware may have released its pooled writer already.
+				if gw.Reason() != "" && gw.protocolErr == nil {
+					finalize(c, false)
+				}
 				if c.Request != nil && gw.parentContext != nil {
 					c.Request = c.Request.WithContext(gw.restoreContext(c.Request.Context()))
 				}
@@ -34,6 +39,10 @@ func Middleware() gin.HandlerFunc {
 // Finalize completes the response before a capture middleware releases its writer.
 // The outer fallback can call it again without writing or dispatching twice.
 func Finalize(c *gin.Context) {
+	finalize(c, true)
+}
+
+func finalize(c *gin.Context, writeResponse bool) {
 	gw := StatusGuard(c)
 	if gw == nil {
 		return
@@ -64,22 +73,24 @@ func Finalize(c *gin.Context) {
 	}
 	committed := gw.Committed()
 	aborted := false
-	if committed > 0 {
-		aborted = gw.AbortConnection()
-	} else {
-		gw.WriteError(DefaultBlockStatus, message)
+	if writeResponse {
+		if committed > 0 {
+			aborted = gw.AbortConnection()
+		} else {
+			gw.WriteError(DefaultBlockStatus, message)
+		}
 	}
 	if gw.protocolErr != nil {
 		gw.evidence.close()
 		log.Printf("[poison] invalid upstream stream path=%s committed_bytes=%d aborted=%v", c.Request.URL.Path, committed, aborted)
 		return
 	}
-	if id, path := gw.evidence.finalize(); path != "" {
+	if id, path := gw.evidence.finalize(); id != "" {
 		c.Set("poison_guard_evidence_id", id)
 		c.Set("poison_guard_evidence_path", path)
 	}
 	accountID, _ := c.Get(ContextKeyAccountID)
-	log.Printf("[poison] blocked path=%s status=%d reason=%s account=%v committed_bytes=%d truncated=%v aborted=%v",
-		c.Request.URL.Path, DefaultBlockStatus, gw.Reason(), accountID, committed, committed > 0, aborted)
+	log.Printf("[poison] blocked path=%s status=%d reason=%s account=%v committed_bytes=%d truncated=%v aborted=%v evidence_id=%s",
+		c.Request.URL.Path, DefaultBlockStatus, gw.Reason(), accountID, committed, committed > 0, aborted, c.GetString("poison_guard_evidence_id"))
 	Dispatch(c, gw.Reason())
 }
