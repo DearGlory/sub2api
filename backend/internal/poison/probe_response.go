@@ -49,6 +49,7 @@ type probeScan struct {
 	lane      string
 	inspected int
 	terminal  bool
+	failed    bool
 }
 
 // InspectProbeResponse judges a complete upstream body with the same lane parser
@@ -114,11 +115,13 @@ func InspectProbeResponse(opts ProbeResponseOptions) ProbeInspection {
 		// A streaming request answered with unstructured bytes proves nothing;
 		// finalized JSON is still a complete non-stream body.
 		return inconclusive("not_stream")
+	case scan.failed:
+		return inconclusive("upstream_failure")
 	case parseErr != nil:
 		return inconclusive("parse_error")
 	case scan.inspected == 0:
 		return inconclusive("empty_body")
-	case mode == responseSSE && !scan.terminal:
+	case (mode == responseSSE || mode == responseJSON) && !scan.terminal:
 		return inconclusive("incomplete_stream")
 	}
 
@@ -171,6 +174,10 @@ func (s *probeScan) feedWhole(body []byte) error {
 	if probeJSONTerminal(body) {
 		s.terminal = true
 	}
+	var envelope map[string]any
+	if json.Unmarshal(body, &envelope) == nil && probePayloadFailed(envelope) {
+		s.failed = true
+	}
 	return parseErr
 }
 
@@ -179,6 +186,16 @@ func (s *probeScan) feedWhole(body []byte) error {
 func (s *probeScan) feedSSE(body []byte) error {
 	var parseErr error
 	for _, frame := range probeSSEFrames(body) {
+		for _, line := range probeLines(string(frame)) {
+			value, ok := probeDataValue(line)
+			if !ok {
+				continue
+			}
+			var envelope map[string]any
+			if json.Unmarshal([]byte(value), &envelope) == nil && probePayloadFailed(envelope) {
+				s.failed = true
+			}
+		}
 		if probeFrameTerminal(frame) {
 			s.terminal = true
 		}
@@ -356,6 +373,31 @@ func probePayloadTerminal(payload map[string]any) bool {
 	}
 	if response, ok := payload["response"].(map[string]any); ok {
 		return probePayloadTerminal(response)
+	}
+	return false
+}
+
+func probePayloadFailed(payload map[string]any) bool {
+	if e, ok := payload["error"]; ok && e != nil {
+		return true
+	}
+	if text, ok := payload["error_description"].(string); ok && strings.TrimSpace(text) != "" {
+		return true
+	}
+	if typ, ok := payload["type"].(string); ok {
+		switch typ {
+		case "error", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
+			return true
+		}
+	}
+	if status, ok := payload["status"].(string); ok {
+		switch status {
+		case "failed", "incomplete", "cancelled", "canceled":
+			return true
+		}
+	}
+	if nested, ok := payload["response"].(map[string]any); ok {
+		return probePayloadFailed(nested)
 	}
 	return false
 }
