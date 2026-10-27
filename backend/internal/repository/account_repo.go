@@ -672,7 +672,8 @@ func lockAndMergeAccountProbeExtra(
 			),
 			extra -> 'opencode_go_usage_auto_refresh',
 			extra -> 'opencode_go_usage_snapshot',
-			extra -> 'poison_guard_restore_epoch'
+			extra -> 'poison_guard_restore_epoch',
+			extra -> 'poison_guard_shared_generation'
 		FROM accounts
 		WHERE id = $1 AND deleted_at IS NULL
 		FOR NO KEY UPDATE
@@ -702,6 +703,7 @@ func lockAndMergeAccountProbeExtra(
 		currentOpenCodeAutoRefresh     []byte
 		currentOpenCodeSnapshot        []byte
 		currentRestoreEpoch            []byte
+		currentSharedGeneration        []byte
 	)
 	if err := rows.Scan(
 		&identityUnchanged,
@@ -717,6 +719,7 @@ func lockAndMergeAccountProbeExtra(
 		&currentOpenCodeAutoRefresh,
 		&currentOpenCodeSnapshot,
 		&currentRestoreEpoch,
+		&currentSharedGeneration,
 	); err != nil {
 		return nil, err
 	}
@@ -731,6 +734,27 @@ func lockAndMergeAccountProbeExtra(
 			return nil, err
 		}
 		extra[poison.RestoreEpochKey] = value
+	}
+	// The shared proxy generation is repository-managed the same way: the whole
+	// extra column is replaced here, so a client object loaded before the
+	// verification round (or a malicious payload, already stripped above) would
+	// otherwise drop the row back to generation 0 and make a poisoned account
+	// look never-verified. Copy the locked row's value verbatim; an invalid
+	// stored value stays invalid (SharedGeneration reports -1) instead of being
+	// rewritten into a fresh, apparently current generation.
+	// The shared proxy generation is repository-managed the same way: the whole
+	// extra column is replaced here, so a client object loaded before the
+	// verification round (or a malicious payload, already stripped above) would
+	// otherwise drop the row back to generation 0 and make a poisoned account
+	// look never-verified. Copy the locked row's value verbatim; an invalid
+	// stored value stays invalid (SharedGeneration reports -1) instead of being
+	// rewritten into a fresh, apparently current generation.
+	if len(currentSharedGeneration) > 0 {
+		var value any
+		if err := json.Unmarshal(currentSharedGeneration, &value); err != nil {
+			return nil, err
+		}
+		extra[poison.SharedGenerationKey] = value
 	}
 	if poison.IsAdminRestore(ctx) {
 		epoch := poison.RestoreEpoch(extra)

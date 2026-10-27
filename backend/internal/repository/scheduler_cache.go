@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/poison"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
@@ -1266,12 +1267,17 @@ func filterSchedulerCredentials(credentials map[string]any) map[string]any {
 }
 
 func filterSchedulerExtra(extra map[string]any) map[string]any {
+
 	if len(extra) == 0 {
 		return nil
 	}
 	keys := []string{
 		// Restore generations must survive metadata-only scheduler snapshots.
 		"poison_guard_restore_epoch",
+		poison.SharedGenerationKey,
+		// The shared proxy generation gates every verification decision, and the
+		// gateway reads it from this projection. Dropping it makes a verified
+		// account look generation 0 and re-enters it into the shared flow.
 		// Anthropic shared-window and Fable-only threshold checks run on this
 		// projection. UpdateExtra refreshes both payloads without a bucket rebuild.
 		"session_window_utilization",

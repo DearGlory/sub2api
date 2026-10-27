@@ -27,7 +27,23 @@ func IsAdminRestore(ctx context.Context) bool {
 // RestoreEpoch returns -1 for invalid internal metadata, so it cannot match a valid row.
 // The safe-integer bound keeps snapshots decoded by encoding/json exact.
 func RestoreEpoch(extra map[string]any) int64 {
-	value, exists := extra[RestoreEpochKey]
+	return managedGeneration(extra, RestoreEpochKey)
+}
+
+// SharedGeneration returns the shared-proxy verification generation of an
+// account: 0 when the account never entered the shared verification flow, -1
+// for invalid metadata (same rule as the restore epoch, so a corrupt value can
+// never be mistaken for a fresh generation and re-enable a poisoned account).
+func SharedGeneration(extra map[string]any) int64 {
+	return managedGeneration(extra, SharedGenerationKey)
+}
+
+// managedGeneration decodes one repository-managed generation. Both generations
+// share one decoder on purpose: two independent decoders would drift, and a
+// value shape accepted at one key and rejected at the other silently changes
+// which accounts are considered current.
+func managedGeneration(extra map[string]any, key string) int64 {
+	value, exists := extra[key]
 	if !exists {
 		return 0
 	}
@@ -53,15 +69,21 @@ func RestoreEpoch(extra map[string]any) int64 {
 	return -1
 }
 
+// StripRestoreEpoch removes every repository-managed generation key. Callers use
+// it on client-supplied extra so no request body can create, raise or erase a
+// generation; the repository writes those keys back from the locked row.
 func StripRestoreEpoch(extra map[string]any) map[string]any {
-	if _, exists := extra[RestoreEpochKey]; !exists {
+	_, hasRestore := extra[RestoreEpochKey]
+	_, hasShared := extra[SharedGenerationKey]
+	if !hasRestore && !hasShared {
 		return extra
 	}
-	clean := make(map[string]any, len(extra)-1)
+	clean := make(map[string]any, len(extra))
 	for key, value := range extra {
-		if key != RestoreEpochKey {
-			clean[key] = value
+		if key == RestoreEpochKey || key == SharedGenerationKey {
+			continue
 		}
+		clean[key] = value
 	}
 	return clean
 }
