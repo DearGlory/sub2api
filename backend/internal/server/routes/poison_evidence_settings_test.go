@@ -60,7 +60,7 @@ func evidenceSettingsRouter(t *testing.T) (*gin.Engine, *evidenceSettingsRepo, *
 		}
 		c.Next()
 	})
-	registerSettingsRoutes(group, h)
+	registerSettingsRoutes(group, h, func(c *gin.Context) { c.Next() })
 	return router, repo, refreshed
 }
 func evidenceSettingsRequest(router *gin.Engine, method, body string) *httptest.ResponseRecorder {
