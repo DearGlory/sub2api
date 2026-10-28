@@ -25,7 +25,7 @@ func TestE2EPreCapturedWriterStillGuarded(t *testing.T) {
 	r := gin.New()
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "text/event-stream")
 
@@ -77,7 +77,7 @@ func TestE2ELargeCleanStreamIntact(t *testing.T) {
 	r := gin.New()
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "text/event-stream")
 		w := c.Writer
@@ -116,7 +116,7 @@ func TestE2ENonStreamPoisonWrappedInJSON(t *testing.T) {
 	r := gin.New()
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "application/json")
 		// 上游 400 原样透传的写法。

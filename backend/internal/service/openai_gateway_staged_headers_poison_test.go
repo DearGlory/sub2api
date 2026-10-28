@@ -61,7 +61,7 @@ func TestOpenAIStagedHeadersPoisonGuardAppliedOnce(t *testing.T) {
 				Detector: poison.NewDetector(poison.Config{Veto: poison.DefaultVetoKeywords(), HeadBufferRunes: poison.DefaultHeadBufferRunes}),
 				Scope:    poison.NewScope([]string{"https://upstream.example"}, true),
 			}
-			poison.MarkRequest(c, snap, "https://upstream.example", true)
+			poison.MarkRequest(c, snap, "防投毒test", "https://upstream.example", true)
 			poison.WrapWriter(c)
 			guard, ok := c.Writer.(*poison.GuardWriter)
 			require.True(t, ok, "must exercise the real poison GuardWriter")

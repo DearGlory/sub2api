@@ -23,7 +23,7 @@ func TestMiddlewareReplacesPoisonWithError(t *testing.T) {
 	r, _ := newRouter(t, snap)
 
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "application/json")
 		_, _ = c.Writer.Write([]byte(`{"content":[{"type":"text","text":"` + poisonedShort + `"}]}`))
@@ -52,7 +52,7 @@ func TestMiddlewarePassesCleanResponseThrough(t *testing.T) {
 
 	payload := `{"content":[{"type":"text","text":"这是一段完全正常的回复内容。"}]}`
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "application/json")
 		_, _ = c.Writer.Write([]byte(payload))
@@ -77,7 +77,7 @@ func TestMiddlewareUntouchedForOutOfScope(t *testing.T) {
 
 	payload := poisonedShort // 即使是投毒内容，不在范围内也不拦——这是有意的范围约束。
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://api.openai.com", true) // 非白名单上游
+		MarkRequest(c, snap, "防投毒test", "https://api.openai.com", true) // 非白名单上游
 		WrapWriter(c)
 		_, _ = c.Writer.Write([]byte(payload))
 	})
@@ -103,7 +103,7 @@ func TestMiddlewareStreamingPoisonNeverLeaks(t *testing.T) {
 	}
 
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "text/event-stream")
 		for _, p := range pieces {

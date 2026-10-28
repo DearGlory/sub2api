@@ -111,7 +111,7 @@ func TestSharedParentReconcileHonorsValidation(t *testing.T) {
 func TestSharedParentPersistedOffPreventsHit(t *testing.T) {
 	f := newSharedSwitchFixture(t)
 	inc := parentCurrentIncident(f)
-	f.h.exec(`INSERT INTO settings(key,value) VALUES('poison_guard_shared_enabled','false') ON CONFLICT(key) DO UPDATE SET value='false'`)
+	f.h.exec(`INSERT INTO settings(key,value) VALUES('poison_guard_enabled','false') ON CONFLICT(key) DO UPDATE SET value='false'`)
 	d, err := f.co.Handle(context.Background(), inc)
 	if err != nil && !errors.Is(err, ErrSharedDisabled) {
 		t.Fatal(err)

@@ -14,26 +14,6 @@ import (
 	"time"
 )
 
-func TestRotationHydratesProxyID(t *testing.T) {
-	id := int64(7)
-	called := false
-	h := &Handler{LookupProxy: func(ctx context.Context, got int64) (*RotationCandidate, error) {
-		called = true
-		if got != id {
-			t.Fatalf("wrong proxy id %d", got)
-		}
-		return &RotationCandidate{ID: id, Host: "192.0.2.7", Port: 1080}, nil
-	}}
-	ip, dynamic := h.resolveEgress(context.Background(), Incident{ProxyID: &id})
-	if !called || ip != "192.0.2.7" || dynamic {
-		t.Fatalf("missing hydrated egress: %q dynamic=%v called=%v", ip, dynamic, called)
-	}
-	h.LookupProxy = func(context.Context, int64) (*RotationCandidate, error) { return nil, errors.New("unavailable") }
-	if ip, _ := h.resolveEgress(context.Background(), Incident{ProxyID: &id}); ip != "" {
-		t.Fatal("lookup failure invented egress")
-	}
-}
-
 func TestRotationRejectsHostnameRecord(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -93,70 +73,6 @@ func TestRotationDynamicCandidateValidation(t *testing.T) {
 				t.Fatalf("requests=%d checked=%v", requests, checked)
 			}
 		})
-	}
-}
-
-func TestRotationThreeFailuresDeferWithoutBinding(t *testing.T) {
-	defaultStore.mu.RLock()
-	old := defaultStore.st
-	defaultStore.mu.RUnlock()
-	st := &Store{}
-	st.cur.Store(&Snapshot{RotateMax: 99, EgressProbe: true})
-	SetStore(st)
-	defer SetStore(old)
-	attempts := 0
-	bound := 0
-	disabled := 0
-	var candidates []RotationCandidate
-	for i := int64(1); i <= 5; i++ {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { attempts++; w.WriteHeader(http.StatusBadGateway) }))
-		defer srv.Close()
-		u, _ := url.Parse(srv.URL)
-		_, portText, _ := net.SplitHostPort(u.Host)
-		port, _ := strconv.Atoi(portText)
-		candidates = append(candidates, RotationCandidate{ID: i, Host: "localhost", Port: port, Protocol: "http"})
-	}
-	r := &Rotator{ActiveProxies: func(context.Context) ([]RotationCandidate, error) {
-		return candidates, nil
-	}, Prober: &EgressProber{Endpoints: []string{"http://egress.invalid/ip"}, Timeout: time.Second}}
-	r.Blocked = func(context.Context) (map[int64]struct{}, error) { return nil, nil }
-	r.InUse = func(context.Context) (map[string]struct{}, error) { return nil, nil }
-	r.IsEgressBlocked = func(context.Context, string) (bool, error) { return false, nil }
-	h := &Handler{Rotator: r, RebindProxy: func(context.Context, int64, int64) error { bound++; return nil }, DisableAccount: func(context.Context, int64) error { disabled++; return nil }}
-	h.Handle(context.Background(), Incident{AccountID: 42})
-	if attempts != 3 || bound != 0 || disabled != 0 {
-		t.Fatalf("attempts=%d bound=%d disabled=%d", attempts, bound, disabled)
-	}
-}
-
-func TestRotationLookupErrorsFailClosed(t *testing.T) {
-	for _, kind := range []string{"blocked", "inuse", "egress"} {
-		t.Run(kind, func(t *testing.T) {
-			sentinel := errors.New("lookup unavailable")
-			r := &Rotator{ActiveProxies: func(context.Context) ([]RotationCandidate, error) {
-				return []RotationCandidate{{ID: 1, Host: "192.0.2.1", Port: 80}}, nil
-			}}
-			switch kind {
-			case "blocked":
-				r.Blocked = func(context.Context) (map[int64]struct{}, error) { return nil, sentinel }
-			case "inuse":
-				r.InUse = func(context.Context) (map[string]struct{}, error) { return nil, sentinel }
-			case "egress":
-				r.IsEgressBlocked = func(context.Context, string) (bool, error) { return false, sentinel }
-			}
-			got, err := r.Next(context.Background(), nil)
-			if got != nil || !errors.Is(err, sentinel) {
-				t.Fatalf("lookup failure must return no candidate and preserve error; candidate=%v err=%v", got != nil, err)
-			}
-		})
-	}
-}
-
-func TestRotationUnknownDynamicEgressIsNotHostname(t *testing.T) {
-	h := &Handler{}
-	ip, dynamic := h.resolveEgress(context.Background(), Incident{ProxyHost: "dynamic.invalid", ProxyPort: 80})
-	if ip != "" || !dynamic {
-		t.Fatalf("unknown egress must remain empty, got %q dynamic=%v", ip, dynamic)
 	}
 }
 

@@ -122,7 +122,7 @@ func (s *PoisonProbePlanService) admittedAccounts(ctx context.Context, scope *po
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, COALESCE(credentials->>'base_url', ''), proxy_id, status, schedulable, COALESCE(extra, '{}'::jsonb)
 FROM accounts
-WHERE deleted_at IS NULL
+WHERE deleted_at IS NULL AND starts_with(name,'防投毒')
 ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("poison probe plan: query accounts: %w", err)

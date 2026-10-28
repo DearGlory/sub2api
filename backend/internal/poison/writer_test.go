@@ -15,7 +15,7 @@ func newGuardContext(t *testing.T, snap *Snapshot, baseURL string, hasProxy bool
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	MarkRequest(c, snap, baseURL, hasProxy)
+	MarkRequest(c, snap, "防投毒test", baseURL, hasProxy)
 	WrapWriter(c)
 	return c, rec
 }

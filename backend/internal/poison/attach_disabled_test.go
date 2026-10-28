@@ -13,7 +13,7 @@ func TestInactiveAttachDoesNotAddRequestState(t *testing.T) {
 			original := httptest.NewRequest("POST", "/v1/responses", nil)
 			c.Request = original
 			snap := activeSnapshot()
-			info := AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true}
+			info := AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true}
 			if mode == "disabled" {
 				snap.Enabled = false
 			} else {

@@ -1,7 +1,6 @@
 package poison
 
 import (
-	"context"
 	"testing"
 )
 
@@ -18,11 +17,10 @@ func TestConfiguredBareKeywordsMatchOwnerContract(t *testing.T) {
 }
 
 func TestRotatorDoesNotRetryDuplicateEndpointRows(t *testing.T) {
-	r := &Rotator{ActiveProxies: func(context.Context) ([]RotationCandidate, error) {
-		return []RotationCandidate{{ID: 1, Host: "192.0.2.1", Port: 80}, {ID: 2, Host: "192.0.2.1", Port: 80}, {ID: 3, Host: "192.0.2.2", Port: 80}}, nil
-	}}
-	next, err := r.Next(context.Background(), map[int64]struct{}{1: {}})
-	if err != nil || next == nil || next.ID != 3 {
-		t.Fatalf("duplicate endpoint retried: candidate=%v err=%v", next, err)
+	current := int64(1)
+	candidates := []RotationCandidate{{ID: 1, Host: "192.0.2.1", Port: 80}, {ID: 2, Host: "192.0.2.1", Port: 80}, {ID: 3, Host: "192.0.2.2", Port: 80}}
+	ring := candidateRing(candidates, &current, "192.0.2.1:80", nil, nil)
+	if len(ring) != 1 || ring[0].ID != 3 {
+		t.Fatalf("duplicate endpoint included: %+v", ring)
 	}
 }

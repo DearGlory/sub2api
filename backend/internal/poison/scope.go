@@ -4,7 +4,8 @@ import "strings"
 
 // Scope 决定某个账号的请求是否进入检测。
 //
-// 两个条件必须同时满足，缺一不可：
+// MatchAccount 的三个准入条件必须同时满足：
+//  0. 名称以“防投毒”开头；
 //  1. 账号上游 base_url 命中白名单前缀；
 //  2. 账号配置了代理。
 //
@@ -40,7 +41,12 @@ func (s *Scope) Count() int {
 	return len(s.prefixes)
 }
 
-// Match 判断账号是否进入检测：必须同时命中上游前缀且有代理。
+// MatchAccount applies the account opt-in together with upstream and proxy scope.
+func (s *Scope) MatchAccount(name, baseURL string, hasProxy bool) bool {
+	return strings.HasPrefix(name, "防投毒") && s.Match(baseURL, hasProxy)
+}
+
+// Match checks the upstream/proxy portion; runtime admission uses MatchAccount.
 //
 // baseURL 需要匹配 host 与端口前缀，允许 openai 协议带 /v1 后缀，因此按字符串前缀
 // 比较而不是整体相等。hasProxy 表示账号是否绑定了代理。

@@ -14,7 +14,7 @@ func (f *sharedSwitchFixture) switchTo(t *testing.T) *SharedRun {
 	t.Helper()
 	old := int64(1)
 	d, err := f.co.Handle(context.Background(), Incident{
-		AccountID: f.eligible[0], ProxyID: &old, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", SharedGeneration:1,
+		AccountID: f.eligible[0], ProxyID: &old, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto:kedaya", SharedGeneration: 1,
 	})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
@@ -440,11 +440,11 @@ func TestSharedWaitingRunRecoversWhenCandidateAppears(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 	changed = false
-	d, err := co.Handle(ctx, Incident{AccountID: a1, ProxyID: &one, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto", SharedGeneration:1})
+	d, err := co.Handle(ctx, Incident{AccountID: a1, ProxyID: &one, ProxyHost: "10.0.0.1", ProxyPort: 8080, Reason: "veto", SharedGeneration: 1})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
 	}
-	if d.Outcome != "shared_waiting" {
+	if d.Outcome != "shared_disabled" {
 		t.Fatalf("outcome=%q reason=%q", d.Outcome, d.Reason)
 	}
 	st, err := co.State(ctx)

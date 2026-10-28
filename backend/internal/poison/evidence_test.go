@@ -30,7 +30,7 @@ func evidenceFixture(t *testing.T) (*gin.Context, *Snapshot, string) {
 	ctx := context.WithValue(context.Background(), ctxkey.RequestID, "rid-not-a-filename/../")
 	ctx = context.WithValue(ctx, ctxkey.Model, "test-model")
 	c.Request = httptest.NewRequest("POST", "/v1/responses?credential=hidden", nil).WithContext(ctx)
-	require.True(t, Attach(c, snap, AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 51}))
+	require.True(t, Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 51}))
 	t.Cleanup(func() { StatusGuard(c).Close() })
 	return c, snap, dir
 }
@@ -125,7 +125,7 @@ func TestEvidenceCleanupNormalParseErrorRetryAndClose(t *testing.T) {
 				c.Writer.WriteString("data: {broken\n\n")
 				Finalize(c)
 			case "retry":
-				require.True(t, Attach(c, snap, AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 52}))
+				require.True(t, Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 52}))
 				r := &http.Response{Body: io.NopCloser(strings.NewReader("old"))}
 				original := r.Body
 				CaptureUpstreamResponse(old, r)
@@ -146,7 +146,7 @@ func TestEvidenceDisabledAndBypassNoWrapperOrAllocation(t *testing.T) {
 		snap.EvidenceDir = t.TempDir()
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		c.Request = httptest.NewRequest("GET", "/", nil)
-		Attach(c, snap, AccountInfo{BaseURL: "https://unmatched.invalid", HasProxy: true})
+		Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://unmatched.invalid", HasProxy: true})
 		resp := &http.Response{Body: io.NopCloser(strings.NewReader("safe"))}
 		original := resp.Body
 		require.Zero(t, testing.AllocsPerRun(100, func() { CaptureUpstreamResponse(c.Request.Context(), resp) }))
@@ -157,7 +157,7 @@ func TestEvidenceDisabledAndBypassNoWrapperOrAllocation(t *testing.T) {
 	c, snap, _ := evidenceFixture(t)
 	StatusGuard(c).Close()
 	snap.EvidenceEnabled = false
-	Attach(c, snap, AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true})
+	Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true})
 	require.Nil(t, StatusGuard(c).evidence)
 }
 func TestEvidenceDiskFailurePreservesBlocking(t *testing.T) {
@@ -247,7 +247,7 @@ func TestEvidenceMiddlewarePanicCleanup(t *testing.T) {
 	r := gin.New()
 	r.Use(gin.CustomRecovery(func(c *gin.Context, _ any) { c.Status(500) }), Middleware())
 	r.GET("/", func(c *gin.Context) {
-		Attach(c, snap, AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true})
+		Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true})
 		feedEvidence(t, c, strings.Repeat("x", wireMemoryThreshold+1))
 		panic("synthetic")
 	})
@@ -258,7 +258,7 @@ func TestEvidenceMiddlewarePanicCleanup(t *testing.T) {
 func TestEvidenceRetryThenHitDoesNotMixAccounts(t *testing.T) {
 	c, snap, dir := evidenceFixture(t)
 	feedEvidence(t, c, "account-one-clean")
-	Attach(c, snap, AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 52})
+	Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 52})
 	feedEvidence(t, c, "account-two-kedaya")
 	c.Writer.WriteString("kedaya")
 	m, path := evidenceReceipt(t, c, dir)

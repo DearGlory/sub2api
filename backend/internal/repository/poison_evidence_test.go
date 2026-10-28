@@ -35,7 +35,7 @@ func TestPoisonEvidenceRealSocketJSONAfterBodyClose(t *testing.T) {
 	router.Use(func(c *gin.Context) { defer close(done); c.Next() })
 	router.Use(poison.Middleware())
 	router.GET("/v1/responses", func(c *gin.Context) {
-		if !poison.Attach(c, st.Current(), poison.AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 42}) {
+		if !poison.Attach(c, st.Current(), poison.AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 42}) {
 			t.Error("not admitted")
 			return
 		}

@@ -98,13 +98,22 @@ func (s *SharedCoordinator) Reconcile(ctx context.Context) error {
 		return err
 	}
 	var chosen *RotationCandidate
-	needTarget := observed.SharedProxyID == nil || !usableProxy(*observed.SharedProxyID, cands, ips, blocked)
+	selection := CandidateSelection{}
+	selectionCertain := true
+	needTarget := observed.WaitingForProxy || observed.SharedProxyID == nil || !usableProxy(*observed.SharedProxyID, cands, ips, blocked)
 	if needTarget {
 		accounts, err := s.eligibleAccounts(ctx, s.db, false)
 		if err != nil {
 			return err
 		}
 		remaining := append([]RotationCandidate(nil), cands...)
+		if observed.WaitingForProxy && observed.SharedProxyID != nil {
+			old, err := s.loadProxy(ctx, s.db, *observed.SharedProxyID)
+			if err != nil {
+				return err
+			}
+			remaining = candidateRing(cands, observed.SharedProxyID, old.Candidate.endpoint(), ips, blocked)
+		}
 		for attempts := 0; attempts < s.rotationBudget() && len(remaining) > 0; attempts++ {
 			candidate := pickInitial(accounts, remaining, ips, blocked)
 			if candidate == nil {
@@ -115,6 +124,10 @@ func (s *SharedCoordinator) Reconcile(ctx context.Context) error {
 				break
 			} else if ctx.Err() != nil {
 				return ctx.Err()
+			} else if errors.Is(err, ErrEgressBlocked) {
+				selection.unavailable = append(selection.unavailable, *candidate)
+			} else {
+				selectionCertain = false
 			}
 			filtered := remaining[:0]
 			for _, c := range remaining {
@@ -151,6 +164,36 @@ func (s *SharedCoordinator) Reconcile(ctx context.Context) error {
 			if chosen == nil {
 				st.WaitingForProxy = true
 				st.LastReason = "no_verified_candidate"
+				// Only act on a recorded poisoning incident, never on initial setup.
+				if st.SharedProxyID != nil && st.WaitingForProxy && exhaustionRun(st) != nil && selectionCertain {
+					old, err := s.loadProxy(ctx, tx, *st.SharedProxyID)
+					if err != nil {
+						return err
+					}
+					if exhaustedSelection(selection, candidateRing(freshCands, st.SharedProxyID, old.Candidate.endpoint(), freshIPs, freshBlocked)) {
+						// A manual restore changes the epoch and owns the next decision.
+						run := exhaustionRun(st)
+						frozen := map[int64]int64{}
+						for _, c := range run.Cells {
+							frozen[c.AccountID] = c.RestoreEpoch
+						}
+						affected := []sharedAccount{}
+						for _, a := range accounts {
+							epoch, ok := frozen[a.ID]
+							if ok && epoch == a.RestoreEpoch && a.Generation == st.Generation && a.Status == "active" && a.Schedulable {
+								affected = append(affected, a)
+							}
+						}
+						if err := disableSharedAccounts(ctx, tx, affected, *st.SharedProxyID, st.Generation); err != nil {
+							return err
+						}
+						if err := enqueueBulkChange(ctx, tx, affected); err != nil {
+							return err
+						}
+						changed = accountIDs(affected)
+						st.LastOutcome, st.LastReason = "shared_disabled", "candidates_exhausted"
+					}
+				}
 				return nil
 			}
 			currentProxy, err := s.loadProxy(ctx, tx, chosen.ID)
@@ -391,7 +434,24 @@ func (s *SharedCoordinator) Handle(ctx context.Context, inc Incident) (Dispositi
 			st.SharedProxyID = &oldID
 			refreshed = ids
 			st.WaitingForProxy = true
-			d.Outcome, d.Reason = "shared_waiting", "no_candidate"
+			d.Outcome, d.Reason = "shared_waiting", "unresolved_candidates"
+			if selErr == nil && selection.Complete {
+				// Recheck the complete pool under the same lock as account writes.
+				fresh, err := s.activeProxies(ctx, tx)
+				if err != nil {
+					return err
+				}
+				ips, blocked, err := s.blockedSets(ctx, tx)
+				if err != nil {
+					return err
+				}
+				if exhaustedSelection(selection, candidateRing(fresh, inc.ProxyID, old.Candidate.endpoint(), ips, blocked)) {
+					if err := disableSharedAccounts(ctx, tx, accounts, *inc.ProxyID, newGen); err != nil {
+						return err
+					}
+					d.Outcome, d.Reason = "shared_disabled", "candidates_exhausted"
+				}
+			}
 		}
 		if err := s.freezeRun(ctx, tx, st, inc, old.Candidate, egress, dynamic, before, target, planned); err != nil {
 			return err
@@ -545,6 +605,7 @@ func (s *SharedCoordinator) selectTarget(ctx context.Context, current int64, cur
 	ring := candidateRing(cands, &current, currentEndpoint, blockedIPs, blockedProxies)
 	audit.Eligible = len(ring)
 	audit.Complete = true
+	unknown := false
 	for i := range ring {
 		if i >= s.rotationBudget() {
 			return nil, audit, rotationError("attempt_budget", ErrRotationUnavailable)
@@ -554,6 +615,11 @@ func (s *SharedCoordinator) selectTarget(ctx context.Context, current int64, cur
 			if err := s.opts.ValidateProxy(ctx, c); err != nil {
 				audit.Candidates = append(audit.Candidates, CandidateDecision{ProxyID: c.ID, Reason: rotationReason(err)})
 				audit.Excluded["validation"]++
+				if !errors.Is(err, ErrEgressBlocked) {
+					unknown = true
+				} else {
+					audit.unavailable = append(audit.unavailable, c)
+				}
 				if errorsIsContext(err) {
 					return nil, audit, err
 				}
@@ -563,7 +629,36 @@ func (s *SharedCoordinator) selectTarget(ctx context.Context, current int64, cur
 		audit.Candidates = append(audit.Candidates, CandidateDecision{ProxyID: c.ID, Reason: "verified"})
 		return &ring[i], audit, nil
 	}
+	if unknown {
+		return nil, audit, rotationError("unresolved_candidates", ErrRotationUnavailable)
+	}
 	return nil, audit, nil
+}
+
+func exhaustionRun(st *SharedState) *SharedRun {
+	for i := len(st.Runs) - 1; i >= 0; i-- {
+		r := &st.Runs[i]
+		if r.Kind == SharedRunAuto && r.Generation == st.Generation && r.WaitingForCandidate && sameSharedProxy(r.ProxyID, st.SharedProxyID) {
+			return r
+		}
+	}
+	return nil
+}
+
+func exhaustedSelection(selection CandidateSelection, fresh []RotationCandidate) bool {
+	for _, c := range fresh {
+		proven := false
+		for _, rejected := range selection.unavailable {
+			if c == rejected {
+				proven = true
+				break
+			}
+		}
+		if !proven {
+			return false
+		}
+	}
+	return true
 }
 
 func errorsIsContext(err error) bool {

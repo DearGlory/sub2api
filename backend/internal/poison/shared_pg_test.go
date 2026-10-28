@@ -148,7 +148,7 @@ func (h *sharedTestDB) addAccount(a sharedAcct) int64 {
 	var id int64
 	err = h.db.QueryRow(`INSERT INTO accounts(name,platform,type,credentials,extra,proxy_id,status,schedulable,deleted_at)
 		VALUES($1,'anthropic','apikey',$2,$3,$4,$5,$6, CASE WHEN $7 THEN NOW() ELSE NULL END) RETURNING id`,
-		"acct", creds, raw, a.ProxyID, status, !a.Unschedule, a.Deleted).Scan(&id)
+		"防投毒acct", creds, raw, a.ProxyID, status, !a.Unschedule, a.Deleted).Scan(&id)
 	if err != nil {
 		h.t.Fatalf("insert account: %v", err)
 	}

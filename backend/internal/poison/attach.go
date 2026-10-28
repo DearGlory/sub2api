@@ -14,6 +14,7 @@ import (
 //
 // 刻意只保留必要字段，避免本包依赖 service 包的具体类型；接线处负责填充。
 type AccountInfo struct {
+	Name string
 	// BaseURL 是账号上游地址原文，来自 credentials.base_url。
 	BaseURL string
 	// HasProxy 表示账号绑定了代理。
@@ -90,7 +91,7 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 	if !snap.Active() {
 		return false
 	}
-	if !snap.Scope.Match(info.BaseURL, info.HasProxy) {
+	if !snap.Scope.MatchAccount(info.Name, info.BaseURL, info.HasProxy) {
 		return false
 	}
 	// Keep the first admitted forwarding attempt time across account retries.
@@ -103,7 +104,7 @@ func Attach(c *gin.Context, snap *Snapshot, info AccountInfo) bool {
 		}
 		c.Set(ContextKeyRequestStartedAt, started)
 	}
-	MarkRequest(c, snap, info.BaseURL, info.HasProxy)
+	MarkRequest(c, snap, info.Name, info.BaseURL, info.HasProxy)
 	WrapWriter(c)
 	if snap.EvidenceEnabled && c.Request != nil {
 		ctx := c.Request.Context()

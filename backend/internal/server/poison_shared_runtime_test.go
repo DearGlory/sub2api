@@ -12,7 +12,7 @@ func TestPoisonSharedRuntimeLifecycle(t *testing.T) {
 	starts, stops := 0, 0
 	var workerCtx context.Context
 	runtime := newPoisonSharedLifecycle(func() *poison.Snapshot {
-		return &poison.Snapshot{Enabled: true, SharedEnabled: enabled, Detector: poison.NewDetector(poison.Config{}), Scope: poison.NewScope([]string{"https://scope.invalid"}, true)}
+		return &poison.Snapshot{Enabled: enabled, SharedEnabled: false, Detector: poison.NewDetector(poison.Config{}), Scope: poison.NewScope([]string{"https://scope.invalid"}, true)}
 	}, func(ctx context.Context) { starts++; workerCtx = ctx }, func() { stops++ })
 	runtime.Refresh()
 	if starts != 0 || stops != 0 {

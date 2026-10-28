@@ -25,7 +25,7 @@ func TestAttachPoisonGuardCopiesSharedGeneration(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest("POST", "/v1/responses", nil).WithContext(context.Background())
 	proxy := int64(4)
-	a := &service.Account{ID: 9, ProxyID: &proxy, Credentials: map[string]any{"base_url": "https://kedaya.ai"}, Extra: map[string]any{poison.SharedGenerationKey: float64(12), poison.RestoreEpochKey: float64(3)}}
+	a := &service.Account{Name: "防投毒test", ID: 9, ProxyID: &proxy, Credentials: map[string]any{"base_url": "https://kedaya.ai"}, Extra: map[string]any{poison.SharedGenerationKey: float64(12), poison.RestoreEpochKey: float64(3)}}
 	attachPoisonGuard(c, a)
 	defer poison.StatusGuard(c).Close()
 	poison.Dispatch(c, "hit")

@@ -23,9 +23,9 @@ func TestEvidenceConfirmedHitPanicRetained(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			prior := CurrentHandler()
 			dispatched := make(chan Incident, 4)
-			AttachHandler(&Handler{IncidentCurrent: func(_ context.Context, inc Incident) (bool, error) {
+			AttachHandler(&Handler{SharedHandle: func(_ context.Context, inc Incident) (Disposition, error) {
 				dispatched <- inc
-				return false, nil
+				return Disposition{Outcome: "stale"}, nil
 			}})
 			t.Cleanup(func() { AttachHandler(prior) })
 			dir := t.TempDir()
@@ -39,7 +39,7 @@ func TestEvidenceConfirmedHitPanicRetained(t *testing.T) {
 			router.Use(gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, v any) { recovered = v }), Middleware())
 			router.GET("/", func(c *gin.Context) {
 				ctx = c
-				require.True(t, Attach(c, snap, AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 51}))
+				require.True(t, Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 51}))
 				feedEvidence(t, c, raw)
 				if mode == "late-hit" {
 					c.Writer.WriteString(strings.Repeat("safe ", 10000))
@@ -125,7 +125,7 @@ func TestEvidenceIOFailureCorrelation(t *testing.T) {
 }
 
 func TestEvidenceResponseAttemptLayerCorrelation(t *testing.T) {
-	s := newEvidenceSession(t.TempDir(), "r", "/", "m", AccountInfo{})
+	s := newEvidenceSession(t.TempDir(), "r", "/", "m", AccountInfo{Name: "防投毒test"})
 	defer s.close()
 	ctx := context.WithValue(context.Background(), evidenceContextKey{}, s)
 	responses := []*http.Response{{Header: make(http.Header), Body: io.NopCloser(strings.NewReader("one"))}, {Header: make(http.Header), Body: io.NopCloser(strings.NewReader("two"))}}
@@ -164,7 +164,7 @@ func (r *evidenceBarrierReader) Read(p []byte) (int, error) {
 }
 func (r *evidenceBarrierReader) Close() error { close(r.closed); return nil }
 func TestEvidenceConcurrentReadCloseBarrier(t *testing.T) {
-	s := newEvidenceSession(t.TempDir(), "r", "/", "m", AccountInfo{})
+	s := newEvidenceSession(t.TempDir(), "r", "/", "m", AccountInfo{Name: "防投毒test"})
 	defer s.close()
 	ctx := context.WithValue(context.Background(), evidenceContextKey{}, s)
 	source := &evidenceBarrierReader{make(chan struct{}), make(chan struct{})}

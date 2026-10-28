@@ -139,7 +139,7 @@ func newGuardRouter(t *testing.T, snap *Snapshot, pieces []string, contentType s
 	r := gin.New()
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", contentType)
 		for _, p := range pieces {

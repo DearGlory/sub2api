@@ -33,7 +33,7 @@ func pgLifecycleServer(t *testing.T, handle gin.HandlerFunc) *httptest.Server {
 	r := gin.New()
 	r.Use(poison.Middleware(), OpsErrorLoggerMiddleware(nil))
 	r.POST("/v1/messages", func(c *gin.Context) {
-		if !poison.Attach(c, snap, poison.AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true}) {
+		if !poison.Attach(c, snap, poison.AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true}) {
 			t.Error("guard did not attach")
 			c.Status(500)
 			return

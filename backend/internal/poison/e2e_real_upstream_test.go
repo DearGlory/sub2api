@@ -64,7 +64,7 @@ func TestE2EPoisonUpstreamThroughRealAttach(t *testing.T) {
 	r := gin.New()
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
-		attached := Attach(c, snap, AccountInfo{
+		attached := Attach(c, snap, AccountInfo{Name: "防投毒test",
 			BaseURL:   "https://kedaya.ai",
 			HasProxy:  true,
 			AccountID: 350,

@@ -60,7 +60,7 @@ func TestPoisonEvidenceProductionStackLateHit(t *testing.T) {
 				ctx := context.WithValue(c.Request.Context(), ctxkey.RequestID, "evidence-prod-"+name)
 				ctx = context.WithValue(ctx, ctxkey.Model, "fixture-model")
 				c.Request = c.Request.WithContext(ctx)
-				if !poison.Attach(c, snap, poison.AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 42}) {
+				if !poison.Attach(c, snap, poison.AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 42}) {
 					t.Error("not admitted")
 					return
 				}

@@ -25,13 +25,13 @@ func TestFailoverAcrossScopeBoundary(t *testing.T) {
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
 		// 第一轮：命中准入，写入一段内容（未命中投毒，尾部被扣留）
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "text/event-stream")
 		_, _ = c.Writer.Write([]byte(poisonFirst))
 
 		// 第二轮：failover 到不在准入范围的账号
-		MarkRequest(c, snap, "https://api.other.com", false)
+		MarkRequest(c, snap, "防投毒test", "https://api.other.com", false)
 		WrapWriter(c) // 已包装则直接 return，不会重置缓冲区
 		_, _ = c.Writer.Write([]byte(cleanSecond))
 	})

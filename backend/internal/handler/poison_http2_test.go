@@ -20,7 +20,7 @@ func TestPoisonProtocolHTTP2LateHitResetsStream(t *testing.T) {
 	r := gin.New()
 	r.Use(middleware2.Recovery(), poison.Middleware(), OpsErrorLoggerMiddleware(nil))
 	r.POST("/v1/messages", func(c *gin.Context) {
-		poison.Attach(c, snap, poison.AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true})
+		poison.Attach(c, snap, poison.AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true})
 		c.Header("Content-Type", "text/event-stream")
 		for range 4 {
 			_, _ = c.Writer.Write([]byte(`data: {"delta":{"text":"` + strings.Repeat("a", 512) + `"}}` + "\n\n"))

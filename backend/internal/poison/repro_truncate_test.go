@@ -18,7 +18,7 @@ func TestReproTruncatedBody(t *testing.T) {
 
 	snap := activeSnapshot()
 
-	MarkRequest(c, snap, "http://51.222.42.218:17777", true)
+	MarkRequest(c, snap, "防投毒test", "http://51.222.42.218:17777", true)
 	WrapWriter(c)
 	gw := StatusGuard(c)
 	if gw == nil {

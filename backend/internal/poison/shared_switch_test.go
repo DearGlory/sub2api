@@ -100,6 +100,7 @@ func (f *sharedSwitchFixture) setSharedEnabled(on bool) {
 	defer f.snapMu.Unlock()
 	snap := *f.snap
 	snap.SharedEnabled = on
+	snap.Enabled = on
 	f.snap = &snap
 }
 

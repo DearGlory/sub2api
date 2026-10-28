@@ -29,7 +29,7 @@ func TestPoisonProtocolRetryDiscardsPreviousAttempt(t *testing.T) {
 				if inScope {
 					base = "https://kedaya.ai"
 				}
-				poison.Attach(c, snap, poison.AccountInfo{BaseURL: base, HasProxy: true, AccountID: 200})
+				poison.Attach(c, snap, poison.AccountInfo{Name: "防投毒test", BaseURL: base, HasProxy: true, AccountID: 200})
 				if !inScope && poison.StatusGuard(c) != nil {
 					t.Error("out of scope retry kept previous guard")
 				}

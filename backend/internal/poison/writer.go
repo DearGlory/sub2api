@@ -13,12 +13,12 @@ import (
 // ContextKeyActive 标记当前请求已通过准入判定、需要检测。
 const ContextKeyActive = "poison_guard_active"
 
-// MarkRequest 由接线处调用：账号同时满足上游白名单与代理时标记本请求。
-func MarkRequest(c *gin.Context, snap *Snapshot, baseURL string, hasProxy bool) {
+// MarkRequest marks requests only when name, upstream and proxy all match.
+func MarkRequest(c *gin.Context, snap *Snapshot, name, baseURL string, hasProxy bool) {
 	if c == nil || !snap.Active() {
 		return
 	}
-	if !snap.Scope.Match(baseURL, hasProxy) {
+	if !snap.Scope.MatchAccount(name, baseURL, hasProxy) {
 		return
 	}
 	c.Set(ContextKeyActive, snap)

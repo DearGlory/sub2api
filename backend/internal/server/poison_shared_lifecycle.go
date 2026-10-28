@@ -26,7 +26,7 @@ func (r *poisonSharedLifecycle) Refresh() {
 		return
 	}
 	snap := r.snapshot()
-	enabled := snap != nil && snap.Active() && snap.SharedEnabled
+	enabled := snap != nil && snap.Active()
 	if enabled && r.cancel == nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		r.cancel = cancel

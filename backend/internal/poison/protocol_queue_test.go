@@ -39,7 +39,7 @@ func TestProtocolPanicReleasesSpilledWire(t *testing.T) {
 	r := gin.New()
 	r.Use(gin.RecoveryWithWriter(io.Discard), Middleware())
 	r.GET("/", func(c *gin.Context) {
-		MarkRequest(c, activeSnapshot(), "https://kedaya.ai", true)
+		MarkRequest(c, activeSnapshot(), "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "application/json")
 		_, _ = c.Writer.Write([]byte(`{"text":"` + strings.Repeat("a", wireMemoryThreshold+1)))

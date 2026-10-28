@@ -25,7 +25,7 @@ func TestPoisonFinalizationKeepsOuterRequestContextLive(t *testing.T) {
 		}
 	}, poison.Middleware(), OpsErrorLoggerMiddleware(nil))
 	r.POST("/v1/messages", func(c *gin.Context) {
-		poison.Attach(c, snap, poison.AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true})
+		poison.Attach(c, snap, poison.AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true})
 		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), requestMetadataKey{}, "selected-after-attach"))
 		c.Data(http.StatusOK, "application/json", []byte(`{"content":[{"text":"normal"}]}`))
 	})

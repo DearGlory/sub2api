@@ -56,8 +56,7 @@ func (s *SharedCoordinator) withState(ctx context.Context, fn func(*sql.Tx, *Sha
 	}
 	var enabled bool
 	if err := tx.QueryRowContext(ctx, `SELECT
-      COALESCE((SELECT lower(btrim(value)) IN ('true','1') FROM settings WHERE key=$1),false)
-      AND COALESCE((SELECT lower(btrim(value)) IN ('true','1') FROM settings WHERE key=$2),false)`, SettingSharedEnabled, SettingEnabled).Scan(&enabled); err != nil {
+      COALESCE((SELECT lower(btrim(value)) IN ('true','1') FROM settings WHERE key=$1),false)`, SettingEnabled).Scan(&enabled); err != nil {
 		return err
 	}
 	if !enabled {
@@ -116,7 +115,7 @@ func (s *SharedCoordinator) snapshot() *Snapshot {
 // reload disables all probing without a restart.
 func (s *SharedCoordinator) sharedEnabled() bool {
 	snap := s.snapshot()
-	return snap != nil && snap.SharedEnabled && snap.Active()
+	return snap != nil && snap.Active()
 }
 
 // eligibleAccounts returns every admitted account: not deleted, bound to a proxy
@@ -129,7 +128,7 @@ func (s *SharedCoordinator) eligibleAccounts(ctx context.Context, q sharedQuerye
 		return nil, nil
 	}
 	query := `SELECT id, COALESCE(credentials->>'base_url',''), proxy_id, status, schedulable, extra
-        FROM accounts WHERE deleted_at IS NULL AND proxy_id IS NOT NULL
+        FROM accounts WHERE deleted_at IS NULL AND proxy_id IS NOT NULL AND starts_with(name,'防投毒')
         AND EXISTS (SELECT 1 FROM unnest($1::text[]) AS p(prefix)
           WHERE lower(btrim(credentials->>'base_url'))=p.prefix
           OR left(lower(btrim(credentials->>'base_url')),length(p.prefix)+1)=p.prefix||'/')
@@ -388,6 +387,25 @@ func pickInitial(accounts []sharedAccount, cands []RotationCandidate, blockedIPs
 	}
 	c := usable[bestID]
 	return &c
+}
+
+// disableSharedAccounts only stops currently schedulable members of this fleet.
+// Callers hold the coordinator lock and account row locks; outbox writes share
+// the transaction and refresh happens only after commit.
+func disableSharedAccounts(ctx context.Context, tx *sql.Tx, accounts []sharedAccount, proxyID, generation int64) error {
+	ids := []int64{}
+	for _, a := range accounts {
+		if a.Status == "active" && a.Schedulable && a.ProxyID != nil && *a.ProxyID == proxyID {
+			ids = append(ids, a.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE accounts SET status='inactive', schedulable=false, updated_at=NOW()
+ WHERE id=ANY($1::bigint[]) AND proxy_id=$2 AND status='active' AND schedulable=true
+ AND COALESCE((extra->>$3)::bigint,0)=$4`, pq.Array(ids), proxyID, SharedGenerationKey, generation)
+	return err
 }
 
 // writeAccounts rewrites only proxy_id and the shared generation marker, merging

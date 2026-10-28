@@ -40,7 +40,7 @@ func (r *PoisonSharedRuntime) Bind(settings *service.SettingService, admin *admi
 				State: func(ctx context.Context) (any, error) { return r.coordinator.State(ctx) },
 				Reconcile: func(ctx context.Context) error {
 					snapshot := poison.CurrentSnapshot()
-					if snapshot == nil || !snapshot.Active() || !snapshot.SharedEnabled {
+					if snapshot == nil || !snapshot.Active() {
 						return errors.New("shared proxy mode disabled")
 					}
 					return r.coordinator.Reconcile(ctx)

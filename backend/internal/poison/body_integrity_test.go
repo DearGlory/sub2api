@@ -22,7 +22,7 @@ func TestNonStreamingBodyLengthMatchesDeclared(t *testing.T) {
 	r := gin.New()
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		// 复刻真实 handler 的非流式写法
 		c.Data(http.StatusOK, "application/json", []byte(payload))
@@ -61,7 +61,7 @@ func TestStreamingBodyNotTruncated(t *testing.T) {
 	r := gin.New()
 	r.Use(Middleware())
 	r.POST("/v1/messages", func(c *gin.Context) {
-		MarkRequest(c, snap, "https://kedaya.ai", true)
+		MarkRequest(c, snap, "防投毒test", "https://kedaya.ai", true)
 		WrapWriter(c)
 		c.Header("Content-Type", "text/event-stream")
 		for _, ch := range chunks {

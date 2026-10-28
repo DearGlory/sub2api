@@ -89,7 +89,7 @@ func TestPoisonProtocolDisabledAndOutOfScopeUnwrapped(t *testing.T) {
 			r.Use(poison.Middleware(), OpsErrorLoggerMiddleware(nil))
 			r.POST("/v1/messages", func(c *gin.Context) {
 				before := c.Writer
-				if poison.Attach(c, snap, poison.AccountInfo{BaseURL: tc.base, HasProxy: tc.proxy}) || c.Writer != before {
+				if poison.Attach(c, snap, poison.AccountInfo{Name: "防投毒test", BaseURL: tc.base, HasProxy: tc.proxy}) || c.Writer != before {
 					t.Error("out of scope writer wrapped")
 				}
 				c.Data(200, "application/json", []byte(`{"text":"kedaya"}`))
@@ -111,7 +111,7 @@ func TestPoisonProtocolOuterStatusMatchesClient(t *testing.T) {
 			r := gin.New()
 			r.Use(func(c *gin.Context) { c.Next(); observed <- c.Writer.Status() }, poison.Middleware(), OpsErrorLoggerMiddleware(nil))
 			r.POST("/v1/messages", func(c *gin.Context) {
-				poison.Attach(c, snap, poison.AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true})
+				poison.Attach(c, snap, poison.AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true})
 				text := "normal"
 				if blocked {
 					text = "kedaya"

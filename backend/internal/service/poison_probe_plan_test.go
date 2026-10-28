@@ -32,7 +32,7 @@ func planPostgres(t *testing.T) *sql.DB {
 DROP TABLE IF EXISTS usage_logs, account_groups, accounts CASCADE;
 CREATE TABLE accounts(
   id bigserial PRIMARY KEY,
-  name text NOT NULL DEFAULT 'fixture',
+  name text NOT NULL DEFAULT '防投毒fixture',
   platform text NOT NULL DEFAULT 'openai',
   type text NOT NULL DEFAULT 'api_key',
   credentials jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -131,6 +131,17 @@ func ids(got []poison.SharedAccount) []int64 {
 
 // TestPoisonProbePlanPostgres covers admission equivalence, multi-group merge,
 // COUNT-not-tokens, zero-cost rows, inactive inclusion, distinct groups and ID order.
+func TestPoisonProbePlanNameScope(t *testing.T) {
+	db := planPostgres(t)
+	admitted := planAccount{baseURL: "https://shared.example.com", proxyID: planProxy(1), schedulable: true}.seed(t, db)
+	excluded := planAccount{baseURL: "https://shared.example.com", proxyID: planProxy(1), schedulable: true}.seed(t, db)
+	_, err := db.Exec("UPDATE accounts SET name='ordinary' WHERE id=$1", excluded)
+	require.NoError(t, err)
+	got, err := NewPoisonProbePlanService(db).Plan(context.Background(), planScope())
+	require.NoError(t, err)
+	require.Equal(t, []int64{admitted}, ids(got))
+}
+
 func TestPoisonProbePlanPostgres(t *testing.T) {
 	db := planPostgres(t)
 	ctx := context.Background()

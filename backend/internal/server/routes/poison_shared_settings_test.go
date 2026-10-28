@@ -32,17 +32,17 @@ func TestPoisonSharedSettingsRoutesRoundTrip(t *testing.T) {
 		}
 	}
 	require.NoError(t, json.Unmarshal(initial.Body.Bytes(), &v))
-	require.False(t, v.Data.Enabled)
+	require.True(t, v.Data.Enabled)
 	on := sharedSettingsRequest(router, "PUT", "/api/v1/admin/poison/shared", `{"enabled":true}`, true)
 	require.Equal(t, http.StatusOK, on.Code, on.Body.String())
-	require.Equal(t, map[string]string{"poison_guard_shared_enabled": "true"}, repo.updates)
+	require.Equal(t, map[string]string{"poison_guard_enabled": "true"}, repo.updates)
 	require.Equal(t, 1, *refresh)
 	require.Equal(t, "3", repo.values["poison_guard_threshold"])
 	require.Equal(t, "false", repo.values["registration_enabled"])
 	off := sharedSettingsRequest(router, "PUT", "/api/v1/admin/poison/shared", `{"enabled":false}`, true)
 	require.Equal(t, http.StatusOK, off.Code)
 	require.Equal(t, 2, *refresh)
-	require.Equal(t, "false", repo.values["poison_guard_shared_enabled"])
+	require.Equal(t, "false", repo.values["poison_guard_enabled"])
 	noop := sharedSettingsRequest(router, "PUT", "/api/v1/admin/poison/shared", `{}`, true)
 	require.Equal(t, http.StatusOK, noop.Code)
 	require.Equal(t, 2, *refresh)
@@ -64,5 +64,5 @@ func TestPoisonSharedSettingsWriteFailurePreservesRuntime(t *testing.T) {
 	w := sharedSettingsRequest(router, "PUT", "/api/v1/admin/poison/shared", `{"enabled":true}`, true)
 	require.Equal(t, 500, w.Code)
 	require.Zero(t, *refresh)
-	require.NotContains(t, repo.values, "poison_guard_shared_enabled")
+	require.Equal(t, "true", repo.values["poison_guard_enabled"])
 }

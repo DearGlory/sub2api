@@ -26,7 +26,7 @@ func evidenceContext(t *testing.T) (*gin.Context, string) {
 		return map[string]string{"poison_guard_enabled": "true", "poison_guard_evidence_enabled": "true", "poison_guard_evidence_dir": dir}, nil
 	})
 	require.NoError(t, st.Reload())
-	require.True(t, poison.Attach(c, st.Current(), poison.AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 99}))
+	require.True(t, poison.Attach(c, st.Current(), poison.AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 99}))
 	t.Cleanup(func() { poison.StatusGuard(c).Close() })
 	return c, dir
 }

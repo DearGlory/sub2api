@@ -28,7 +28,7 @@ func TestSharedSwitchConfigurationReload(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("shared settings key count=%d want=1", count)
 	}
-	values[SettingSharedEnabled] = "false"
+	values[SettingEnabled] = "false"
 	if err := store.Reload(); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestSharedGenerationAttachDispatchAcrossRetry(t *testing.T) {
 	proxy := int64(7)
 	snap := activeSnapshot()
 	for _, generation := range []int64{4, 9} {
-		if !Attach(c, snap, AccountInfo{BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 41, ProxyID: &proxy, RestoreEpoch: 3, SharedGeneration: generation}) {
+		if !Attach(c, snap, AccountInfo{Name: "防投毒test", BaseURL: "https://kedaya.ai", HasProxy: true, AccountID: 41, ProxyID: &proxy, RestoreEpoch: 3, SharedGeneration: generation}) {
 			t.Fatal("attach failed")
 		}
 		Dispatch(c, "hit")
@@ -100,7 +100,7 @@ func TestSharedHandlerDelegatesOnlyWhileEnabled(t *testing.T) {
 	if got.Reason != "deferred_shared_unavailable" {
 		t.Fatalf("missing shared handler fell through: %+v", got)
 	}
-	values[SettingSharedEnabled] = "false"
+	values[SettingEnabled] = "false"
 	if err := st.Reload(); err != nil {
 		t.Fatal(err)
 	}

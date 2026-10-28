@@ -144,9 +144,7 @@ func parse(values map[string]string) *Snapshot {
 	if v, ok := get(SettingEnabled); ok {
 		snap.Enabled = parseBool(v, false)
 	}
-	if v, ok := get(SettingSharedEnabled); ok {
-		snap.SharedEnabled = parseBool(v, false)
-	}
+	snap.SharedEnabled = snap.Enabled
 
 	veto := parseList(get, SettingKeywordsVeto, DefaultVetoKeywords)
 	strong := parseList(get, SettingKeywordsStrong, DefaultStrongKeywords)
