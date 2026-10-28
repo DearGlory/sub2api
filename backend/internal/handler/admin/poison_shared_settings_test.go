@@ -18,7 +18,7 @@ import (
 type sharedAdminSettingRepo struct{ service.SettingRepository }
 
 func (*sharedAdminSettingRepo) GetMultiple(context.Context, []string) (map[string]string, error) {
-	return map[string]string{"poison_guard_shared_enabled": "true"}, nil
+	return map[string]string{"poison_guard_enabled": "true"}, nil
 }
 func TestPoisonSharedAdminActionsReachCoordinator(t *testing.T) {
 	gin.SetMode(gin.TestMode)
